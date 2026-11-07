@@ -75,7 +75,13 @@ export function startServer(o: ServeOptions): Promise<{ server: Server; url: str
           return send(200, "text/markdown; charset=utf-8", readFileSync(join(o.outDir, "report.md"), "utf8"));
         case "/vendor/elevenlabs.js": {
           // The SDK's own browser build from node_modules (pinned in package.json), so nothing loads from a CDN.
-          const p = createRequire(import.meta.url).resolve("@elevenlabs/client").replace(/index\.js$/, "lib.iife.js");
+          // Optional dependency, only for the voice narrator in serve: migrate never loads it.
+          let p: string;
+          try {
+            p = createRequire(import.meta.url).resolve("@elevenlabs/client").replace(/index\.js$/, "lib.iife.js");
+          } catch {
+            return send(404, "text/plain; charset=utf-8", "voice narrator not installed (optional dependency @elevenlabs/client)");
+          }
           return send(200, "text/javascript; charset=utf-8", readFileSync(p, "utf8"));
         }
         case "/api/el-token": {

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { mkdtempSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate } from "../../src/pipeline/migrate.js";
@@ -26,7 +27,9 @@ describe("events and narration", () => {
     const done = ev.at(-1)!;
     if (done.type !== "run.done") throw new Error();
     expect(done.topGaps.map((g) => g.code)).not.toContain("scope.var.free-form");
-    expect(done.topGaps[0]!.code).toBe("metric.unmapped");
+    // Every top gap is a reason on some bounded/manual/unsupported item.
+    const gapCodes = new Set(run.report.items.filter((i) => !["exact", "exact-under"].includes(i.status)).flatMap((i) => i.reason_codes));
+    for (const g of done.topGaps) expect(gapCodes.has(g.code), g.code).toBe(true);
   });
   it("narrates milestones and problems, stays quiet on routine exact panels", () => {
     const said = ev.map(narrate);
@@ -76,8 +79,20 @@ describe("serve", async () => {
     expect(data.at(-1)).toMatchObject({ type: "run.done", say: expect.stringMatching(/^Finished\./) });
     expect(text).toContain("event: end");
   });
-  it("serves the pinned ElevenLabs browser SDK locally", async () => {
+  // @elevenlabs/client is an optional dependency (voice narrator only): skipped when it isn't installed.
+  const hasVoice = (() => {
+    try {
+      createRequire(import.meta.url).resolve("@elevenlabs/client");
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  it.skipIf(!hasVoice)("serves the pinned ElevenLabs browser SDK locally", async () => {
     const js = await (await get("/vendor/elevenlabs.js")).text();
     expect(js.startsWith("var ElevenLabsClient")).toBe(true);
+  });
+  it.skipIf(hasVoice)("without the optional voice SDK, /vendor/elevenlabs.js is a 404, not a crash", async () => {
+    expect((await get("/vendor/elevenlabs.js")).status).toBe(404);
   });
 });
