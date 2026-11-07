@@ -38,6 +38,8 @@ class Lowerer {
     if (!this.extraAssumptions.includes(a)) this.extraAssumptions.push(a);
   }
   find(severity: Finding["severity"], code: string, message: string, original?: unknown): void {
+    // A formula can reference the same query twice (`query1 / (query1 + query2)`): report each finding once.
+    if (this.findings.some((f) => f.code === code && f.message === message)) return;
     this.findings.push({ severity, code, where: this.ctx.where ?? "", message, ...(original !== undefined ? { original } : {}) });
   }
   manual(code: string, message: string, original?: unknown): never {
@@ -154,7 +156,29 @@ class Lowerer {
       mapping = { otel: m.metric, kind: "gauge" };
     }
 
-    const matchers: PMatcher[] = [{ label: "otel_metric_name", op: "=", value: mapping.otel }, ...this.scope(m.scope)];
+    if (mapping.status === "approximate") {
+      this.use("select.metric.approximate");
+      this.find("warn", "metric.approximate", `${m.metric} -> ${mapping.otel} is an approximate mapping${mapping.note ? `: ${mapping.note}` : ""}`);
+    }
+
+    // Mapping-table labels select the right OTel series (redis.cpu.sys -> redis.cpu.time{state="sys"}).
+    const labelMatchers: PMatcher[] = Object.entries(mapping.labels ?? {}).map(([label, value]) => ({ label, op: "=", value }));
+    if (labelMatchers.length) this.use("select.labels");
+    const scopeMatchers = this.scope(m.scope);
+    const clash = scopeMatchers.find((s) => labelMatchers.some((l) => l.label === s.label));
+    if (clash) this.manual("select.labels.clash", `the query filters on '${clash.label}', which the mapping already fixes`);
+    const matchers: PMatcher[] = [{ label: "otel_metric_name", op: "=", value: mapping.otel }, ...labelMatchers, ...scopeMatchers];
+
+    // Effective kind. Datadog's own kind decides the time aggregation when the table gives it (T1 kindTransform):
+    // a Datadog gauge stays a gauge even when the OTel receiver emits a counter; a Datadog RATE on an OTel counter
+    // means a plain query already shows per-second values, so it needs rate() (D-18).
+    let kind = mapping.kind;
+    let ddRate = false;
+    if (mapping.ddKind !== undefined) {
+      if (mapping.ddKind === "gauge" && kind !== "histogram") kind = "gauge";
+      else if (mapping.ddKind === "rate" && kind === "counter") ddRate = true;
+      else this.manual("time.kind", `Datadog ${mapping.ddKind} stored as an OTel ${kind}: no tested rule yet`);
+    }
 
     // Time aggregation, Datadog order: per series first.
     let fn = "avg";
@@ -178,22 +202,26 @@ class Lowerer {
       } else if (c.name === "as_count" || c.name === "as_rate") {
         // .as_count()/.as_rate() suggest a count or rate metric, so don't lean on the gauge assumption here.
         if (!mapped) this.manual("time.kind-unknown", `.${c.name}() on ${m.metric}: its kind is unknown (no mapping entry), so the time aggregation can't be chosen`);
-        if (mapping.kind === "gauge") this.use(`time.${c.name}.gauge`);
-        else if (mapping.kind === "counter") {
+        if (kind === "gauge") this.use(`time.${c.name}.gauge`);
+        else if (kind === "counter") {
           this.use(`time.${c.name}.counter`);
           counterMode = c.name === "as_count" ? "increase" : "rate";
-        } else if (mapping.kind === "delta" && c.name === "as_count") {
+        } else if (kind === "delta" && c.name === "as_count") {
           this.use("time.as_count.delta");
           fn = "sum";
-        } else this.manual(`time.${c.name}.${mapping.kind}`, `.${c.name}() on a ${mapping.kind} metric has no exact rule`);
+        } else this.manual(`time.${c.name}.${kind}`, `.${c.name}() on a ${kind} metric has no exact rule`);
       } else if (c.name === "fill") {
         const a = c.args[0];
         if (c.args.length === 1 && a?.type === "word" && a.value === "null") this.use("time.fill.null");
         else this.manual("time.fill", ".fill() other than null has no exact rule (PromQL does not fill gaps)");
       } else this.manual(`fn.${c.name}`, `no exact rule for .${c.name}()`);
     }
-    if ((mapping.kind === "counter" && !counterMode) || mapping.kind === "histogram" || (mapping.kind === "delta" && fn !== "sum"))
-      this.manual("time.kind", `a ${mapping.kind} metric needs an explicit .as_count()/.as_rate() to fix its time aggregation`);
+    if (ddRate && !counterMode) {
+      this.use("time.ddrate.plain");
+      counterMode = "rate";
+    }
+    if ((kind === "counter" && !counterMode) || kind === "histogram" || (kind === "delta" && fn !== "sum"))
+      this.manual("time.kind", `a ${kind} metric needs an explicit .as_count()/.as_rate() to fix its time aggregation`);
     if (counterMode && explicitRollup) this.manual("time.rollup.counter", ".rollup() combined with a counter rate has no exact rule");
 
     const sel: PNode = { k: "selector", matchers, range: width };

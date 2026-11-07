@@ -21,9 +21,21 @@ export interface Finding {
 /** OTel-side metric kind (plan 03 §3). `gauge` is assumed when the mapping table has no entry. */
 export type MetricKind = "gauge" | "counter" | "delta" | "histogram";
 
+/**
+ * Structurally compatible with T1's `MetricLookup` (src/ir/context.ts, PR #4), so `metricLookup(mappings)` plugs in
+ * as `ctx.metric` directly. Only `otel` and `kind` are required.
+ */
 export interface MetricMapping {
   otel: string;
+  /** OTel-side kind. */
   kind: MetricKind;
+  /** How Datadog stores it. When present, it decides the time aggregation (a Datadog gauge read from an OTel counter is still a gauge). */
+  ddKind?: "gauge" | "rate" | "count" | "distribution";
+  /** Extra equality matchers that select the right series, e.g. redis.cpu.sys -> {state: "sys"}. */
+  labels?: Record<string, string>;
+  /** Name-mapping fidelity from the table. "approximate" makes the result at best `bounded`. */
+  status?: "exact" | "approximate";
+  note?: string;
 }
 
 export interface TranslateContext {

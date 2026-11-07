@@ -12,6 +12,13 @@ const METRICS: Record<string, MetricMapping> = {
   "nginx.requests": { otel: "nginx.requests", kind: "counter" },
   "app.events": { otel: "app.events", kind: "delta" },
   "http.duration": { otel: "http.server.request.duration", kind: "histogram" },
+  // Shaped like T1's metricLookup() output (PR #4), taken from mappings/datadog/redisdb.yaml.
+  "redis.cpu.sys": { otel: "redis.cpu.time", kind: "counter", ddKind: "rate", labels: { state: "sys" }, status: "exact" },
+  "redis.net.commands": { otel: "redis.commands.processed", kind: "counter", ddKind: "rate", status: "exact" },
+  "redis.net.clients": { otel: "redis.clients.connected", kind: "gauge", ddKind: "gauge", status: "exact" },
+  "redis.dd.gauge_on_counter": { otel: "redis.connections.received", kind: "counter", ddKind: "gauge", status: "exact" },
+  "redis.dd.approx": { otel: "redis.memory.rss", kind: "gauge", ddKind: "gauge", status: "approximate", note: "RSS vs used" },
+  "redis.dd.count": { otel: "redis.keys.evicted", kind: "counter", ddKind: "count", status: "exact" },
 };
 const CTX: TranslateContext = {
   metric: (n) => METRICS[n],
@@ -69,6 +76,13 @@ const CASES: [string, string, string, string][] = [
   ["arith.same-groups", "avg:redis.mem.used{*} by {host} - avg:redis.mem.maxmemory{*} by {host}", `avg by (host_name) (avg_over_time(${SEL("redis.memory.used")}[$__interval])) - avg by (host_name) (avg_over_time(${SEL("redis.maxmemory")}[$__interval]))`, "exact-under"],
   ["arith.div", "avg:redis.mem.used{*} / avg:redis.mem.maxmemory{*}", `avg (avg_over_time(${SEL("redis.memory.used")}[$__interval])) / avg (avg_over_time(${SEL("redis.maxmemory")}[$__interval]))`, "exact-under"],
   ["arith.neg", "-avg:system.cpu.user{*}", `-avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
+  // T1 mapping fields (ddKind, labels, status)
+  ["select.metric.mapped", "avg:redis.net.clients{*}", `avg (avg_over_time(${SEL("redis.clients.connected")}[$__interval]))`, "exact-under"],
+  ["select.labels", "avg:redis.cpu.sys{*} by {host}", `avg by (host_name) (rate(${SEL("redis.cpu.time", ', state="sys"')}[$__interval]))`, "bounded"],
+  ["time.ddrate.plain", "sum:redis.net.commands{*}", `sum (rate(${SEL("redis.commands.processed")}[$__interval]))`, "bounded"],
+  ["time.as_count.counter", "sum:redis.net.commands{*}.as_count()", `sum (increase(${SEL("redis.commands.processed")}[$__interval]))`, "bounded"],
+  ["select.metric.mapped", "avg:redis.dd.gauge_on_counter{*}", `avg (avg_over_time(${SEL("redis.connections.received")}[$__interval]))`, "exact-under"],
+  ["select.metric.approximate", "avg:redis.dd.approx{*}", `avg (avg_over_time(${SEL("redis.memory.rss")}[$__interval]))`, "bounded"],
 ];
 
 describe("rule table: one exact PromQL string per rule", () => {
@@ -128,6 +142,15 @@ describe("formulas", () => {
     expect(r.status).toBe("exact-under");
   });
 
+  it("a query referenced twice reports its findings once", () => {
+    const env = new Map<string, Expr>();
+    const p = parseQuery("avg:foo.hits{*}");
+    if (p.ok) env.set("query1", p.value);
+    const f = parseFormula("query1 / (query1 + 1)");
+    if (!f.ok) throw new Error();
+    expect(translateQuery(f.value, CTX, env).findings.filter((x) => x.code === "metric.unmapped")).toHaveLength(1);
+  });
+
   it("an unknown ref is manual", () => {
     const f = parseFormula("query9 * 2");
     if (!f.ok) throw new Error();
@@ -150,6 +173,8 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["arith.group-mismatch", "avg:redis.mem.used{*} by {host} / avg:redis.mem.maxmemory{*}"],
     ["query.value-filter", "count(v: v>=0):system.cpu.user{*}"],
     ["time.kind-unknown", "sum:unmapped.hits{*}.as_count()"],
+    ["time.kind", "sum:redis.dd.count{*}"],
+    ["select.labels.clash", "avg:redis.cpu.sys{state:user}"],
   ] as const) {
     it(`${code}: ${src}`, () => {
       const r = q(src);

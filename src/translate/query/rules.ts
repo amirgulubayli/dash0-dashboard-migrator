@@ -31,6 +31,11 @@ export const RULES = {
   // selection
   "select.metric.mapped": exact("Datadog metric -> {otel_metric_name=...} through the mapping table"),
   "select.metric.unmapped": under(["A.kind-gauge"], "no mapping entry: keep the Datadog name, assume gauge"),
+  "select.metric.approximate": bounded("the mapping table marks the OTel metric as approximate (see the entry's note)"),
+  "select.labels": exact("mapping-table labels pick the series: redis.cpu.sys -> {otel_metric_name=\"redis.cpu.time\", state=\"sys\"}"),
+  "time.ddrate.plain": bounded(
+    "Datadog RATE metric (stored per second) read from an OTel counter: a plain query -> rate(x[w]) (D-18, maths.md T3b)",
+  ),
   "scope.all": exact("{*} -> no matchers"),
   "scope.tag.eq": exact("key:value -> key=\"value\""),
   "scope.tag.neq": exact("!key:value / -key:value -> key!=\"value\""),
