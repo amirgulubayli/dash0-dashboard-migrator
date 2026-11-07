@@ -172,6 +172,12 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
         under("widget.pie", limits.length ? ["A.style", "A.top-unlimited"] : ["A.style"], `sunburst shown as a pie chart over its single grouping level (calculation ${calculation})${limits.length ? `, without the top-${limits[0]!.count} limit` : ""}`);
         return result("PieChart", { calculation, mode: "value" });
       }
+      if (p.options.display === "geomap") {
+        // Dash0 has no map panel. A geomap is a breakdown by one place field (country, region ...): its data is the value per
+        // group, which a TimeSeriesTable of the same query lists. An ALTERNATIVE view, labelled as one.
+        under("widget.geomap", limits.length ? ["A.style", "A.alt-view", "A.top-unlimited"] : ["A.style", "A.alt-view"], `geomap shown as a table of its values per group (Dash0 has no map panel); the map drawing is not migrated${limits.length ? `, without the top-${limits[0]!.count} limit` : ""}`);
+        return result("TimeSeriesTable", {});
+      }
       under("widget.toplist.unranked", ["A.top-unlimited"], `toplist shown as a TimeSeriesTable of every series${limits.length ? `, without the top-${limits[0]!.count} limit and ranking` : ""}`);
       return result("TimeSeriesTable", {});
     }
@@ -211,6 +217,7 @@ const ASSUMPTION_TEXT: Record<string, string> = {
   "A.align": "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
   "A.boundary": "no sample lies exactly on a bucket boundary (maths.md T8, A3)",
   "A.table-single-query": "the table has one query, default sorting and no conditional formats",
+  "A.alt-view": "what the widget conveys is its value per group; the map or chart drawing is not part of that meaning",
   "A.table-columns": "every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats",
   "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
   "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",

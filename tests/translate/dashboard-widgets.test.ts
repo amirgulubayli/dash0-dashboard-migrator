@@ -23,6 +23,7 @@ const metricQ = (name: string, query: string, extra: object = {}) => ({ data_sou
 const widget = (id: number, definition: object) => ({ id, layout: { x: 0, y: 0, width: 4, height: 2 }, definition });
 const sunburst = (id: number, title: string, queries: object[]) => widget(id, { type: "sunburst", title, requests: [{ response_format: "scalar", queries, formulas: queries.map((q) => ({ formula: (q as { name: string }).name })) }] });
 
+const geomap = (id: number, title: string, queries: object[]) => widget(id, { type: "geomap", title, requests: [{ response_format: "scalar", queries, formulas: queries.map((q) => ({ formula: (q as { name: string }).name })) }] });
 const table = (id: number, title: string, queries: object[], extra: object = {}) =>
   widget(id, { type: "query_table", title, requests: [{ response_format: "scalar", queries, formulas: queries.map((q) => ({ formula: (q as { name: string }).name })), ...extra }] });
 
@@ -44,6 +45,9 @@ const DASH = {
     table(13, "With conditional formats", [metricQ("a", "avg:redis.mem.used{*} by {host}"), metricQ("b", "max:redis.mem.used{*} by {host}")], { conditional_formats: [{ comparator: ">", value: 1, palette: "white_on_red" }] }),
     table(14, "Log and metric columns", [logQ("e", "status:error", [{ facet: "host" }]), metricQ("c", "sum:redis.net.commands{*} by {host}")]),
     table(15, "Other data source column", [metricQ("a", "avg:redis.mem.used{*} by {host}"), { data_source: "events", name: "e", search: { query: "x" }, group_by: [{ facet: "host" }] }]),
+    geomap(16, "Errors by country", [logQ("q", "status:error", [{ facet: "@network.client.geoip.country.iso_code" }])]),
+    geomap(17, "Two levels geomap", [logQ("q", "status:error", [{ facet: "country" }, { facet: "city" }])]),
+    geomap(18, "Ungrouped geomap", [logQ("q", "status:error", [])]),
     sunburst(10, "Events", [{ data_source: "events", name: "q", search: { query: "x" }, group_by: [{ facet: "tag" }] }]),
   ],
 };
@@ -128,6 +132,22 @@ describe("image and sunburst widgets", () => {
     const e = p("Log and metric columns");
     expect(e).toMatchObject({ placeholder: true, status: "manual" });
     expect(e.rules).toContain("arith.scalar-log-mixed");
+  });
+
+  it("a single-level geomap is shown as a TimeSeriesTable of its values per group, labelled as an alternative view", () => {
+    const e = p("Errors by country");
+    expect(e.placeholder).toBe(false);
+    expect(e.status).toBe("bounded");
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
+    expect(e.promql[0]).toContain("[$__range]");
+    expect(e.rules).toEqual(expect.arrayContaining(["widget.geomap", "log.scalar.window"]));
+    expect(e.assumptions).toContain("A.alt-view");
+    expect(e.findings.some((f) => f.code === "widget.geomap" && /Dash0 has no map panel/.test(f.message))).toBe(true);
+  });
+
+  it("a geomap with several levels or no grouping stays a placeholder", () => {
+    expect(p("Two levels geomap")).toMatchObject({ placeholder: true, status: "manual" });
+    expect(p("Ungrouped geomap")).toMatchObject({ placeholder: true, status: "manual" });
   });
 
   it("every emitted query parses and the dashboard passes T7 preflight", () => {

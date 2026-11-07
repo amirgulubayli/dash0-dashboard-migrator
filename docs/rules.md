@@ -8,7 +8,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
 | implemented | 69 | 42 | 18 | 55 | 184 |
-| planned | 17 | 28 | 3 | 11 | 59 |
+| planned | 17 | 29 | 3 | 11 | 60 |
 
 ## Pipeline order
 
@@ -27,7 +27,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
-| 14 | `widget` Widget → panel | widget | yes | 21 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
+| 14 | `widget` Widget → panel | widget | yes | 22 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
 | 15 | `panel` Panel options | panel attribute | no | 5 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 8 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
@@ -326,6 +326,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 80 | `widget.alert_value` | alert_value | StatChart of the monitor's translated query | exact-under(A.style) | — | probe:statchart-calculation | T5 | planned |
 | 90 | `widget.pie` | sunburst / pie | PieChart over the grouped query | exact-under(A.style) | — | probe:piechart | T5 | planned |
 | 140 | `widget.logs` | log_stream / list_stream | Markdown panel with the original query and the reason (LogTable comes with logs.stream) | manual | — | — | T5 | planned |
+| 145 | `widget.geomap` | geomap that is a single-level breakdown of one metric or log query | TimeSeriesTable of the same query (an ALTERNATIVE view: Dash0 has no map panel) | exact-under(A.style, A.alt-view) | — | — | T5 | planned |
 | 150 | `widget.heatmap` | heatmap / distribution / histogram | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 160 | `widget.treemap` | treemap | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 170 | `widget.scatterplot` | scatterplot | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
@@ -337,6 +338,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 - `widget.toplist.unranked`: T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.
 - `widget.query_table.columns`: Probed on a rendered table: several queries with the same group-by show as one row per group with one value column each. Column headers are Dash0 defaults.
 - `widget.alert_graph`: Reuses the monitor's query translation; status = worst(this, that query).
+- `widget.geomap`: The values per group are kept; the map drawing is not. Multi-level, ungrouped or other-source geomaps stay placeholders (widget.unsupported).
 - `query.empty`: Emitted by T5 queries.ts; the id is also the finding code.
 
 ## Panel options (`panel`)
@@ -488,10 +490,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.notify-wider` | the channel may also receive notifications Datadog did not send to it (Dash0 has no degraded-only or recovery-only channel binding) | 1 |
 | `A.msg-length` | text beyond Dash0's annotation limits (description 2048, summary 255 characters) is not needed in the notification; the full original stays in the report | 1 |
 | `A.msg-verbatim` | showing an unknown Datadog template token as literal text is acceptable in the notification | 1 |
-| `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 12 |
+| `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 13 |
 | `A.row-height` | one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export) | 1 |
 | `A.var-values` | a label's values in Dash0 are the same set as the matching tag's values in Datadog | 1 |
 | `A.table-single-query` | the table has one query, default sorting and no conditional formats | 1 |
+| `A.alt-view` | what the widget conveys is its value per group; the map or chart drawing is not part of that meaning | 1 |
 | `A.table-columns` | every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats | 1 |
 | `A.top-uniform` | every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie | 2 |
 | `A.top-unlimited` | showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships | 1 |
@@ -565,6 +568,7 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `widget.alert_graph` (exact-under(A.style), planned, T5)
 - `widget.alert_value` (exact-under(A.style), planned, T5)
 - `widget.pie` (exact-under(A.style), planned, T5)
+- `widget.geomap` (exact-under(A.style, A.alt-view), planned, T5)
 - `panel.unit.unmapped` (exact-under(A.style), planned, T5)
 - `panel.markers` (exact-under(A.style), planned, T5)
 - `panel.conditional-format` (exact-under(A.style), planned, T5)

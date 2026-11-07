@@ -19,6 +19,7 @@ const KIND: Record<string, PanelKind> = {
   free_text: "markdown",
   image: "markdown", // only with an http(s) URL, see panel()
   sunburst: "toplist", // only a single-level breakdown, shown as a PieChart, see panel()
+  geomap: "toplist", // only a single-level breakdown, shown as a table (Dash0 has no map panel), see panel()
   log_stream: "logs",
 };
 
@@ -154,6 +155,10 @@ function panel(w: unknown, path: string, find: (f: Omit<Finding, "itemId" | "ite
     kind = "unsupported";
     why = `image URL is not an http(s) URL (${str(def.url) === undefined ? "none" : str(def.url)!.startsWith("data:") ? "data URI" : "relative to the Datadog site"}): it cannot be embedded in a Markdown panel`;
   }
+  if (type === "geomap" && !singleLevel(requests)) {
+    kind = "unsupported";
+    why = "geomap is not a single-level breakdown of one metric or log query (no grouping, several levels, or another data source): a table of its values would not show the same thing";
+  }
   if (type === "sunburst" && !singleLevel(requests)) {
     kind = "unsupported";
     why = "sunburst is not a single-level breakdown of one metric or log query (several levels, another data source, or no grouping): a pie chart would not show the same thing";
@@ -230,6 +235,7 @@ function optionsOf(type: string, def: Json): Record<string, unknown> {
     o.text = `![${alt}](${str(def.url)!.replace(/\(/g, "%28").replace(/\)/g, "%29").replace(/\s/g, "%20")})`;
   }
   if (type === "sunburst") o.display = "pie";
+  if (type === "geomap") o.display = "geomap";
   copy("precision");
   copy("custom_unit", "unit");
   copy("autoscale");

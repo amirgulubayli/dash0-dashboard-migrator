@@ -53,6 +53,10 @@ export const DASHBOARD_RULES: RuleDef[] = [
   }),
   panel("panel.style", 130, "exact-under", "palette, legend, display type, title alignment", "closest Perses visual option", { assumptions: ["A.style"] }),
   w("widget.logs", 140, "manual", "log_stream / list_stream", `${PLACEHOLDER} (LogTable comes with logs.stream)`, { findingCode: "query.datasource" }),
+  w("widget.geomap", 145, "exact-under", "geomap that is a single-level breakdown of one metric or log query", "TimeSeriesTable of the same query (an ALTERNATIVE view: Dash0 has no map panel)", {
+    assumptions: ["A.style", "A.alt-view"],
+    note: "The values per group are kept; the map drawing is not. Multi-level, ungrouped or other-source geomaps stay placeholders (widget.unsupported).",
+  }),
   w("widget.heatmap", 150, "manual", "heatmap / distribution / histogram", PLACEHOLDER, { findingCode: "widget.unsupported" }),
   w("widget.treemap", 160, "manual", "treemap", PLACEHOLDER, { findingCode: "widget.unsupported" }),
   w("widget.scatterplot", 170, "manual", "scatterplot", PLACEHOLDER, { findingCode: "widget.unsupported" }),
