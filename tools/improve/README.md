@@ -51,3 +51,26 @@ The loop stops at `--rounds`, at `--budget-usd` (estimated from token usage at O
   property tests, and stay with people for now.
 - Requests use server-side refusal fallbacks (`fallbacks: "default"`). Set `--max-turns` lower to cap a round
   tighter than the budget does.
+
+## Jev (plan 08): optional, suggestions only
+Jev is TypeSafe's decision model. It runs only when `TYPESAFE_API_KEY` is set. It never touches `src/` or
+`report.json`, and `tests/improve/loop.test.ts` checks that `src/` never imports it. Jev has no seed, so every
+answer is cached in `out/jev-cache/<request sha256>.json` with the model version that gave it, and a re-run with
+the same input reuses it.
+
+- **J2, `--picker jev`:** Jev chooses among the top 5 gaps of the deterministic ranking. Its probabilities go in the
+  round log. If Jev fails, the loop falls back to the deterministic pick and says so.
+- **J3, after the gates pass:** Jev scores the evidence of every mapping row from 0 (weak) to 3 (strong). The scores
+  go into the commit message and the round log. A row is flagged when it claims `exact` on evidence below "good", or
+  `none` while a match looks likely. This is a note for the reviewer, never a gate.
+- **J1, for the console:** `npx tsx tools/jev/main.ts priority <out>/report.json` writes
+  `report.review-priority.json`, the non-exact items ranked by review urgency and tied to the report's `outputHash`.
+  Henry's console can show it as "Suggested review order (Jev)".
+- `npx tsx tools/jev/main.ts evidence mappings/datadog/<x>.yaml` runs J3 on any mapping table.
+
+First live run (jev-1.14.0, fixtures):
+- **J2** picked `metric.unmapped:postgresql` with probability 0.94.
+- **J3** scored the agent's 6 Postgres rows: the exact rows 2.29 to 2.66, the approximate rows about 1.4, none
+  flagged.
+- **J1** ranked 102 items. Average score by status: manual 2.82, unsupported 2.42, bounded 1.96, exact-under 1.52.
+  Copied text notes came last.
