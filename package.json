@@ -4,8 +4,12 @@
   "description": "Deterministic Datadog -> Dash0 migrator: dashboards to Perses, queries to PromQL, monitors to Dash0 check rules.",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=22" },
-  "bin": { "dd2dash0": "dist/cli.js" },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "dd2dash0": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p .",
     "dev": "tsx src/cli.ts",
@@ -17,5 +21,9 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@lezer/lr": "^1.4.12",
+    "@prometheus-io/lezer-promql": "^0.316.0"
   }
 }
