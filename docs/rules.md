@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 51 | 30 | 17 | 34 | 132 |
-| planned | 31 | 30 | 2 | 18 | 81 |
+| implemented | 68 | 42 | 17 | 37 | 164 |
+| planned | 18 | 22 | 2 | 14 | 56 |
 
 ## Pipeline order
 
@@ -25,8 +25,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 9 | `function` Functions | function call | yes | 32 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 8 | Formulas over named queries, constants, division. |
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
-| 12 | `alert` Check-rule assembly | monitor field or option | yes | 18 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
-| 13 | `message` Message → annotations | template token | yes | 7 | Deterministic Mustache token rewrite into Go-template annotations. |
+| 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
+| 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
 | 14 | `widget` Widget → panel | widget | yes | 16 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
 | 15 | `panel` Panel options | panel attribute | no | 4 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 6 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
@@ -48,9 +48,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
-| 10 | `classify.monitor.metric` | monitor type "metric alert" or "query alert" | goes through the query stages and the monitor stage | exact | — | — | T6 | planned |
+| 10 | `classify.monitor.metric` | monitor type "metric alert" or "query alert" | goes through the query stages and the monitor stage | exact | unit | — | T6 | implemented |
 | 20 | `classify.monitor.log` | monitor type "log alert" | goes through the logs stage (log.monitor.count) | exact | — | — | T6 | planned |
-| 999 (fallback) | `classify.monitor.other` | composite, service check, event, synthetics, SLO, process, anomaly-type and any other monitor | no rule; original kept | manual | — | — | T6 | planned |
+| 999 (fallback) | `classify.monitor.other` | composite, service check, event, synthetics, SLO, process, log (until T12) and any other monitor | no rule; original kept | manual | unit | — | T6 | implemented |
+
+- `classify.monitor.log`: Until T12 lands, log alerts take classify.monitor.other.
 
 ## Parse (`parse`)
 
@@ -250,39 +252,48 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
-| 10 | `alert.id` | monitor id | id "dd-monitor-<id>", label dd_monitor_id="<id>" (re-runs overwrite, D-31) | exact | — | — | T6 | planned |
-| 20 | `alert.name` | monitor name | name as is (template tokens in names are not expanded) | exact | — | — | T6 | planned |
-| 30 | `alert.threshold.both` | critical and warning thresholds | thresholds {failed: critical, degraded: warning} | exact | — | — | T6 | planned |
-| 40 | `alert.threshold.warnonly` | warning threshold only | thresholds {degraded: warning} | exact | — | — | T6 | planned |
-| 50 | `alert.threshold.recovery` | critical_recovery / warning_recovery | no output: value hysteresis has no Dash0 form (keep_firing_for is time-based) | manual | — | — | T6 | planned |
-| 60 | `alert.group` | multi-alert by {tags} | grouping stays in the expression, one alert per series | exact | — | — | T6 | planned |
-| 70 | `alert.defaults` | evaluation schedule | interval "1m", for "0s", keep_firing_for "0s" | exact-under(A.eval-1m) | — | — | T6 | planned |
-| 100 | `alert.opt.evaluation_delay` | options.evaluation_delay = s | offset s on every selector in the expression | exact | — | — | T6 | planned |
-| 110 | `alert.opt.require_full_window.true` | require_full_window: true | expression unchanged | exact-under(A.full-window) | — | — | T6 | planned |
-| 120 | `alert.opt.require_full_window.false` | require_full_window: false or absent | expression unchanged (PromQL evaluates partial windows) | exact | — | — | T6 | planned |
-| 130 | `alert.opt.new_group_delay` | new_group_delay / new_host_delay | expression unchanged | exact-under(A.no-new-groups) | — | — | T6 | planned |
-| 140 | `alert.opt.no_data` | notify_no_data + no_data_timeframe T, ungrouped monitor | companion rule absent_over_time(<selector>[T]), id "dd-monitor-<id>-nodata", behind a CLI flag | exact-under(A.boundary) | — | — | T6 | planned |
-| 150 | `alert.opt.no_data.grouped` | notify_no_data on a multi-alert monitor | no companion rule: absent_over_time does not work per group | manual | — | — | T6 | planned |
-| 200 | `alert.opt.notification` | renotify_interval, escalation_message, notify_audit, include_tags, notification channels | not emitted; listed in the report as manual setup | exact-under(A.notify-manual) | — | — | T6 | planned |
-| 210 | `alert.priority` | priority n | label priority="P<n>" | exact | — | — | T6 | planned |
-| 220 | `alert.tags` | tags k:v with valid label keys | labels {k: v} | exact | — | — | T6 | planned |
-| 230 | `alert.tags.rename` | tags whose keys are not valid label names | key sanitised to [a-zA-Z_][a-zA-Z0-9_]*, rename recorded | exact-under(A.label-rename) | — | — | T6 | planned |
-| 999 (fallback) | `alert.opt.unknown` | any other option | no output; option kept in the report | manual | — | — | T6 | planned |
+| 10 | `alert.id` | monitor id | id = UUIDv5("datadog:monitor:<id>") in our fixed name space, so POST /api/import/check-rule upserts (live 2026-11-07, hub #289); origin "dd-monitor-<id>" for PUT by origin; label dd_monitor_id="<id>" | exact | unit | — | T6 | implemented |
+| 20 | `alert.name` | monitor name | name as is (template tokens in names are not expanded) | exact | unit | — | T6 | implemented |
+| 30 | `alert.threshold.both` | critical (from the query) and warning thresholds | thresholds {failed: critical, degraded: warning} | exact | unit | — | T6 | implemented |
+| 40 | `alert.threshold.critical` | critical threshold only | thresholds {failed: critical} | exact | unit | — | T6 | implemented |
+| 50 | `alert.threshold.recovery` | critical_recovery / warning_recovery | no output: value hysteresis has no Dash0 form (keep_firing_for is time-based) | manual | unit | — | T6 | implemented |
+| 60 | `alert.group` | multi-alert by {tags} | grouping stays in the expression, one alert per series | exact | unit | — | T6 | implemented |
+| 70 | `alert.defaults` | evaluation schedule | interval "1m", for "0s", keep_firing_for "0s" | exact-under(A.eval-1m) | unit | — | T6 | implemented |
+| 100 | `alert.opt.evaluation_delay` | options.evaluation_delay = s (whole seconds) | the inner query is wrapped in timeshift(q, -s), so T4's map.timeshift puts offset s on every selector | exact | unit | — | T6 | implemented |
+| 110 | `alert.opt.require_full_window.true` | require_full_window: true | expression unchanged | exact-under(A.full-window) | unit | — | T6 | implemented |
+| 120 | `alert.opt.require_full_window.false` | require_full_window: false | expression unchanged (PromQL evaluates partial windows) | exact | unit | — | T6 | implemented |
+| 130 | `alert.opt.new_group_delay` | new_group_delay / new_host_delay > 0 | expression unchanged | exact-under(A.no-new-groups) | unit | — | T6 | implemented |
+| 135 | `alert.opt.no_data` | notify_no_data + no_data_timeframe T, ungrouped monitor | companion rule absent_over_time(<selector>[T]), id "dd-monitor-<id>-nodata", behind a CLI flag | exact-under(A.boundary) | — | — | T6 | planned |
+| 140 | `alert.opt.no_data.report` | notify_no_data: true (with no_data_timeframe, timeout_h) or on_missing_data: show_no_data | main rule unchanged; the no-data alert is listed in the report | exact-under(A.no-data-manual) | unit | — | T6 | implemented |
+| 150 | `alert.opt.on_missing_data.resolve` | on_missing_data: resolve | expression unchanged: with no samples a PromQL comparison returns nothing, so the alert resolves | exact | unit | — | T6 | implemented |
+| 200 | `alert.opt.notification` | renotify_*, escalation_message, notify_audit, include_tags, notification_preset_name, notify_by, locked, restricted_roles, silenced | not emitted; listed in the report as manual setup | exact-under(A.notify-manual) | unit | — | T6 | implemented |
+| 210 | `alert.priority` | priority n (1-5) | label priority="P<n>" | exact | unit | — | T6 | implemented |
+| 220 | `alert.tags` | tags k:v with valid label keys | labels {k: v}; a tag without ':' becomes {tag: "true"} | exact | unit | — | T6 | implemented |
+| 230 | `alert.tags.rename` | tags whose keys are not valid label names, clash with our labels, or repeat with several values | key sanitised to [a-zA-Z_][a-zA-Z0-9_]* (dd_tag_ prefix on a clash), repeated values joined with ',' | exact-under(A.label-rename) | unit | — | T6 | implemented |
+| 999 (fallback) | `alert.opt.unknown` | any other option with a non-default value | no output; option kept in the report | manual | unit | — | T6 | implemented |
 
-- `alert.threshold.recovery`: Policy (kb 06 §8): never import a weaker active alert silently. An override may import it disabled.
-- `alert.opt.evaluation_delay`: Same transform as map.timeshift. Plan 04 had it as a warn-only finding; kb 06 §8 proposes the offset.
+- `alert.threshold.recovery`: Policy (kb 06 §8): never import a weaker active alert silently. keepManual emits it disabled for review.
+- `alert.group`: Carried by T4's space.agg: the by-labels survive into the alert expression.
+- `alert.opt.evaluation_delay`: Plan 04 had it as a warn-only finding; kb 06 §8 proposes the offset.
+- `alert.opt.no_data`: Replaces alert.opt.no_data.report for ungrouped monitors once built (needs the inner selector from T4).
 
 ## Message → annotations (`message`)
 
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
-| 10 | `alert.msg.summary` | monitor name and message | annotations {summary: name, description: rewritten message} | exact | — | — | T6 | planned |
-| 20 | `alert.msg.value` | {{value}} | {{ $value }} (negated rules carry a note: the value shown is negated) | exact | — | — | T6 | planned |
-| 30 | `alert.msg.label` | {{<tag>.name}} | {{ $labels.<tag> }} with the same key sanitising as alert.tags | exact | — | — | T6 | planned |
+| 10 | `alert.msg.summary` | monitor name and message | annotations {summary: name, description: rewritten message} | exact | unit | — | T6 | implemented |
+| 20 | `alert.msg.value` | {{value}} | {{ $value }} (negated rules carry a note: the value shown is negated) | exact | unit | — | T6 | implemented |
+| 25 | `alert.msg.threshold` | {{threshold}} / {{warn_threshold}} | the threshold number itself | exact | unit | — | T6 | implemented |
+| 30 | `alert.msg.label` | {{<tag>.name}} | {{ $labels.<label> }} through the tag mapping, then sanitised | exact | unit | — | T6 | implemented |
 | 40 | `alert.msg.conditional.label` | {{#is_alert}} / {{#is_warning}} / {{#is_recovery}} blocks | {{ if eq $labels.<threshold> "failed" }} … {{ end }} | exact | — | probe:threshold-label | T6 | planned |
-| 50 | `alert.msg.conditional` | {{#is_alert}} / {{#is_warning}} blocks (until probe:threshold-label is yes) | the block's text kept unconditionally | exact-under(A.msg-conditional) | — | — | T6 | planned |
-| 60 | `alert.msg.handle` | @slack-… / @pagerduty-… / @user@… handles | removed from the text, listed in the report as channels to create | exact-under(A.notify-manual) | — | — | T6 | planned |
-| 999 (fallback) | `alert.msg.unknown-token` | any other {{…}} token | escaped as literal text {{ "{{token}}" }} so the Go template still parses | exact-under(A.msg-verbatim) | — | — | T6 | planned |
+| 50 | `alert.msg.conditional` | {{#is_alert}} / {{#is_warning}} blocks (until probe:threshold-label is yes) | markers removed, the block's text kept unconditionally | exact-under(A.msg-conditional) | unit | — | T6 | implemented |
+| 55 | `alert.msg.conditional.drop` | {{#is_recovery}}, {{#is_no_data}}, {{#is_renotify}}, {{^is_alert}} … blocks | block removed (never part of a firing notification) | exact-under(A.msg-recovery) | unit | — | T6 | implemented |
+| 60 | `alert.msg.handle` | @slack-… / @pagerduty-… / @user@… handles with no entry in the channel file | removed from the text, listed in the report as channels to create | exact-under(A.notify-manual) | unit | — | T6 | implemented |
+| 61 | `alert.notify.channel` | @handle in the main message, mapped in the channel file | annotation dash0.com/notification-channel-ids: "<channel id>" | exact | unit | — | T6 | implemented |
+| 62 | `alert.notify.channel.critical-only` | @handle only inside {{#is_alert}}, mapped in the channel file | "<channel id>:critical-only" (Dash0 sends this channel only critical = failed notifications) | exact | unit | — | T6 | implemented |
+| 63 | `alert.notify.channel.wider` | @handle only inside {{#is_warning}} or a recovery section, mapped in the channel file | "<channel id>": the channel gets every notification of the rule | exact-under(A.notify-wider) | unit | — | T6 | implemented |
+| 70 | `alert.msg.truncate` | description over 2048 or summary over 255 characters | cut at the limit on a {{ … }} boundary, ending in … | exact-under(A.msg-length) | unit | — | T6 | implemented |
+| 999 (fallback) | `alert.msg.unknown-token` | any other {{…}} token, and stray {{ / }} in text | escaped as a Go string literal {{ "{{token}}" }} so the template still parses | exact-under(A.msg-verbatim) | unit | — | T6 | implemented |
 
 ## Widget → panel (`widget`)
 
@@ -439,6 +450,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.notify-manual` | notification routing (channels, renotify, escalation) is recreated by hand in Dash0; it does not change when the rule fires | 2 |
 | `A.label-rename` | nothing downstream matches on the original Datadog tag key spelling, only on the sanitised label | 1 |
 | `A.msg-conditional` | the reader of a notification can tell failed from degraded by the rule's threshold, so text from {{#is_alert}} / {{#is_warning}} blocks may appear unconditionally | 1 |
+| `A.msg-recovery` | text Datadog only sends on recovery, no-data or renotify notifications is not needed in a firing notification | 1 |
+| `A.no-data-manual` | the monitor's no-data alert is recreated by hand in Dash0 (the companion absent_over_time rule is not generated yet) | 1 |
+| `A.notify-wider` | the channel may also receive notifications Datadog did not send to it (Dash0 has no degraded-only or recovery-only channel binding) | 1 |
+| `A.msg-length` | text beyond Dash0's annotation limits (description 2048, summary 255 characters) is not needed in the notification; the full original stays in the report | 1 |
 | `A.msg-verbatim` | showing an unknown Datadog template token as literal text is acceptable in the notification | 1 |
 | `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 10 |
 | `A.row-height` | one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export) | 1 |
@@ -487,15 +502,19 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `fn.histogram.quantile` (bounded(ε), planned, T4)
 - `arith.group-subset` (exact-under(A.nonzero-denominator), planned, T4)
 - `monitor.threshold.mismatch` (exact-under(A.query-threshold), implemented, T4)
-- `alert.defaults` (exact-under(A.eval-1m), planned, T6)
-- `alert.opt.require_full_window.true` (exact-under(A.full-window), planned, T6)
-- `alert.opt.new_group_delay` (exact-under(A.no-new-groups), planned, T6)
+- `alert.defaults` (exact-under(A.eval-1m), implemented, T6)
+- `alert.opt.require_full_window.true` (exact-under(A.full-window), implemented, T6)
+- `alert.opt.new_group_delay` (exact-under(A.no-new-groups), implemented, T6)
 - `alert.opt.no_data` (exact-under(A.boundary), planned, T6)
-- `alert.opt.notification` (exact-under(A.notify-manual), planned, T6)
-- `alert.tags.rename` (exact-under(A.label-rename), planned, T6)
-- `alert.msg.conditional` (exact-under(A.msg-conditional), planned, T6)
-- `alert.msg.handle` (exact-under(A.notify-manual), planned, T6)
-- `alert.msg.unknown-token` (exact-under(A.msg-verbatim), planned, T6)
+- `alert.opt.no_data.report` (exact-under(A.no-data-manual), implemented, T6)
+- `alert.opt.notification` (exact-under(A.notify-manual), implemented, T6)
+- `alert.tags.rename` (exact-under(A.label-rename), implemented, T6)
+- `alert.msg.conditional` (exact-under(A.msg-conditional), implemented, T6)
+- `alert.msg.conditional.drop` (exact-under(A.msg-recovery), implemented, T6)
+- `alert.msg.handle` (exact-under(A.notify-manual), implemented, T6)
+- `alert.notify.channel.wider` (exact-under(A.notify-wider), implemented, T6)
+- `alert.msg.truncate` (exact-under(A.msg-length), implemented, T6)
+- `alert.msg.unknown-token` (exact-under(A.msg-verbatim), implemented, T6)
 - `widget.query_value` (exact-under(A.align, A.boundary), planned, T5)
 - `widget.toplist` (exact-under(A.top-uniform), planned, T5)
 - `widget.query_table` (exact-under(A.table-single-query), planned, T5)
