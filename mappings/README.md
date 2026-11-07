@@ -15,7 +15,9 @@ Schema and loader: `src/ir/mappings.ts`. Format changes need a CONTRACT.
 ```
 node scripts/build-redis-mapping.mjs <fork>/mappings/datadog/redisdb.yaml
 ```
-Its sources (Datadog check constants, metadata.csv, OTel receiver metadata v0.164.0, the research crosswalk) are in the workspace at `docs/research/sources/redisdb/`. Current totals: 271 metrics: 39 exact, 22 approximate, 5 derived, 205 no equivalent. All 24 metrics used by the Redis overview dashboard and the high-memory monitor are covered, and 18 of them have an equivalent.
+Its sources (Datadog check constants, metadata.csv, OTel receiver metadata v0.164.0, the research crosswalk) are in the workspace at `docs/research/sources/redisdb/`. Current totals: 271 metrics: 39 exact, 22 approximate, 5 derived, 205 no equivalent. All 24 metrics used by the Redis overview dashboard and the high-memory monitor are covered, and 18 of them have an equivalent. 23 of its rows map to receiver metrics that are **disabled by default**, and each note says so; that includes `redis.maxmemory`, the high-memory monitor's denominator, so the Collector must enable it.
+
+**Logic gates (plan 09).** `tests/ir/mappings-logic.test.ts` checks every row of every table against its pinned sources: the OTel name exists in the receiver metadata (L1), kind, unit and labels agree (L2-L4), a ddKind that differs from metadata.csv cites the check source (L5), default-off receiver metrics are declared in the note (L6), and `exact` only when no kind change is needed (L7). The receiver facts come from `datadog/_receivers.json`, **generated** in the workspace with `node scripts/build-receiver-facts.mjs <fork>/mappings/datadog/_receivers.json` from `docs/research/sources/`. A new integration needs its receiver metadata pinned there first.
 
 ## Collector setup (data only appears if the receiver emits the metric)
 

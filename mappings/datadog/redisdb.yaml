@@ -331,63 +331,63 @@ metrics:
     otelKind: gauge
     unit: "1"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.cluster.cluster_enabled in the Collector."
   redis.cluster.known_nodes:
     otel: "redis.cluster.known_nodes"
     ddKind: gauge
     otelKind: gauge
     unit: "{node}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.cluster.known_nodes in the Collector."
   redis.cluster.size:
     otel: "redis.cluster.node.count"
     ddKind: gauge
     otelKind: gauge
     unit: "{node}"
     status: approximate
-    note: "Cluster master-node counts; confirm serving-slot semantics."
+    note: "Cluster master-node counts; confirm serving-slot semantics. Disabled by default in the receiver: enable metrics.redis.cluster.node.count in the Collector."
   redis.cluster.slots_assigned:
     otel: "redis.cluster.slots_assigned"
     ddKind: gauge
     otelKind: gauge
     unit: "{slot}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.cluster.slots_assigned in the Collector."
   redis.cluster.slots_fail:
     otel: "redis.cluster.slots_fail"
     ddKind: gauge
     otelKind: gauge
     unit: "{slot}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.cluster.slots_fail in the Collector."
   redis.cluster.slots_ok:
     otel: "redis.cluster.slots_ok"
     ddKind: gauge
     otelKind: gauge
     unit: "{slot}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.cluster.slots_ok in the Collector."
   redis.cluster.slots_pfail:
     otel: "redis.cluster.slots_pfail"
     ddKind: gauge
     otelKind: gauge
     unit: "{slot}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.cluster.slots_pfail in the Collector."
   redis.cluster.state:
     otel: "redis.cluster.state"
     ddKind: gauge
     otelKind: gauge
     unit: "{state}"
     status: approximate
-    note: "Select cluster_state label and numeric 1/0 state."
+    note: "Select cluster_state label and numeric 1/0 state. Disabled by default in the receiver: enable metrics.redis.cluster.state in the Collector."
   redis.command.calls:
     otel: "redis.cmd.calls"
     ddKind: gauge
     otelKind: counter
     unit: "{call}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.cmd.calls in the Collector."
   redis.command.usec_per_call:
     otel: null
     ddKind: gauge
@@ -728,14 +728,14 @@ metrics:
     otelKind: gauge
     unit: "By"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.maxmemory in the Collector."
   redis.mem.overhead:
     otel: "redis.memory.used_memory_overhead"
     ddKind: gauge
     otelKind: updowncounter
     unit: "By"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.memory.used_memory_overhead in the Collector."
   redis.mem.peak:
     otel: "redis.memory.peak"
     ddKind: gauge
@@ -768,7 +768,7 @@ metrics:
     otelKind: updowncounter
     unit: "By"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.memory.used_memory_startup in the Collector."
   redis.mem.total_replication_buffers:
     otel: null
     ddKind: gauge
@@ -988,21 +988,21 @@ metrics:
     otelKind: updowncounter
     unit: "{channel}"
     status: approximate
-    note: "Filter channel-state=active before aggregating; module/version behavior differs."
+    note: "Filter channel-state=active before aggregating; module/version behavior differs. Disabled by default in the receiver: enable metrics.redis.pubsub.channel.status in the Collector."
   redis.pubsub.clients:
     otel: "redis.pubsub.connection.count"
     ddKind: gauge
     otelKind: updowncounter
     unit: "{client}"
     status: approximate
-    note: "Receiver equivalent requires Redis 7.2 or newer."
+    note: "Receiver equivalent requires Redis 7.2 or newer. Disabled by default in the receiver: enable metrics.redis.pubsub.connection.count in the Collector."
   redis.pubsub.patterns:
     otel: "redis.pubsub.pattern.status"
     ddKind: gauge
     otelKind: updowncounter
     unit: "{pattern}"
     status: approximate
-    note: "Filter active patterns before aggregating."
+    note: "Filter active patterns before aggregating. Disabled by default in the receiver: enable metrics.redis.pubsub.pattern.status in the Collector."
   redis.pubsub.shard_channels:
     otel: null
     ddKind: gauge
@@ -1192,7 +1192,7 @@ metrics:
     otelKind: gauge
     unit: "By"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.replication.replica_offset in the Collector."
   redis.replication.sync:
     otel: null
     ddKind: gauge
@@ -1577,28 +1577,28 @@ metrics:
     otelKind: gauge
     unit: "{master}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.sentinel.masters in the Collector."
   redis.sentinel.running_scripts:
     otel: "redis.sentinel.running_scripts"
     ddKind: gauge
     otelKind: gauge
     unit: "{script}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.sentinel.running_scripts in the Collector."
   redis.sentinel.scripts_queue_length:
     otel: "redis.sentinel.scripts_queue_length"
     ddKind: gauge
     otelKind: gauge
     unit: "{script}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.sentinel.scripts_queue_length in the Collector."
   redis.sentinel.simulate_failure_flags:
     otel: "redis.sentinel.simulate_failure_flags"
     ddKind: gauge
     otelKind: gauge
     unit: "{flag}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.sentinel.simulate_failure_flags in the Collector."
   redis.sentinel.tilt:
     otel: null
     ddKind: gauge
@@ -1611,14 +1611,14 @@ metrics:
     otelKind: gauge
     unit: "s"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.sentinel.tilt_since_seconds in the Collector."
   redis.sentinel.total_tilt:
     otel: "redis.sentinel.total_tilt"
     ddKind: gauge
     otelKind: counter
     unit: "{event}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.sentinel.total_tilt in the Collector."
   redis.server.io_threads_active:
     otel: null
     ddKind: gauge
@@ -1699,7 +1699,7 @@ metrics:
     otelKind: updowncounter
     unit: "{key}"
     status: exact
-    note: "Same Redis measurement; metric or type name differs."
+    note: "Same Redis measurement; metric or type name differs. Disabled by default in the receiver: enable metrics.redis.tracking_total_keys in the Collector."
   redis.tracking.total_prefixes:
     otel: null
     ddKind: gauge
