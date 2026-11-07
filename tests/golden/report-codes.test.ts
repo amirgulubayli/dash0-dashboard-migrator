@@ -37,10 +37,8 @@ describe("report codes resolve to the catalog", () => {
 
   // The full corpus emits codes the fixtures do not. Codes with no catalog row yet are listed here on purpose:
   // when a row lands the second test fails until the code is removed from this list, so it only ever shrinks.
-  const PENDING = new Set([
-    "source.unreadable", // T2 ingest failure
-    "fn.autosmooth", "fn.throughput", "fn.rate", "fn.forecast", "fn.ewma_3", "fn.ewma_10", "fn.outliers", "fn.calendar_shift", "fn.sum", // T4 manual outcomes (T17 rows announced by Michael)
-    "log.measure", "log.or.cross-key", "log.monitor.shape", // T12 manual outcomes (the catalog's planned row is logs.measure -> query.datasource, a different code)
+  const PENDING = new Set<string>([
+    // empty since #16 and #30: every code in the full-corpus report resolves to a catalog row
   ]);
   const corpus = [process.env.DD_CORPUS_DIR, resolve(process.cwd(), "../../corpus/integrations-core-master"), resolve(process.cwd(), "../corpus/integrations-core-master")].filter((p): p is string => !!p).find((p) => existsSync(p));
 
