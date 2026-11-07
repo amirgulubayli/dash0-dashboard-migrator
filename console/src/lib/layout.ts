@@ -1,6 +1,9 @@
 import type { GridBox, ReportItem } from "./report";
 
-export interface PlacedWidget { item: ReportItem; box: GridBox }
+export interface PlacedWidget {
+  item: ReportItem;
+  box: GridBox;
+}
 export interface PlacedGroup {
   item: ReportItem | null;
   title: string;
@@ -10,7 +13,9 @@ export interface PlacedGroup {
   rows: number; // rows actually used by widgets
   widgets: PlacedWidget[];
 }
-export interface Band { groups: PlacedGroup[] }
+export interface Band {
+  groups: PlacedGroup[];
+}
 export interface MapLayout {
   bands: Band[];
   unplaced: ReportItem[];
@@ -39,7 +44,8 @@ export function buildMapLayout(items: ReportItem[]): MapLayout {
     if (!g.layout) continue;
     const w = clamp(Math.round(g.layout.w), 1, COLS);
     const x = clamp(Math.round(g.layout.x), 0, COLS - w);
-    if (w !== g.layout.w || x !== g.layout.x) warnings.push(`${g.id}: position clamped to the grid.`);
+    if (w !== g.layout.w || x !== g.layout.x)
+      warnings.push(`${g.id}: position clamped to the grid.`);
     placed.push({ item: g, title: g.title || g.id, x, w, rows: 0, widgets: [] });
   }
   const byTitle = new Map(placed.map((p) => [p.title, p]));
@@ -54,7 +60,8 @@ export function buildMapLayout(items: ReportItem[]): MapLayout {
     const x = clamp(Math.round(it.layout.x), 0, grp.w - w);
     const h = Math.max(1, Math.round(it.layout.h));
     const y = Math.max(0, Math.round(it.layout.y));
-    if (w !== it.layout.w || x !== it.layout.x) warnings.push(`${it.id}: position clamped to its group.`);
+    if (w !== it.layout.w || x !== it.layout.x)
+      warnings.push(`${it.id}: position clamped to its group.`);
     grp.widgets.push({ item: it, box: { x, y, w, h } });
     grp.rows = Math.max(grp.rows, y + h);
   }
@@ -114,7 +121,10 @@ function buildGroupedOverview(widgets: ReportItem[]): MapLayout {
     let span: number;
     let boxes: PlacedWidget[];
     if (withLayout) {
-      cols = Math.max(1, ...members.map((m) => Math.round((m.layout?.x ?? 0) + (m.layout?.w ?? 1))));
+      cols = Math.max(
+        1,
+        ...members.map((m) => Math.round((m.layout?.x ?? 0) + (m.layout?.w ?? 1))),
+      );
       span = clamp(Math.round((COLS * cols) / 24), 2, COLS);
       boxes = members.map((item) => ({
         item,
@@ -128,15 +138,31 @@ function buildGroupedOverview(widgets: ReportItem[]): MapLayout {
     } else {
       cols = Math.min(3, members.length);
       span = clamp(cols * 2, 4, COLS);
-      boxes = members.map((item, i) => ({ item, box: { x: i % cols, y: Math.floor(i / cols), w: 1, h: 1 } }));
+      boxes = members.map((item, i) => ({
+        item,
+        box: { x: i % cols, y: Math.floor(i / cols), w: 1, h: 1 },
+      }));
     }
-    placed.push({ item: null, title, x: 0, w: span, cols, rows: Math.max(...boxes.map((b) => b.box.y + b.box.h)), widgets: boxes });
+    placed.push({
+      item: null,
+      title,
+      x: 0,
+      w: span,
+      cols,
+      rows: Math.max(...boxes.map((b) => b.box.y + b.box.h)),
+      widgets: boxes,
+    });
   }
   return { bands: pack(placed), unplaced, warnings: [], grouped: true };
 }
 
 /** True when the smallest widget would render under the minimum tile height at this row unit. */
-export function needsStretch(layout: MapLayout, rowUnit: number, gap: number, minTile: number): boolean {
+export function needsStretch(
+  layout: MapLayout,
+  rowUnit: number,
+  gap: number,
+  minTile: number,
+): boolean {
   return layout.bands.some((b) =>
     b.groups.some((g) => g.widgets.some((w) => w.box.h * rowUnit + (w.box.h - 1) * gap < minTile)),
   );

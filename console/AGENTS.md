@@ -1,4 +1,5 @@
 <!-- LOVABLE:BEGIN -->
+
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
 > published git history — force pushing, or rebasing/amending/squashing commits
@@ -27,9 +28,11 @@ use the editor.
   `LOVABLE_API_KEY`. When Lovable does not provide one, users can bring their
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
+
 <!-- LOVABLE:END -->
 
 ## Project rules
+
 - All report.json field names and parsing live only in `src/lib/report.ts`; the CLI may rename fields, so this keeps renames to one file.
 - The app is browser-only: no backend, no network calls, no AI, no translation logic (hackathon rule: translation must be deterministic in the CLI).
 - Review decisions are stored in localStorage keyed by the SHA-256 of the loaded report text, so decisions never carry across reports.
@@ -43,6 +46,7 @@ use the editor.
 - Shared detail supports stacked map and three-column drawer layouts; query text breaks only at explicit whitespace/operator opportunities to preserve metric names.
 
 ## Handover rules
+
 - Browser-only. No AI calls and no network calls (the only fetch is the same-origin `/report.json` from the public folder).
 - All report parsing and `report.json` field names live only in `src/lib/report.ts`.
 - Every number shown is computed from the loaded file; never hard-code counts.

@@ -1,7 +1,11 @@
 import type { Report, ReportItem } from "./report";
 
 export type Decision = "approved" | "flagged" | "acknowledged";
-export interface DecisionEntry { decision: Decision; note: string; at: string }
+export interface DecisionEntry {
+  decision: Decision;
+  note: string;
+  at: string;
+}
 export interface ReviewState {
   reviewer: string;
   decisions: Record<string, DecisionEntry>;
@@ -12,7 +16,10 @@ export const emptyReview = (): ReviewState => ({ reviewer: "", decisions: {}, ch
 export const CHECK_RULE_CHECKLIST: { key: string; label: string }[] = [
   { key: "comparator", label: "Comparator and units" },
   { key: "window", label: "5-minute window" },
-  { key: "severity", label: "Datadog warning to Dash0 degraded (DEGRADED), critical to failed (CRITICAL)" },
+  {
+    key: "severity",
+    label: "Datadog warning to Dash0 degraded (DEGRADED), critical to failed (CRITICAL)",
+  },
   { key: "missing", label: "Missing-data behaviour" },
   { key: "routing", label: "Notification routing (not migrated)" },
 ];
@@ -39,13 +46,17 @@ export function checklistComplete(state: ReviewState, id: string): boolean {
 
 export function decisionLabel(i: ReportItem, d?: Decision): string {
   if (!d) return "Pending";
-  if (d === "approved") return i.kind === "widget" && i.status === "approximate" ? "Approved, still approximate" : "Approved";
+  if (d === "approved")
+    return i.kind === "widget" && i.status === "approximate"
+      ? "Approved, still approximate"
+      : "Approved";
   if (d === "flagged") return "Flagged";
   return "Acknowledged";
 }
 
 export function decisionMeaning(i: ReportItem, d: Decision): string {
-  if (i.kind === "monitor") return d === "approved" ? "Import the check rule." : "Do not import the check rule.";
+  if (i.kind === "monitor")
+    return d === "approved" ? "Import the check rule." : "Do not import the check rule.";
   if (d === "approved") return "Import the translated panel.";
   if (d === "flagged") return "Import a placeholder panel with the note.";
   return "Imported as a placeholder panel.";
@@ -60,7 +71,10 @@ export interface ImportPlan {
 }
 
 export function importPlan(report: Report, state: ReviewState): ImportPlan {
-  let translated = 0, placeholders = 0, pending = 0, reviewable = 0;
+  let translated = 0,
+    placeholders = 0,
+    pending = 0,
+    reviewable = 0;
   const checkRules = { total: 0, approved: 0 };
   for (const i of report.items) {
     if (i.kind === "group") continue;
@@ -84,9 +98,10 @@ export function importPlan(report: Report, state: ReviewState): ImportPlan {
 }
 
 export function planText(p: ImportPlan): string {
-  const rule = p.checkRules.total === 0
-    ? "0 check rules"
-    : `${p.checkRules.total} check rule${p.checkRules.total > 1 ? "s" : ""} (${p.checkRules.approved === p.checkRules.total ? "approved" : "not approved"})`;
+  const rule =
+    p.checkRules.total === 0
+      ? "0 check rules"
+      : `${p.checkRules.total} check rule${p.checkRules.total > 1 ? "s" : ""} (${p.checkRules.approved === p.checkRules.total ? "approved" : "not approved"})`;
   return `Plan: 1 dashboard (${p.translated} translated panels, ${p.placeholders} placeholders), ${rule}. ${p.pending} items pending.`;
 }
 
@@ -99,7 +114,11 @@ export function buildReviewJson(report: Report, sha: string, state: ReviewState)
     decisions: Object.entries(state.decisions)
       .filter(([id, d]) => {
         const item = items.get(id);
-        return item && allowedDecisions(item).includes(d.decision) && (item.kind !== "monitor" || d.decision !== "approved" || checklistComplete(state, id));
+        return (
+          item &&
+          allowedDecisions(item).includes(d.decision) &&
+          (item.kind !== "monitor" || d.decision !== "approved" || checklistComplete(state, id))
+        );
       })
       .map(([id, d]) => ({ id, decision: d.decision, note: d.note })),
   };

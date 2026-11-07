@@ -87,7 +87,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Migration Review Console" },
       { name: "description", content: "Review and sign off a Datadog to Dash0 migration report." },
       { property: "og:title", content: "Migration Review Console" },
-      { property: "og:description", content: "Review and sign off a Datadog to Dash0 migration report." },
+      {
+        property: "og:description",
+        content: "Review and sign off a Datadog to Dash0 migration report.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

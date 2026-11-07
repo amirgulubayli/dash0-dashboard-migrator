@@ -7,7 +7,11 @@ import { COPY } from "@/lib/status";
 
 export function PlanSummary() {
   const { report, review } = useReport();
-  return <code className="break-words font-mono text-xs text-body">{planText(importPlan(report, review))}</code>;
+  return (
+    <code className="break-words font-mono text-xs text-body">
+      {planText(importPlan(report, review))}
+    </code>
+  );
 }
 
 export function ExportButton() {
@@ -18,7 +22,9 @@ export function ExportButton() {
 
   const download = () => {
     if (!sha) return;
-    const blob = new Blob([JSON.stringify(buildReviewJson(report, sha, review), null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(buildReviewJson(report, sha, review), null, 2)], {
+      type: "application/json",
+    });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "review.json";
@@ -30,9 +36,15 @@ export function ExportButton() {
   if (confirming) {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-warn-foreground">{plan.pending} items still pending. Export anyway?</span>
-        <Button size="sm" onClick={download}>Export</Button>
-        <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+        <span className="text-sm text-warn-foreground">
+          {plan.pending} items still pending. Export anyway?
+        </span>
+        <Button size="sm" onClick={download}>
+          Export
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+          Cancel
+        </Button>
       </div>
     );
   }

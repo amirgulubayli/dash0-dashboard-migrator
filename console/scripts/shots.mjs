@@ -4,7 +4,12 @@ import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
 const base = process.env.SHOTS_URL ?? "http://localhost:8080";
-const pages = [["overview", "/"], ["map", "/map"], ["items", "/items"], ["review", "/review"]];
+const pages = [
+  ["overview", "/"],
+  ["map", "/map"],
+  ["items", "/items"],
+  ["review", "/review"],
+];
 mkdirSync("shots", { recursive: true });
 const browser = await chromium.launch();
 let overflow = false;
@@ -16,11 +21,18 @@ for (const width of [1920, 1440]) {
     if (width === 1920) await page.screenshot({ path: `shots/${name}.png` });
     const wide = await page.evaluate(() => {
       const w = document.documentElement.clientWidth;
-      const els = [...document.querySelectorAll("body *")].filter((e) => e.getBoundingClientRect().right > w + 1 && !e.closest("[data-scroll-ok]"));
-      return { scroll: document.documentElement.scrollWidth - w, offenders: els.slice(0, 3).map((e) => e.tagName + "." + String(e.className).slice(0, 60)) };
+      const els = [...document.querySelectorAll("body *")].filter(
+        (e) => e.getBoundingClientRect().right > w + 1 && !e.closest("[data-scroll-ok]"),
+      );
+      return {
+        scroll: document.documentElement.scrollWidth - w,
+        offenders: els.slice(0, 3).map((e) => e.tagName + "." + String(e.className).slice(0, 60)),
+      };
     });
-    if (wide.scroll > 0) { overflow = true; console.log(`OVERFLOW ${width} ${name}: ${wide.scroll}px`, wide.offenders); }
-    else console.log(`ok ${width} ${name}`);
+    if (wide.scroll > 0) {
+      overflow = true;
+      console.log(`OVERFLOW ${width} ${name}: ${wide.scroll}px`, wide.offenders);
+    } else console.log(`ok ${width} ${name}`);
   }
   await page.close();
 }

@@ -12,9 +12,7 @@
         "x": 0,
         "y": 0
       },
-      "reason_codes": [
-        "LAYOUT_APPROXIMATE"
-      ],
+      "reason_codes": ["LAYOUT_APPROXIMATE"],
       "source_path": "/widgets/0",
       "status": "approximate",
       "target_panel": "Grid section",
@@ -109,9 +107,7 @@
         "x": 8,
         "y": 0
       },
-      "reason_codes": [
-        "LAYOUT_APPROXIMATE"
-      ],
+      "reason_codes": ["LAYOUT_APPROXIMATE"],
       "source_path": "/widgets/1",
       "status": "approximate",
       "target_panel": "Grid section",
@@ -135,11 +131,7 @@
       },
       "notes": "",
       "promql": "100 * avg(rate({otel_metric_name=\"redis.keyspace.hits\"}[1m])) / (avg(rate({otel_metric_name=\"redis.keyspace.hits\"}[1m])) + avg(rate({otel_metric_name=\"redis.keyspace.misses\"}[1m])))",
-      "reason_codes": [
-        "RATE_CONVERSION",
-        "ZERO_DENOMINATOR_RISK",
-        "TEMPLATE_VARIABLE_PINNED"
-      ],
+      "reason_codes": ["RATE_CONVERSION", "ZERO_DENOMINATOR_RISK", "TEMPLATE_VARIABLE_PINNED"],
       "source_formula": "(query1 / (query1 + query2)) * 100",
       "source_path": "/widgets/1/definition/widgets/0",
       "source_queries": [
@@ -181,14 +173,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.clients.blocked\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": null,
       "source_path": "/widgets/1/definition/widgets/1",
-      "source_queries": [
-        "sum:redis.clients.blocked{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.clients.blocked{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 1,
@@ -224,14 +212,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.db.keys\"})",
-      "reason_codes": [
-        "DB_SUM_REQUIRED"
-      ],
+      "reason_codes": ["DB_SUM_REQUIRED"],
       "source_formula": null,
       "source_path": "/widgets/1/definition/widgets/2",
-      "source_queries": [
-        "sum:redis.keys{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.keys{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 1,
@@ -267,14 +251,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.rdb.changes_since_last_save\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": null,
       "source_path": "/widgets/1/definition/widgets/3",
-      "source_queries": [
-        "sum:redis.rdb.changes_since_last{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.rdb.changes_since_last{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 1,
@@ -310,14 +290,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "NO_EQUIVALENT_METRIC"
-      ],
+      "reason_codes": ["NO_EQUIVALENT_METRIC"],
       "source_formula": null,
       "source_path": "/widgets/1/definition/widgets/4",
-      "source_queries": [
-        "sum:redis.replication.master_link_down_since_seconds{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.replication.master_link_down_since_seconds{$scope,$host}"],
       "status": "no_data",
       "target_layout": {
         "h": 2,
@@ -385,9 +361,7 @@
         "x": 0,
         "y": 0
       },
-      "reason_codes": [
-        "LAYOUT_APPROXIMATE"
-      ],
+      "reason_codes": ["LAYOUT_APPROXIMATE"],
       "source_path": "/widgets/2",
       "status": "approximate",
       "target_panel": "Grid section",
@@ -411,14 +385,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "NO_EQUIVALENT_METRIC"
-      ],
+      "reason_codes": ["NO_EQUIVALENT_METRIC"],
       "source_formula": "query2",
       "source_path": "/widgets/2/definition/widgets/0",
-      "source_queries": [
-        "avg:redis.info.latency_ms{$scope,$host} by {host}"
-      ],
+      "source_queries": ["avg:redis.info.latency_ms{$scope,$host} by {host}"],
       "status": "no_data",
       "target_layout": {
         "h": 4,
@@ -493,14 +463,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "NO_EQUIVALENT_METRIC"
-      ],
+      "reason_codes": ["NO_EQUIVALENT_METRIC"],
       "source_formula": "top(query1 / 1000, 10, 'mean', 'desc')",
       "source_path": "/widgets/2/definition/widgets/2",
-      "source_queries": [
-        "sum:redis.slowlog.micros.95percentile{$scope,$host} by {name,command}"
-      ],
+      "source_queries": ["sum:redis.slowlog.micros.95percentile{$scope,$host} by {name,command}"],
       "status": "no_data",
       "target_layout": {
         "h": 2,
@@ -536,14 +502,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "NO_EQUIVALENT_METRIC"
-      ],
+      "reason_codes": ["NO_EQUIVALENT_METRIC"],
       "source_formula": "query1",
       "source_path": "/widgets/2/definition/widgets/3",
-      "source_queries": [
-        "sum:redis.slowlog.micros.count{$host,$scope} by {command,name}"
-      ],
+      "source_queries": ["sum:redis.slowlog.micros.count{$host,$scope} by {command,name}"],
       "status": "no_data",
       "target_layout": {
         "h": 2,
@@ -579,14 +541,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "NO_EQUIVALENT_METRIC"
-      ],
+      "reason_codes": ["NO_EQUIVALENT_METRIC"],
       "source_formula": "query1",
       "source_path": "/widgets/2/definition/widgets/4",
-      "source_queries": [
-        "avg:redis.replication.delay{$host,$scope}"
-      ],
+      "source_queries": ["avg:redis.replication.delay{$host,$scope}"],
       "status": "no_data",
       "target_layout": {
         "h": 2,
@@ -625,18 +583,10 @@
         "avg(rate({otel_metric_name=\"redis.cpu.time\",state=\"sys\"}[1m]))",
         "avg(rate({otel_metric_name=\"redis.cpu.time\",state=\"user\"}[1m]))"
       ],
-      "reason_codes": [
-        "RATE_CONVERSION"
-      ],
-      "source_formula": [
-        "query1",
-        "query2"
-      ],
+      "reason_codes": ["RATE_CONVERSION"],
+      "source_formula": ["query1", "query2"],
       "source_path": "/widgets/2/definition/widgets/5",
-      "source_queries": [
-        "avg:redis.cpu.sys{$host,$scope}",
-        "avg:redis.cpu.user{$host,$scope}"
-      ],
+      "source_queries": ["avg:redis.cpu.sys{$host,$scope}", "avg:redis.cpu.user{$host,$scope}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -672,10 +622,7 @@
       },
       "notes": "",
       "promql": "100 * avg(rate({otel_metric_name=\"redis.keyspace.hits\"}[1m])) / (avg(rate({otel_metric_name=\"redis.keyspace.hits\"}[1m])) + avg(rate({otel_metric_name=\"redis.keyspace.misses\"}[1m])))",
-      "reason_codes": [
-        "RATE_CONVERSION",
-        "ZERO_DENOMINATOR_RISK"
-      ],
+      "reason_codes": ["RATE_CONVERSION", "ZERO_DENOMINATOR_RISK"],
       "source_formula": "(query1 / (query1 + query2)) * 100",
       "source_path": "/widgets/2/definition/widgets/6",
       "source_queries": [
@@ -717,10 +664,7 @@
       },
       "notes": "",
       "promql": "100 * avg(rate({otel_metric_name=\"redis.keyspace.hits\"}[1m])) / (avg(rate({otel_metric_name=\"redis.keyspace.hits\"}[1m])) + avg(rate({otel_metric_name=\"redis.keyspace.misses\"}[1m])))",
-      "reason_codes": [
-        "RATE_CONVERSION",
-        "ZERO_DENOMINATOR_RISK"
-      ],
+      "reason_codes": ["RATE_CONVERSION", "ZERO_DENOMINATOR_RISK"],
       "source_formula": "(query1 / (query1 + query2)) * 100",
       "source_path": "/widgets/2/definition/widgets/7",
       "source_queries": [
@@ -755,9 +699,7 @@
         "x": 6,
         "y": 0
       },
-      "reason_codes": [
-        "LAYOUT_APPROXIMATE"
-      ],
+      "reason_codes": ["LAYOUT_APPROXIMATE"],
       "source_path": "/widgets/3",
       "status": "approximate",
       "target_panel": "Grid section",
@@ -781,11 +723,7 @@
       },
       "notes": "",
       "promql": "100 * avg({otel_metric_name=\"redis.memory.used\"}) / max({otel_metric_name=\"redis.maxmemory\"})",
-      "reason_codes": [
-        "LABEL_MAPPING_MISSING",
-        "METRIC_NOT_ENABLED",
-        "ZERO_DENOMINATOR_RISK"
-      ],
+      "reason_codes": ["LABEL_MAPPING_MISSING", "METRIC_NOT_ENABLED", "ZERO_DENOMINATOR_RISK"],
       "source_formula": "(query1 / query2) * 100",
       "source_path": "/widgets/3/definition/widgets/0",
       "source_queries": [
@@ -866,15 +804,10 @@
       },
       "notes": "",
       "promql": "60 * sum(rate({otel_metric_name=\"redis.keys.evicted\"}[1m]))",
-      "reason_codes": [
-        "APPROXIMATE_FUNCTION",
-        "LABEL_MAPPING_MISSING"
-      ],
+      "reason_codes": ["APPROXIMATE_FUNCTION", "LABEL_MAPPING_MISSING"],
       "source_formula": "per_minute(query2)",
       "source_path": "/widgets/3/definition/widgets/2",
-      "source_queries": [
-        "sum:redis.keys.evicted{$scope,$host} by {host}"
-      ],
+      "source_queries": ["sum:redis.keys.evicted{$scope,$host} by {host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -910,14 +843,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.memory.rss\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": "query1",
       "source_path": "/widgets/3/definition/widgets/3",
-      "source_queries": [
-        "sum:redis.mem.rss{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.mem.rss{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -953,14 +882,10 @@
       },
       "notes": "",
       "promql": "avg({otel_metric_name=\"redis.memory.fragmentation_ratio\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": null,
       "source_path": "/widgets/3/definition/widgets/4",
-      "source_queries": [
-        "avg:redis.mem.fragmentation_ratio{$scope,$host}"
-      ],
+      "source_queries": ["avg:redis.mem.fragmentation_ratio{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -996,14 +921,10 @@
       },
       "notes": "",
       "promql": "avg({otel_metric_name=\"redis.memory.fragmentation_ratio\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": "query1",
       "source_path": "/widgets/3/definition/widgets/5",
-      "source_queries": [
-        "avg:redis.mem.fragmentation_ratio{$scope,$host}"
-      ],
+      "source_queries": ["avg:redis.mem.fragmentation_ratio{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1032,9 +953,7 @@
         "x": 0,
         "y": 0
       },
-      "reason_codes": [
-        "LAYOUT_APPROXIMATE"
-      ],
+      "reason_codes": ["LAYOUT_APPROXIMATE"],
       "source_path": "/widgets/4",
       "status": "approximate",
       "target_panel": "Grid section",
@@ -1058,14 +977,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.clients.connected\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": "query1",
       "source_path": "/widgets/4/definition/widgets/0",
-      "source_queries": [
-        "sum:redis.net.clients{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.net.clients{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1140,14 +1055,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.clients.blocked\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": "query2",
       "source_path": "/widgets/4/definition/widgets/2",
-      "source_queries": [
-        "sum:redis.clients.blocked{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.clients.blocked{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1183,14 +1094,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.slaves.connected\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": "query1",
       "source_path": "/widgets/4/definition/widgets/3",
-      "source_queries": [
-        "sum:redis.net.slaves{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.net.slaves{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1226,14 +1133,10 @@
       },
       "notes": "",
       "promql": "sum(increase({otel_metric_name=\"redis.connections.rejected\"}[1m]))",
-      "reason_codes": [
-        "APPROXIMATE_FUNCTION"
-      ],
+      "reason_codes": ["APPROXIMATE_FUNCTION"],
       "source_formula": "diff(query1)",
       "source_path": "/widgets/4/definition/widgets/4",
-      "source_queries": [
-        "sum:redis.net.rejected{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.net.rejected{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1269,14 +1172,10 @@
       },
       "notes": "",
       "promql": "sum(rate({otel_metric_name=\"redis.commands.processed\"}[1m]))",
-      "reason_codes": [
-        "RATE_CONVERSION"
-      ],
+      "reason_codes": ["RATE_CONVERSION"],
       "source_formula": "query1",
       "source_path": "/widgets/4/definition/widgets/5",
-      "source_queries": [
-        "sum:redis.net.commands{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.net.commands{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1305,9 +1204,7 @@
         "x": 0,
         "y": 5
       },
-      "reason_codes": [
-        "LAYOUT_APPROXIMATE"
-      ],
+      "reason_codes": ["LAYOUT_APPROXIMATE"],
       "source_path": "/widgets/5",
       "status": "approximate",
       "target_panel": "Grid section",
@@ -1331,14 +1228,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.db.keys\"})",
-      "reason_codes": [
-        "DB_SUM_REQUIRED"
-      ],
+      "reason_codes": ["DB_SUM_REQUIRED"],
       "source_formula": "query1",
       "source_path": "/widgets/5/definition/widgets/0",
-      "source_queries": [
-        "sum:redis.keys{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.keys{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1374,14 +1267,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.db.keys\"})",
-      "reason_codes": [
-        "DB_SUM_REQUIRED"
-      ],
+      "reason_codes": ["DB_SUM_REQUIRED"],
       "source_formula": "query1",
       "source_path": "/widgets/5/definition/widgets/1",
-      "source_queries": [
-        "sum:redis.keys{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.keys{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1456,14 +1345,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.keys.expired\"})",
-      "reason_codes": [
-        "DEFAULT_ROLLUP_DIFFERENCE"
-      ],
+      "reason_codes": ["DEFAULT_ROLLUP_DIFFERENCE"],
       "source_formula": "query1",
       "source_path": "/widgets/5/definition/widgets/3",
-      "source_queries": [
-        "sum:redis.keys.expired{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.keys.expired{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1499,14 +1384,10 @@
       },
       "notes": "",
       "promql": "sum({otel_metric_name=\"redis.db.expires\"})",
-      "reason_codes": [
-        "DB_SUM_REQUIRED"
-      ],
+      "reason_codes": ["DB_SUM_REQUIRED"],
       "source_formula": "query1",
       "source_path": "/widgets/5/definition/widgets/4",
-      "source_queries": [
-        "sum:redis.expires{$scope,$host}"
-      ],
+      "source_queries": ["sum:redis.expires{$scope,$host}"],
       "status": "approximate",
       "target_layout": {
         "h": 2,
@@ -1542,15 +1423,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "UNSUPPORTED_WIDGET",
-        "NO_EQUIVALENT_METRIC"
-      ],
+      "reason_codes": ["UNSUPPORTED_WIDGET", "NO_EQUIVALENT_METRIC"],
       "source_formula": "query1",
       "source_path": "/widgets/5/definition/widgets/5",
-      "source_queries": [
-        "sum:redis.key.length{$scope, $host, $key} by {key}"
-      ],
+      "source_queries": ["sum:redis.key.length{$scope, $host, $key} by {key}"],
       "status": "unsupported",
       "target_layout": {
         "h": 2,
@@ -1579,9 +1455,7 @@
         "x": 0,
         "y": 10
       },
-      "reason_codes": [
-        "LAYOUT_APPROXIMATE"
-      ],
+      "reason_codes": ["LAYOUT_APPROXIMATE"],
       "source_path": "/widgets/6",
       "status": "approximate",
       "target_panel": "Grid section",
@@ -1605,15 +1479,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "UNSUPPORTED_WIDGET",
-        "NON_METRIC_DATA_SOURCE"
-      ],
+      "reason_codes": ["UNSUPPORTED_WIDGET", "NON_METRIC_DATA_SOURCE"],
       "source_formula": null,
       "source_path": "/widgets/6/definition/widgets/0",
-      "source_queries": [
-        "source:redis $scope $host status:error"
-      ],
+      "source_queries": ["source:redis $scope $host status:error"],
       "status": "unsupported",
       "target_layout": {
         "h": 8,
@@ -1649,15 +1518,10 @@
       },
       "notes": "",
       "promql": null,
-      "reason_codes": [
-        "UNSUPPORTED_WIDGET",
-        "NON_METRIC_DATA_SOURCE"
-      ],
+      "reason_codes": ["UNSUPPORTED_WIDGET", "NON_METRIC_DATA_SOURCE"],
       "source_formula": null,
       "source_path": "/widgets/6/definition/widgets/1",
-      "source_queries": [
-        "source:redis $scope $host"
-      ],
+      "source_queries": ["source:redis $scope $host"],
       "status": "unsupported",
       "target_layout": {
         "h": 8,

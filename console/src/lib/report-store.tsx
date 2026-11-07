@@ -1,10 +1,30 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import sampleText from "@/data/report.sample.json?raw";
 import { parseReport, type Report } from "./report";
 import { sha256Hex } from "./fingerprint";
-import { allowedDecisions, checklistComplete, emptyReview, storageKey, type Decision, type ReviewState } from "./review";
+import {
+  allowedDecisions,
+  checklistComplete,
+  emptyReview,
+  storageKey,
+  type Decision,
+  type ReviewState,
+} from "./review";
 
-interface Loaded { report: Report; text: string; sourceName: string; isSample: boolean }
+interface Loaded {
+  report: Report;
+  text: string;
+  sourceName: string;
+  isSample: boolean;
+}
 
 function loadSample(): Loaded {
   const r = parseReport(sampleText);
@@ -53,15 +73,21 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         setReviewLoadedFor(null);
         setLoaded({ report: r.report, text, sourceName: "report.json", isSample: false });
       })
-      .catch(() => { /* no public report.json: keep the sample */ });
-    return () => { alive = false; };
+      .catch(() => {
+        /* no public report.json: keep the sample */
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
     let alive = true;
     setSha(null);
     sha256Hex(loaded.text).then((h) => alive && setSha(h));
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [loaded.text]);
 
   // Load decisions stored under this report's fingerprint.
@@ -71,19 +97,28 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     try {
       const raw = localStorage.getItem(storageKey(sha));
       if (raw) next = { ...next, ...JSON.parse(raw) };
-    } catch { /* ignore corrupt storage */ }
+    } catch {
+      /* ignore corrupt storage */
+    }
     setReview(next);
     setReviewLoadedFor(sha);
   }, [sha]);
 
   useEffect(() => {
     if (!sha || reviewLoadedFor !== sha) return;
-    try { localStorage.setItem(storageKey(sha), JSON.stringify(review)); } catch { /* storage full */ }
+    try {
+      localStorage.setItem(storageKey(sha), JSON.stringify(review));
+    } catch {
+      /* storage full */
+    }
   }, [review, sha, reviewLoadedFor]);
 
   const loadText = useCallback((text: string, name: string) => {
     const r = parseReport(text);
-    if (!r.ok) { setLoadError(r.error); return; }
+    if (!r.ok) {
+      setLoadError(r.error);
+      return;
+    }
     setLoadError(null);
     setSelectedId(null);
     setReviewLoadedFor(null);
@@ -97,38 +132,59 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     setLoaded(loadSample());
   }, []);
 
-  const value = useMemo<Ctx>(() => ({
-    report: loaded.report,
-    sourceName: loaded.sourceName,
-    isSample: loaded.isSample || !!loaded.report.sampleNotice,
-    sha,
-    loadError,
-    loadText,
-    resetToSample,
-    selectedId,
-    select: setSelectedId,
-    review,
-    setReviewer: (reviewer) => setReview((s) => ({ ...s, reviewer })),
-    decide: (id, d, note) => setReview((s) => {
-      const item = loaded.report.items.find((i) => i.id === id);
-      if (!item || (d && (!allowedDecisions(item).includes(d) || (item.kind === "monitor" && d === "approved" && !checklistComplete(s, id))))) return s;
-      const decisions = { ...s.decisions };
-      if (!d) delete decisions[id];
-      else decisions[id] = { decision: d, note: note ?? s.decisions[id]?.note ?? "", at: new Date().toISOString() };
-      return { ...s, decisions };
+  const value = useMemo<Ctx>(
+    () => ({
+      report: loaded.report,
+      sourceName: loaded.sourceName,
+      isSample: loaded.isSample || !!loaded.report.sampleNotice,
+      sha,
+      loadError,
+      loadText,
+      resetToSample,
+      selectedId,
+      select: setSelectedId,
+      review,
+      setReviewer: (reviewer) => setReview((s) => ({ ...s, reviewer })),
+      decide: (id, d, note) =>
+        setReview((s) => {
+          const item = loaded.report.items.find((i) => i.id === id);
+          if (
+            !item ||
+            (d &&
+              (!allowedDecisions(item).includes(d) ||
+                (item.kind === "monitor" && d === "approved" && !checklistComplete(s, id))))
+          )
+            return s;
+          const decisions = { ...s.decisions };
+          if (!d) delete decisions[id];
+          else
+            decisions[id] = {
+              decision: d,
+              note: note ?? s.decisions[id]?.note ?? "",
+              at: new Date().toISOString(),
+            };
+          return { ...s, decisions };
+        }),
+      setNote: (id, note) =>
+        setReview((s) => {
+          const cur = s.decisions[id];
+          if (!cur) return s;
+          return { ...s, decisions: { ...s.decisions, [id]: { ...cur, note } } };
+        }),
+      setCheck: (id, key, v) =>
+        setReview((s) => {
+          const decisions = { ...s.decisions };
+          if (!v && decisions[id]?.decision === "approved") delete decisions[id];
+          return {
+            ...s,
+            decisions,
+            checklist: { ...s.checklist, [id]: { ...(s.checklist[id] ?? {}), [key]: v } },
+          };
+        }),
+      clearDecisions: () => setReview((s) => ({ ...s, decisions: {}, checklist: {} })),
     }),
-    setNote: (id, note) => setReview((s) => {
-      const cur = s.decisions[id];
-      if (!cur) return s;
-      return { ...s, decisions: { ...s.decisions, [id]: { ...cur, note } } };
-    }),
-    setCheck: (id, key, v) => setReview((s) => {
-      const decisions = { ...s.decisions };
-      if (!v && decisions[id]?.decision === "approved") delete decisions[id];
-      return { ...s, decisions, checklist: { ...s.checklist, [id]: { ...(s.checklist[id] ?? {}), [key]: v } } };
-    }),
-    clearDecisions: () => setReview((s) => ({ ...s, decisions: {}, checklist: {} })),
-  }), [loaded, sha, loadError, loadText, resetToSample, selectedId, review]);
+    [loaded, sha, loadError, loadText, resetToSample, selectedId, review],
+  );
 
   return <ReportCtx.Provider value={value}>{children}</ReportCtx.Provider>;
 }

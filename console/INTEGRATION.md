@@ -36,33 +36,33 @@ npx bun run lint
 
 Top level. Only `items` is required; without an `items` array the file is rejected.
 
-| Field | Used for |
-| --- | --- |
-| `items` (required, array) | Everything below |
-| `schema_version` | Shown only |
-| `run.tool_version`, `run.source`, `run.source_commit`, `run.source_sha256`, `run.mapping_version`, `run.rule_version` | Run info |
-| `SAMPLE` | If present, the sample banner is shown (see section 4) |
-| `summary.widgets`, `summary.monitors` | Counts per status plus `total`; each missing number falls back to a count from `items` |
-| `summary.metrics.mapped`, `.total`, `.no_equivalent` | Metric coverage |
-| `summary.numerical.passed`, `.failed` | Numbers-check count |
-| `diagnostics` (array) | Kept, passed through |
+| Field                                                                                                                 | Used for                                                                               |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `items` (required, array)                                                                                             | Everything below                                                                       |
+| `schema_version`                                                                                                      | Shown only                                                                             |
+| `run.tool_version`, `run.source`, `run.source_commit`, `run.source_sha256`, `run.mapping_version`, `run.rule_version` | Run info                                                                               |
+| `SAMPLE`                                                                                                              | If present, the sample banner is shown (see section 4)                                 |
+| `summary.widgets`, `summary.monitors`                                                                                 | Counts per status plus `total`; each missing number falls back to a count from `items` |
+| `summary.metrics.mapped`, `.total`, `.no_equivalent`                                                                  | Metric coverage                                                                        |
+| `summary.numerical.passed`, `.failed`                                                                                 | Numbers-check count                                                                    |
+| `diagnostics` (array)                                                                                                 | Kept, passed through                                                                   |
 
 Each entry in `items`:
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `id` | **yes** | String. Numbers are converted to strings. Decisions are keyed by it. |
-| `status` | **yes** | `exact`, `approximate`, `no_data`, `unsupported` or `failed`. May be omitted if `claim` is set (see below). |
-| `kind` | no | `group`, `widget` or `monitor`. If missing it is inferred from the id: starts with `group` is a group, starts with `monitor` is a monitor, otherwise a widget. |
-| `claim` | no | `exact`, `exact-under`, `bounded` or `manual`. Any other value is ignored. |
-| `condition` | no | Text used with `exact-under`. |
-| `title`, `widget_type`, `group`, `source_path`, `target_panel`, `notes` | no | Display text. `widget_type` of `note` is a text note; `list_stream` and `log_stream` are log panels. |
-| `layout`, `target_layout` | no | `{x, y, w, h}`. Needs numeric `w` and `h`, otherwise treated as absent. `x` and `y` default to 0. |
-| `source_queries`, `source_formula`, `promql`, `reason_codes` | no | Array of strings. A single string is wrapped into an array. Missing means empty. |
-| `thresholds.degraded`, `thresholds.failed` | no | Numbers, for the check rule. |
-| `verification.schema_valid`, `.promql_valid`, `.imported`, `.returns_data` | no | Booleans. Anything else (including `null` and missing) is kept as `null`, which means "not tested". `returns_data: false` shows "No samples yet". |
-| `verification.numeric_check` | no | Kept as is. |
-| `dash0.asset_id`, `dash0.url`, `dash0.import_status` | no | Strings or `null`. A `dash0.url` shows an "Open in Dash0" link. |
+| Field                                                                      | Required | Notes                                                                                                                                                          |
+| -------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                                       | **yes**  | String. Numbers are converted to strings. Decisions are keyed by it.                                                                                           |
+| `status`                                                                   | **yes**  | `exact`, `approximate`, `no_data`, `unsupported` or `failed`. May be omitted if `claim` is set (see below).                                                    |
+| `kind`                                                                     | no       | `group`, `widget` or `monitor`. If missing it is inferred from the id: starts with `group` is a group, starts with `monitor` is a monitor, otherwise a widget. |
+| `claim`                                                                    | no       | `exact`, `exact-under`, `bounded` or `manual`. Any other value is ignored.                                                                                     |
+| `condition`                                                                | no       | Text used with `exact-under`.                                                                                                                                  |
+| `title`, `widget_type`, `group`, `source_path`, `target_panel`, `notes`    | no       | Display text. `widget_type` of `note` is a text note; `list_stream` and `log_stream` are log panels.                                                           |
+| `layout`, `target_layout`                                                  | no       | `{x, y, w, h}`. Needs numeric `w` and `h`, otherwise treated as absent. `x` and `y` default to 0.                                                              |
+| `source_queries`, `source_formula`, `promql`, `reason_codes`               | no       | Array of strings. A single string is wrapped into an array. Missing means empty.                                                                               |
+| `thresholds.degraded`, `thresholds.failed`                                 | no       | Numbers, for the check rule.                                                                                                                                   |
+| `verification.schema_valid`, `.promql_valid`, `.imported`, `.returns_data` | no       | Booleans. Anything else (including `null` and missing) is kept as `null`, which means "not tested". `returns_data: false` shows "No samples yet".              |
+| `verification.numeric_check`                                               | no       | Kept as is.                                                                                                                                                    |
+| `dash0.asset_id`, `dash0.url`, `dash0.import_status`                       | no       | Strings or `null`. A `dash0.url` shows an "Open in Dash0" link.                                                                                                |
 
 An item with no `id`, or with neither `status` nor a usable `claim`, is skipped and a warning is recorded.
 
@@ -82,9 +82,7 @@ Exported from the Review page as `review.json`:
   "schema_version": "1",
   "report_sha256": "<SHA-256 hex of the exact report.json text that was loaded>",
   "reviewer": "name typed by the reviewer",
-  "decisions": [
-    { "id": "widget-4.1", "decision": "approved", "note": "" }
-  ]
+  "decisions": [{ "id": "widget-4.1", "decision": "approved", "note": "" }]
 }
 ```
 
@@ -95,15 +93,15 @@ Exported from the Review page as `review.json`:
 
 What each decision means for import:
 
-| Item | Decision | Import does |
-| --- | --- | --- |
-| Exact widget | none needed | Imports the translated panel |
-| Approximate widget | `approved` | Imports the translated panel |
-| Approximate widget | `flagged` | Imports a placeholder panel with the note |
-| Approximate widget | no decision | Not decided; the console counts it as pending |
-| Unsupported, no-equivalent or failed widget | `acknowledged` | Always a placeholder panel |
-| Check rule | `approved` | Imports the check rule |
-| Check rule | `flagged` or none | Does not import the check rule |
+| Item                                        | Decision          | Import does                                   |
+| ------------------------------------------- | ----------------- | --------------------------------------------- |
+| Exact widget                                | none needed       | Imports the translated panel                  |
+| Approximate widget                          | `approved`        | Imports the translated panel                  |
+| Approximate widget                          | `flagged`         | Imports a placeholder panel with the note     |
+| Approximate widget                          | no decision       | Not decided; the console counts it as pending |
+| Unsupported, no-equivalent or failed widget | `acknowledged`    | Always a placeholder panel                    |
+| Check rule                                  | `approved`        | Imports the check rule                        |
+| Check rule                                  | `flagged` or none | Does not import the check rule                |
 
 ## 4. The integration hook
 
@@ -136,15 +134,15 @@ cd console && npx bun install --frozen-lockfile && npx bun run test && npx bun r
 
 ## 6. Tasks for the team board
 
-| ID | Owner role | Task | Files | Acceptance check |
-| --- | --- | --- | --- | --- |
-| U1 | Fork maintainer | Copy the app into `console/` and open a PR. | `console/**`, root lint, test and tsconfig excludes | The smoke test passes in `console/`. Root lint, tests and tsc do not touch `console/`. |
-| U2 | CLI engineer | CLI writes `report.json` to `console/public/report.json` using the agreed schema. | CLI report writer, `console/public/report.json` | `npx bun run dev` loads it with no sample banner. The warnings list is empty. |
-| U3 | CLI engineer | CLI reads `review.json` with `--approved` and checks `report_sha256`. | CLI import command | A `review.json` from a different `report.json` is refused with a clear error. A matching one imports per the table in section 3. |
-| U4 | Console engineer | Replace the sample with real CLI output and fix field mismatches. Change `src/lib/report.ts` only. | `src/lib/report.ts`, `src/test/report.test.ts` | Counts on Overview match the CLI's own summary. No other file changed for a rename. |
-| U5 | CLI engineer | After import, fill `dash0.url` and the `verification` fields, then re-write `report.json`. | CLI import step, `console/public/report.json` | Items show "Open in Dash0" and verified chips. The new file has a new hash, so old decisions do not carry over. |
-| U6 | Front-end engineer | Projector polish on real data. | `src/styles.css`, `src/components/map/DashboardMap.tsx`, `src/components/detail/DetailPanel.tsx` | `npx bun run shots` reports no overflow at 1920x1080 and 1440x900. Approve, Flag and Acknowledge are visible on the map without scrolling the page. |
-| U7 | Front-end engineer (optional) | Evidence tab for the numbers check. | `src/lib/report.ts` (read `numeric_check`), a new component under `src/components/` | Each item with a `numeric_check` shows its result. Counts come from the file. |
+| ID  | Owner role                    | Task                                                                                               | Files                                                                                            | Acceptance check                                                                                                                                    |
+| --- | ----------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U1  | Fork maintainer               | Copy the app into `console/` and open a PR.                                                        | `console/**`, root lint, test and tsconfig excludes                                              | The smoke test passes in `console/`. Root lint, tests and tsc do not touch `console/`.                                                              |
+| U2  | CLI engineer                  | CLI writes `report.json` to `console/public/report.json` using the agreed schema.                  | CLI report writer, `console/public/report.json`                                                  | `npx bun run dev` loads it with no sample banner. The warnings list is empty.                                                                       |
+| U3  | CLI engineer                  | CLI reads `review.json` with `--approved` and checks `report_sha256`.                              | CLI import command                                                                               | A `review.json` from a different `report.json` is refused with a clear error. A matching one imports per the table in section 3.                    |
+| U4  | Console engineer              | Replace the sample with real CLI output and fix field mismatches. Change `src/lib/report.ts` only. | `src/lib/report.ts`, `src/test/report.test.ts`                                                   | Counts on Overview match the CLI's own summary. No other file changed for a rename.                                                                 |
+| U5  | CLI engineer                  | After import, fill `dash0.url` and the `verification` fields, then re-write `report.json`.         | CLI import step, `console/public/report.json`                                                    | Items show "Open in Dash0" and verified chips. The new file has a new hash, so old decisions do not carry over.                                     |
+| U6  | Front-end engineer            | Projector polish on real data.                                                                     | `src/styles.css`, `src/components/map/DashboardMap.tsx`, `src/components/detail/DetailPanel.tsx` | `npx bun run shots` reports no overflow at 1920x1080 and 1440x900. Approve, Flag and Acknowledge are visible on the map without scrolling the page. |
+| U7  | Front-end engineer (optional) | Evidence tab for the numbers check.                                                                | `src/lib/report.ts` (read `numeric_check`), a new component under `src/components/`              | Each item with a `numeric_check` shows its result. Counts come from the file.                                                                       |
 
 ## 7. Known gaps
 

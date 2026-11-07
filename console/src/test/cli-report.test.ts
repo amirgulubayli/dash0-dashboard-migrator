@@ -41,7 +41,9 @@ describe("CLI report.json mapping", () => {
     expect(status("exact")).toBe(byRawStatus("exact-under"));
     expect(status("approximate")).toBe(byRawStatus("bounded"));
     expect(status("unsupported")).toBe(byRawStatus("manual") + byRawStatus("unsupported"));
-    expect(rep.items.every((i) => ["exact", "approximate", "unsupported"].includes(i.status))).toBe(true);
+    expect(rep.items.every((i) => ["exact", "approximate", "unsupported"].includes(i.status))).toBe(
+      true,
+    );
   });
 
   it("shows an exact-under item as 'Exact if <assumption text>', not 'condition not supplied'", () => {
@@ -69,7 +71,11 @@ describe("CLI report.json mapping", () => {
   it("reads target into dash0, with no URL", () => {
     const rep = load();
     const alert = rep.items.find((i) => i.kind === "monitor");
-    expect(alert?.dash0).toEqual({ asset_id: "8f2feda9-c3a8-5b04-a601-58a589b122a5", url: null, import_status: "dry-run" });
+    expect(alert?.dash0).toEqual({
+      asset_id: "8f2feda9-c3a8-5b04-a601-58a589b122a5",
+      url: null,
+      import_status: "dry-run",
+    });
     expect(rep.items.find((i) => i.kind === "widget")?.dash0?.asset_id).toBe("dd-redisdb-overview");
   });
 
@@ -77,15 +83,31 @@ describe("CLI report.json mapping", () => {
     const rep = load();
     expect(rep.schema_version).toBe("dd2dash0.report/v1");
     expect(rep.run.tool_version).toBe("dd2dash0 0.2.0");
-    expect(rep.run.source_sha256).toBe("9bafa06fce9833bda170dc5237ce964732872cd43b44cc271b7d32516ea2f7fc");
+    expect(rep.run.source_sha256).toBe(
+      "9bafa06fce9833bda170dc5237ce964732872cd43b44cc271b7d32516ea2f7fc",
+    );
     expect(rep.run.mapping_version).toBe("mappings/tags.yaml, datadog/redisdb.yaml");
   });
 
   it("takes summary counts from summary.byKind and they match the CLI's own numbers", () => {
     const rep = load();
     expect(rep.summary.summaryFromFile).toBe(true);
-    expect(rep.summary.widgets).toEqual({ exact: 18, approximate: 10, unsupported: 8, no_data: 0, failed: 0, total: 36 });
-    expect(rep.summary.monitors).toEqual({ exact: 1, approximate: 0, unsupported: 0, no_data: 0, failed: 0, total: 1 });
+    expect(rep.summary.widgets).toEqual({
+      exact: 18,
+      approximate: 10,
+      unsupported: 8,
+      no_data: 0,
+      failed: 0,
+      total: 36,
+    });
+    expect(rep.summary.monitors).toEqual({
+      exact: 1,
+      approximate: 0,
+      unsupported: 0,
+      no_data: 0,
+      failed: 0,
+      total: 1,
+    });
   });
 });
 
@@ -93,7 +115,13 @@ import { explainCode } from "@/lib/reason-codes";
 import { reasonLabel } from "@/lib/presentation";
 
 describe("reason codes in the real CLI report", () => {
-  const codes = [...new Set((JSON.parse(cliReport) as { items: Array<{ reason_codes?: string[] }> }).items.flatMap((i) => i.reason_codes ?? []))];
+  const codes = [
+    ...new Set(
+      (JSON.parse(cliReport) as { items: Array<{ reason_codes?: string[] }> }).items.flatMap(
+        (i) => i.reason_codes ?? [],
+      ),
+    ),
+  ];
   it("finds the 11 distinct codes the CLI writes", () => {
     expect(codes).toHaveLength(11);
   });
@@ -117,13 +145,27 @@ describe("counts lines", () => {
   it("keep text notes and log panels out of the metric widget counts, computed from the file", () => {
     const rep = load();
     const b = widgetBreakdown(rep.items);
-    expect(metricWidgetsLine(b)).toBe("27 metric widgets: 11 exact if a condition holds, 10 approximate, 6 can't migrate automatically");
+    expect(metricWidgetsLine(b)).toBe(
+      "27 metric widgets: 11 exact if a condition holds, 10 approximate, 6 can't migrate automatically",
+    );
     expect(textAndLogsLine(b)).toBe("7 text notes copied, 2 log panels");
     expect(b.metrics + b.notesCopied + b.logPanels).toBe(rep.summary.widgets.total); // 27 + 7 + 2 = 36 panels
   });
   it("adds a plain exact count only when there are plain exact widgets", () => {
-    const b = { metrics: 3, exact: 2, exactIf: 0, differences: 1, manual: 0, notesCopied: 1, logPanels: 0, logsUnsupported: 0, checkRules: 0 };
-    expect(metricWidgetsLine(b)).toBe("3 metric widgets: 2 exact, 0 exact if a condition holds, 1 approximate, 0 can't migrate automatically");
+    const b = {
+      metrics: 3,
+      exact: 2,
+      exactIf: 0,
+      differences: 1,
+      manual: 0,
+      notesCopied: 1,
+      logPanels: 0,
+      logsUnsupported: 0,
+      checkRules: 0,
+    };
+    expect(metricWidgetsLine(b)).toBe(
+      "3 metric widgets: 2 exact, 0 exact if a condition holds, 1 approximate, 0 can't migrate automatically",
+    );
     expect(textAndLogsLine(b)).toBe("1 text note copied, 0 log panels");
   });
 });
