@@ -15,8 +15,8 @@ export const PROBES = {
   },
   "probe:at-modifier": {
     question: "Does Dash0 accept the @ end() modifier and the $__range variable in panel queries?",
-    how: "T0: put `topk(3, avg_over_time(x[$__range] @ end()))` in a TimeSeriesChart and export it",
-    answer: "open",
+    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted; 935/935 queries with the new constructs accepted (hub #278)",
+    answer: "yes",
   },
   "probe:lt-threshold": {
     question: "How does Dash0 compare $__threshold for `<` expressions (is higher always worse)?",
