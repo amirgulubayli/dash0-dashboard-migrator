@@ -1,9 +1,9 @@
 // The whole run: ingest -> translate (T4) -> dashboards (T5) / alerts (T6, interim) -> import (T7) -> report (T8).
 // Pure up to the import step; the only network I/O is ingest --api and the Dash0 import.
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ingestDatadog, type IngestOptions } from "../sources/datadog/index.js";
-import { loadMappings, metricAvailability, metricLookup, tagLookup } from "../ir/index.js";
+import { ddKindLookup, loadDdKinds, loadMappings, metricAvailability, metricLookup, tagLookup } from "../ir/index.js";
 import { translateQuery, type TranslateContext } from "../translate/query/index.js";
 import { toPerses, type DashboardTranslation, type TranslateExpr } from "../translate/dashboard/index.js";
 import { canonicalJson, importAll, sha256, type Dash0Config, type DashboardDefinition, type Manifest, type PrometheusAlertRule } from "../targets/dash0/index.js";
@@ -46,6 +46,9 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
     metric: metricLookup(mappings),
     availability: (dd) => metricAvailability(mappings, dd),
     tag: tagLookup(mappings),
+    // Datadog's own metric kinds (generated from integrations-core metadata.csv); curated entries win. Without it every
+    // unmapped metric is time.kind-unknown and stays manual.
+    ddKind: ddKindLookup(loadDdKinds(o.mappingsDir), mappings),
   };
   const translate: TranslateExpr = (e, t) => translateQuery(e, { ...base, variables: t.variables, where: t.where }, t.env);
 
@@ -67,7 +70,8 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
     });
   }
 
-  const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f))];
+  const kindsFile = join(o.mappingsDir, "datadog", "_kinds.json");
+  const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f)), ...(existsSync(kindsFile) ? [kindsFile] : [])];
   const inputHash = sha256(canonicalJson({ dashboards: ingested.dashboards.map((d) => d.original), alerts: ingested.alerts.map((a) => a.original) }));
   const report = buildReport({
     version: o.version,
