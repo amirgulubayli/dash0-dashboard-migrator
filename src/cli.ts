@@ -14,6 +14,7 @@ import { terminalReview } from "./pipeline/review-terminal.js";
 import { findConsoleDir, startReviewServer } from "./serve/review.js";
 import { createInterface } from "node:readline/promises";
 import { datadogEnv, durationMs, findDatadogMonitor, plannedAlerts, runWatch, type WatchedAlert } from "./pipeline/watch.js";
+import { writeProof } from "./pipeline/proof.js";
 
 export const VERSION = "0.2.0";
 
@@ -24,6 +25,7 @@ Usage:
   dd2dash0 review <plan dir> [--terminal] [--port 4318] [--reviewer <name>]                 decide what gets imported
   dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run]
   dd2dash0 watch <plan dir> [--alert <name>] [--dd-monitor <name>=<id>,...] [--every 5s] [--max 30m] [--until-recovered]
+  dd2dash0 proof <plan dir> [--corpus corpus.json] [--out proof.html]                      one-page evidence (offline HTML)
   dd2dash0 migrate --from datadog (--input <dir> | --api) [options]                        one-shot: translate + import all
   dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
 
@@ -48,6 +50,9 @@ and parity.json, and passes when both fire at the same severity within 2 x the r
 The Dash0 state is computed from the rule's own query and thresholds (labelled "computed").
 Exit codes (watch): 0 parity passed, 1 failed or no incident seen, 3 usage, config or API error.
 
+proof writes <plan>/proof/proof.html from the plan, apply/ and watch/ (and a corpus-coverage --json file): coverage,
+the alert timeline and verdict, and every item that needs a person. Self-contained, no network; same inputs, same bytes.
+
 migrate writes <out>/report.json, report.md, events.jsonl and (unless --no-import) <out>/dash0/.
 serve replays <out>'s run in the browser; with ELEVENLABS_AGENT_ID + ELEVENLABS_API_KEY set, an ElevenLabs
 voice agent narrates it and answers questions (setup: src/serve/VOICE_AGENT.md).
@@ -71,6 +76,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
   if (cmd === "review") return runReviewCmd(rest);
   if (cmd === "apply") return runApplyCmd(rest);
   if (cmd === "watch") return runWatchCmd(rest);
+  if (cmd === "proof") return runProofCmd(rest);
   if (cmd === "migrate") return runMigrate(rest);
   if (cmd === "serve") return runServe(rest);
   console.error(`unknown command: ${cmd} (try --help)`);
@@ -333,6 +339,24 @@ async function runWatchCmd(args: string[]): Promise<number> {
     return res.apiError ? EXIT.usage : res.ok ? EXIT.ok : EXIT.failed;
   } catch (e) {
     console.error(`dd2dash0 watch: ${(e as Error).message}`);
+    return EXIT.usage;
+  }
+}
+
+function runProofCmd(args: string[]): number {
+  const r = readArgs(args, ["--corpus", "--out"], []);
+  if (typeof r === "string" || r._.length !== 1) {
+    console.error(`${typeof r === "string" ? r : "usage: dd2dash0 proof <plan dir> [--corpus corpus.json] [--out proof.html]"}\n\n${USAGE}`);
+    return EXIT.usage;
+  }
+  try {
+    const res = writeProof(resolve(r._[0]!), { ...(r.v["--corpus"] ? { corpus: resolve(r.v["--corpus"]) } : {}), ...(r.v["--out"] ? { out: resolve(r.v["--out"]) } : {}) });
+    const p = res.inputs.parity;
+    console.log(`proof card: ${res.file}`);
+    console.log(`  plan ${res.inputs.planHash.slice(0, 12)} ${res.inputs.planIntact ? "(intact)" : "(CHANGED since planning)"}; ${res.inputs.applied ? "applied" : "not applied"}; ${p?.length ? `alerts watched: ${p.map((x) => x.verdict).join(", ")}` : "no watch yet"}`);
+    return EXIT.ok;
+  } catch (e) {
+    console.error(`dd2dash0 proof: ${(e as Error).message}`);
     return EXIT.usage;
   }
 }

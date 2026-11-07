@@ -301,13 +301,14 @@ export async function runWatch(o: WatchOptions): Promise<WatchResult> {
   const answered = { datadog: false, dash0: false };
   const lastError: Record<Side, string> = { datadog: "", dash0: "" };
   const start = now().getTime();
+  let lastPoll = new Date(start);
   const outDir = join(o.planDir, "watch");
   mkdirSync(outDir, { recursive: true });
   const files = { timeline: join(outDir, "timeline.json"), parity: join(outDir, "parity.json") };
   const bound = (a: WatchedAlert) => 2 * durationMs(a.rule.interval) + o.everyMs + (evalDelayMs.get(a.alertId) ?? 0);
   const results = () => o.alerts.map((a) => parity(tl.events, a.alertId, bound(a)));
   const save = () => {
-    writeFileSync(files.timeline, JSON.stringify({ schema: "dd2dash0.watch/v1", events: tl.events }, null, 2) + "\n");
+    writeFileSync(files.timeline, JSON.stringify({ schema: "dd2dash0.watch/v1", startedAt: new Date(start).toISOString(), endedAt: lastPoll.toISOString(), events: tl.events }, null, 2) + "\n");
     writeFileSync(files.parity, JSON.stringify({ schema: "dd2dash0.parity/v1", results: results() }, null, 2) + "\n");
   };
   const lane = (e: WatchEvent, title: string) =>
@@ -316,6 +317,7 @@ export async function runWatch(o: WatchOptions): Promise<WatchResult> {
 
   for (;;) {
     const at = now();
+    lastPoll = at;
     for (const a of o.alerts) {
       try {
         const d = await datadogState(o.dd, a.ddMonitorId, f);
