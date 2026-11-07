@@ -3,7 +3,8 @@
 import { LIMITS, type DashboardDefinition, type PrometheusAlertRule } from "./schema.js";
 
 const DURATION = /^(\d+(ms|s|m|h|d|w|M|Q|y))+$/;
-const ID = /^[a-z0-9][a-z0-9-]{0,127}$/;
+// An origin is a URL path segment (encoded). T6 origins look like dd-monitor-redisdb__high_mem.
+const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export function preflightCheckRule(r: PrometheusAlertRule): string[] {
   const errs: string[] = [];

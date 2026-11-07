@@ -51,17 +51,20 @@ function fakeDash0(opts: { transform?: (kind: string, body: any) => any; failWit
     const fail = failures.shift();
     if (fail) return new Response(JSON.stringify(fail.body), { status: fail.status, headers: fail.headers });
     const json = (x: unknown, status = 200) => new Response(JSON.stringify(x), { status, headers: { "content-type": "application/json" } });
-    if (method === "POST" && url.pathname === "/api/import/dashboard") {
-      stored.set(`d:${body.metadata.dash0Extensions.id}`, opts.transform?.("dashboard", body) ?? body);
-      return json(body);
-    }
-    if (method === "POST" && url.pathname === "/api/import/check-rule") {
-      // Dash0 normalises durations on the way back (dash0-cli fixture: "5m0s").
-      const stored0 = { ...body, interval: body.interval === "1m" ? "1m0s" : body.interval, for: body.for === "0s" ? "0s" : body.for };
-      stored.set(`r:${body.id}`, opts.transform?.("rule", stored0) ?? stored0);
-      return json(body);
-    }
     const m = /^\/api\/(dashboards|alerting\/check-rules)\/(.+)$/.exec(url.pathname);
+    // Like live Dash0 (2026-11-07): PUT upserts by origin; a check-rule body carrying `id` is rejected with 400.
+    if (method === "PUT" && m) {
+      const origin = decodeURIComponent(m[2]!);
+      if (m[1] === "dashboards") {
+        stored.set(`d:${origin}`, opts.transform?.("dashboard", body) ?? body);
+        return json(body);
+      }
+      if ("id" in body) return json({ error: { code: 400, message: "unexpected field id" } }, 400);
+      // Dash0 normalises durations on the way back (dash0-cli fixture: "5m0s") and assigns its own id.
+      const stored0 = { ...body, id: "srv-0001", interval: body.interval === "1m" ? "1m0s" : body.interval };
+      stored.set(`r:${origin}`, opts.transform?.("rule", stored0) ?? stored0);
+      return json(stored0);
+    }
     if (method === "GET" && m) {
       const v = stored.get(`${m[1] === "dashboards" ? "d" : "r"}:${decodeURIComponent(m[2]!)}`);
       return v ? json(v) : json({ error: { code: 404, message: "not found" } }, 404);
@@ -125,15 +128,16 @@ describe("dry run", () => {
 });
 
 describe("live import (fake Dash0)", () => {
-  it("imports one item at a time, sends auth + dataset, and reads each back", async () => {
+  it("upserts one item at a time by origin (PUT), sends auth + dataset, and reads each back by origin", async () => {
     const { f, calls } = fakeDash0();
     const m = await importAll({ dashboards: [dash()], rules: [rule()] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
     expect(calls.map((c) => `${c.method} ${c.url.pathname}`)).toEqual([
-      "POST /api/import/dashboard",
+      "PUT /api/dashboards/dd-redis-overview",
       "GET /api/dashboards/dd-redis-overview",
-      "POST /api/import/check-rule",
+      "PUT /api/alerting/check-rules/dd-high-mem",
       "GET /api/alerting/check-rules/dd-high-mem",
     ]);
+    expect("id" in calls[2]!.body).toBe(false); // live Dash0 rejects a check-rule body with id (400)
     expect(calls.every((c) => c.headers.Authorization === `Bearer ${TOKEN}` && c.url.searchParams.get("dataset") === "thinc")).toBe(true);
     expect(m.summary).toMatchObject({ imported: 2, readBackMatch: 2, failed: 0 });
   });
@@ -147,10 +151,21 @@ describe("live import (fake Dash0)", () => {
     const m = await importAll({ dashboards: [], rules: [rule()] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
     expect(m.results[0]!.readBack).toEqual({ state: "mismatch", fields: ["expression", "thresholds.degraded"] });
   });
-  it("reports 'missing' when the id is not honoured (GET by id returns 404)", async () => {
+  it("re-running upserts instead of duplicating: still exactly one rule per origin", async () => {
+    const { f, stored } = fakeDash0();
+    for (let i = 0; i < 2; i++) await importAll({ dashboards: [dash()], rules: [rule()] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
+    expect([...stored.keys()].sort()).toEqual(["d:dd-redis-overview", "r:dd-high-mem"]);
+  });
+  it("origins may contain underscores and dots (T6: dd-monitor-redisdb__high_mem)", async () => {
+    const { f, calls } = fakeDash0();
+    const m = await importAll({ dashboards: [], rules: [rule({ id: "dd-monitor-redisdb__high_mem" })] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
+    expect(m.summary).toMatchObject({ imported: 1, readBackMatch: 1 });
+    expect(calls[0]!.url.pathname).toBe("/api/alerting/check-rules/dd-monitor-redisdb__high_mem");
+  });
+  it("reports 'missing' when the read-back by origin finds nothing", async () => {
     const { f } = fakeDash0();
-    // The import succeeds, but Dash0 ignored our id, so the GET by id finds nothing.
-    const lost = (async (u: URL | string, i?: RequestInit) => (String(u).includes("/api/alerting/check-rules/") ? new Response(JSON.stringify({ error: { code: 404, message: "nf" } }), { status: 404 }) : f(u, i))) as typeof fetch;
+    // The PUT succeeds, but the GET by origin finds nothing.
+    const lost = (async (u: URL | string, i?: RequestInit) => ((i?.method ?? "GET") === "GET" && String(u).includes("/api/alerting/check-rules/") ? new Response(JSON.stringify({ error: { code: 404, message: "nf" } }), { status: 404 }) : f(u, i))) as typeof fetch;
     const m = await importAll({ dashboards: [], rules: [rule()] }, { dryRun: false, outDir: tmp(), config: cfg(lost) });
     expect(m.results[0]).toMatchObject({ action: "imported", readBack: { state: "missing" } });
   });
