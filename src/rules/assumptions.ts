@@ -21,6 +21,9 @@ export const ASSUMPTIONS = {
   "A.dd-count-default": "Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog)",
   "A.kind-suffix": "a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming)",
   "A.mono-diff": "Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0",
+  "A.same-key-and": "Datadog applies a literal tag filter and a template variable on the same key together (AND)",
+  "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
+  "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
   // T12 (src/translate/logs, PR #13), text verbatim
   "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
@@ -86,5 +89,8 @@ export const T4_ASSUMPTION_IDS = [
   "A.kind-suffix",
   "A.mono-diff",
   "A.both-present",
+  "A.same-key-and",
+  "A.at-range",
+  "A.monotonic",
   "A.query-threshold",
 ] as const satisfies readonly AssumptionId[];
