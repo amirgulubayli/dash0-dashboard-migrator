@@ -93,9 +93,9 @@ describe("Redis overview dashboard with the real mapping table", () => {
     for (const { r } of rows) totals[r.status] = (totals[r.status] ?? 0) + 1;
     expect(totals).toMatchInlineSnapshot(`
       {
-        "bounded": 9,
-        "exact-under": 7,
-        "manual": 7,
+        "bounded": 10,
+        "exact-under": 8,
+        "manual": 5,
       }
     `);
   });

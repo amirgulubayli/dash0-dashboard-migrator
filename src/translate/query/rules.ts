@@ -11,6 +11,9 @@ export const ASSUMPTIONS = {
   "A.var-default": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
   "A.var-regex": "the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a|b) for several)",
   "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
+  "A.dd-per-unit":
+    "Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog)",
+  "A.no-gaps": "every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
 } as const;
 
@@ -72,6 +75,13 @@ export const RULES = {
   "map.log10": exact("log10(q) -> log10(x)"),
   "map.clamp_min": exact("clamp_min(q, n) -> clamp_min(x, n)"),
   "map.clamp_max": exact("clamp_max(q, n) -> clamp_max(x, n)"),
+  "fn.per_unit.counter": {
+    status: "bounded",
+    assumptions: ["A.dd-per-unit"],
+    description:
+      "per_second/per_minute/per_hour(q) where q sums or averages a Datadog gauge holding an OTel counter's running total -> k * agg(rate(x[w])) (maths.md T3b)",
+  },
+  "fn.diff": under(["A.align", "A.no-gaps"], "diff(q) -> q - (q offset interval): each point minus the previous one"),
   "map.timeshift": exact("timeshift(q, -s) / hour_before(q) / ... -> offset s on every selector"),
   "arith.number": exact("arithmetic with a constant"),
   "arith.same-groups": exact("arithmetic between queries with identical group-by labels (one-to-one matching)"),
