@@ -53,3 +53,18 @@ use the editor.
 - Never show confidence scores.
 - `review.json` keeps `report_sha256` and the `approved` / `flagged` / `acknowledged` decision values unchanged.
 - Package manager is Bun (`bun.lock`). Work on a branch, not `main`.
+
+## Real report contract
+
+These are the CLI's actual field names (`dd2dash0.report/v1`, checked against a real `--dry-run` report kept as `src/test/fixtures/cli-report.redis.json`). `src/lib/report.ts` is the only file that maps them; change a name there and nowhere else.
+
+- **Item kind:** `panel` becomes widget and `alert` becomes monitor. The CLI writes no group items, so the map builds groups from each widget's `group` field.
+- **Claims in `status`:** `exact-under`, `bounded` and `manual` appear in `status` and are claims. They give console status exact, approximate and unsupported. `exact` and `unsupported` stay statuses. A separate `claim` field is also accepted; `status` wins.
+- **Condition text:** for `exact-under`, taken from the item's `findings[].assumptions` sentences (the first one plus a count).
+- **`certificate.checks`:** `parses` becomes `verification.promql_valid` (only when the item has PromQL); `importedReadBack` becomes `verification.imported` (`null` means not tested).
+- **`target`:** `dash0Id` becomes `dash0.asset_id` and `action` becomes `dash0.import_status`. There is no URL until a real import.
+- **`run`:** `tool` and `version` give the tool version; `inputHash` is the source hash; `mappingFiles` (joined) is the mapping version. The top-level `schema` is the schema version. The CLI records no `run.source` or commit, so the console shows "not recorded".
+- **`summary`:** `summary.byKind.panel` gives widget counts and `summary.byKind.alert` gives monitor counts, with the claim words folded into console statuses.
+- **Reason codes:** `reason_codes` use the CLI's dotted names (for example `metric.approximate`). Explanations and chip labels live in `src/lib/reason-codes.ts` and `src/lib/presentation.ts`; an unknown code shows as itself.
+
+Never hard-code counts. Every number shown is computed from the loaded file, including the metric widget, text note and log panel counts.
