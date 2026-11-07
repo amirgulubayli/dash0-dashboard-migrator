@@ -88,3 +88,24 @@ describe("CLI report.json mapping", () => {
     expect(rep.summary.monitors).toEqual({ exact: 1, approximate: 0, unsupported: 0, no_data: 0, failed: 0, total: 1 });
   });
 });
+
+import { explainCode } from "@/lib/reason-codes";
+import { reasonLabel } from "@/lib/presentation";
+
+describe("reason codes in the real CLI report", () => {
+  const codes = [...new Set((JSON.parse(cliReport) as { items: Array<{ reason_codes?: string[] }> }).items.flatMap((i) => i.reason_codes ?? []))];
+  it("finds the 11 distinct codes the CLI writes", () => {
+    expect(codes).toHaveLength(11);
+  });
+  it.each(codes)("%s has a one-sentence explanation and a short chip label", (code) => {
+    const text = explainCode(code);
+    expect(text, code).toBeTruthy();
+    expect(text).not.toContain("(needs wording check)");
+    expect(reasonLabel(code)).not.toBe(code);
+    expect(reasonLabel(code).length).toBeLessThanOrEqual(26);
+  });
+  it("shows an unknown code as itself", () => {
+    expect(reasonLabel("something.new")).toBe("something.new");
+    expect(explainCode("something.new")).toBeUndefined();
+  });
+});
