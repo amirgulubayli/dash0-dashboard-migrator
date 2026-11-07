@@ -14,9 +14,12 @@
     "build": "tsc -p .",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "improve": "tsx tools/improve/main.ts",
+    "typecheck:tools": "tsc -p tools"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
     "@types/node": "^22.10.0",
     "fast-check": "^3.23.2",
     "tsx": "^4.19.2",
