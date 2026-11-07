@@ -22,6 +22,14 @@ export const ASSUMPTIONS = {
   "A.kind-suffix": "a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming)",
   "A.mono-diff": "Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
+  // T12 (src/translate/logs, PR #13), text verbatim
+  "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
+  "A.log-source": "logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent",
+  "A.log-attr-default": "a log attribute without a table entry keeps its name in OTel (dots become underscores in the label)",
+  "A.log-fulltext": "Datadog's free-text match of a word equals a case-insensitive substring match on the log body",
+  "A.group-limit": "the number of groups stays within the widget's group limit, so Datadog shows every group too",
+  "A.severity-map": "the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level)",
+  "A.all-indexes": "every Datadog log index is queried (Dash0 has no indexes)",
   // T17 additions
   "A.same-samples": "Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s)",
   "A.full-window": "every evaluated series has samples across the whole monitor window (Datadog require_full_window)",
@@ -39,6 +47,24 @@ export const ASSUMPTIONS = {
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;
+
+/**
+ * T12's assumption ids, in T12's order (LOG_ASSUMPTIONS in src/translate/logs). A.var-regex, A.var-default and
+ * A.top-stable are shared with T4: the catalog keeps one text per id (T4's), and T12's wording of the last two differs
+ * only in naming (facet vs tag key, groups vs series).
+ */
+export const T12_ASSUMPTION_IDS = [
+  "A.log-count",
+  "A.log-source",
+  "A.log-attr-default",
+  "A.log-fulltext",
+  "A.var-regex",
+  "A.var-default",
+  "A.top-stable",
+  "A.group-limit",
+  "A.severity-map",
+  "A.all-indexes",
+] as const satisfies readonly AssumptionId[];
 
 /** T4's assumption ids, in T4's order. */
 export const T4_ASSUMPTION_IDS = [

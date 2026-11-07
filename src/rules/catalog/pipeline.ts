@@ -4,11 +4,33 @@ import { EPS_RATE, section } from "./build.js";
 
 const ingest = section("ingest", "T2", "planned", "plan 00; dash0-migrator skill (key facts)");
 const logs = section("logs", "T12", "planned", "plan 01 §1; maths.md §8");
+const log = section("logs", "T12", "implemented", "T12 src/translate/logs (PR #13); docs/research/dash0.md (dash0.logs labels, LIVE)");
 const validate = section("validate", "T4", "implemented", "dash0-migrator rule 3");
 const preflight = section("validate", "T7", "implemented", "T7 PR #5");
 const canon = section("canonical", "T13", "planned", "plan 02 rule 5; plan 03 §5");
 const emitT7 = section("emit", "T7", "implemented", "T7 PR #5; D-30, D-31");
 const emitT8 = section("emit", "T8", "planned", "plan 04 §3; plan 03 §5");
+
+/** T12's LOG_RULES ids, in T12's order. */
+export const T12_TABLE_IDS = [
+  "log.count",
+  "log.cardinality",
+  "log.match.reserved",
+  "log.match.reserved.approx",
+  "log.match.attr",
+  "log.match.value",
+  "log.match.status",
+  "log.match.status.approx",
+  "log.match.text",
+  "log.match.var",
+  "log.match.var.dropped",
+  "log.group_by",
+  "log.group_by.limit",
+  "log.group_by.multi-limit",
+  "log.group_by.exclude-missing",
+  "log.indexes",
+  "log.monitor.count",
+] as const;
 
 export const PIPELINE_RULES: RuleDef[] = [
   // ---------- ingest ----------
@@ -17,21 +39,35 @@ export const PIPELINE_RULES: RuleDef[] = [
   ingest("ingest.keep-raw", 30, "exact", "every source item", "raw JSON kept next to its IR node (rule 4), sha256 → certificate.sourceHash"),
 
   // ---------- logs ----------
-  logs("logs.count", 10, "bounded", "log query, compute count, search Q, group_by facets", 'sum by (<labels>) (increase({otel_metric_name="dash0.logs", <matchers(Q)>}[$__interval]))', {
+  // Implemented by T12 (PR #13): mirrors LOG_RULES in src/translate/logs id for id (tests/rules/conformance.test.ts).
+  log("log.count", 10, "bounded", "log query, compute count, search Q, group_by g", 'sum by (g) (increase({otel_metric_name="dash0.logs", m(Q)}[w]))', {
+    assumptions: ["A.log-count"],
     epsilon: EPS_RATE,
     requires: ["probe:log-labels"],
-    evidence: ["proof:T3"],
+    evidence: ["unit", "proof:T3", "live:dash0-4110"],
     note: "exact-under(A.same-samples) once probe:anchored is yes (maths.md §8).",
   }),
-  logs("logs.rate", 20, "bounded", "log count shown as a rate", 'sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m]))', { epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["proof:T3"] }),
-  logs("logs.search.kv", 30, "exact", "key:value / -key:value", 'label="value" / label!="value"', { requires: ["probe:log-labels"] }),
-  logs("logs.search.wildcard", 40, "exact", "key:val*", 'label=~"^val.*$"'),
-  logs("logs.search.status", 50, "exact", "status:error", "severity label matcher", { requires: ["probe:log-labels"] }),
-  logs("logs.search.word", 60, "exact", "bare words", "body regex matcher", { requires: ["probe:log-labels"] }),
-  logs("logs.search.or.cross-key", 70, "exact", "key1:a OR key2:b", "count(A) + count(B) − count(A and B) (inclusion–exclusion)", { evidence: ["proof:log-or", "exhaustive:E5"] }),
-  logs("logs.alert", 80, "bounded", "log alert monitor", 'sum(increase({otel_metric_name="dash0.logs", …}[W])) > $__threshold', { epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["proof:T3"] }),
-  logs("logs.measure", 90, "manual", "avg / sum / percentile / cardinality over @attr", "no output: dash0.logs only counts", { findingCode: "query.datasource" }),
-  logs("logs.stream", 100, "manual", "log_stream / list_stream widget", "placeholder until the LogTable schema comes from T0"),
+  log("log.cardinality", 20, "bounded", "cardinality of @a", "count by (g) (sum by (g, a) (increase(...[w])) > 0)", { assumptions: ["A.log-count"], epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["unit", "proof:T3", "live:dash0-4110"] }),
+  log("log.match.reserved", 30, "exact", "service / host / env / version:x", "the resource label (service_name, ...)", { requires: ["probe:log-labels"] }),
+  log("log.match.reserved.approx", 40, "exact-under", "source:x", 'source="x" (no OTel counterpart)', { assumptions: ["A.log-source"] }),
+  log("log.match.attr", 50, "exact-under", "@a.b:x", 'a_b="x" (renames from mappings/log-attributes.yaml applied)', { assumptions: ["A.log-attr-default"], requires: ["probe:log-labels"] }),
+  log("log.match.value", 60, "exact", "k:v, k:v*, k:(a OR b), k:*, and their negations", '=, =~"^v.*$", =~"^(a|b)$", =~".+", != / !~'),
+  log("log.match.status", 70, "exact", "status:error", 'otel_log_severity_range="ERROR"', { requires: ["probe:log-labels"] }),
+  log("log.match.status.approx", 80, "exact-under", "status:critical / notice / ok / ...", "the nearest OTel severity range", { assumptions: ["A.severity-map"], requires: ["probe:log-labels"] }),
+  log("log.match.text", 90, "exact-under", "free text w", 'otel_log_body=~"(?i).*w.*"', { assumptions: ["A.log-fulltext"], requires: ["probe:log-labels"] }),
+  log("log.match.var", 100, "exact-under", "$var on a facet", 'label=~"^($var)$"', { assumptions: ["A.var-regex"] }),
+  log("log.match.var.dropped", 110, "exact-under", "$var without a facet", "dropped while it is '*'", { assumptions: ["A.var-default"] }),
+  log("log.group_by", 120, "exact", "group_by facets", "by (labels)"),
+  log("log.group_by.limit", 130, "exact-under", "one facet with a limit N", "topk(N, ...) (bottomk for asc)", { assumptions: ["A.top-stable"] }),
+  log("log.group_by.multi-limit", 140, "exact-under", "several facets with limits", "by (labels), limits not applied", { assumptions: ["A.group-limit"] }),
+  log("log.group_by.exclude-missing", 150, "exact", "should_exclude_missing: true", 'label!="" for each group-by label'),
+  log("log.indexes", 160, "exact-under", "indexes other than '*'", "all logs (Dash0 has no indexes)", { assumptions: ["A.all-indexes"] }),
+  log("log.monitor.count", 170, "bounded", "logs(Q).rollup(count).by(g).last(W) op T", "sum by (g) (increase(...[W])) op $__threshold", { assumptions: ["A.log-count"], epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["unit", "proof:T3"] }),
+  // Still planned: not in T12 yet.
+  logs("logs.rate", 200, "bounded", "log count shown as a rate", 'sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m]))', { epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["proof:T3"] }),
+  logs("logs.search.or.cross-key", 210, "exact", "key1:a OR key2:b", "count(A) + count(B) − count(A and B) (inclusion–exclusion)", { evidence: ["proof:log-or", "exhaustive:E5"] }),
+  logs("logs.measure", 220, "manual", "avg / sum / percentile over @attr", "no output: dash0.logs only counts", { findingCode: "query.datasource" }),
+  logs("logs.stream", 230, "manual", "log_stream / list_stream widget", "placeholder until the LogTable schema comes from T0"),
   logs("logs.unparsed", 999, "manual", "log search the log-search parser does not accept", "no output; original kept", { fallback: true, findingCode: "query.parse_error" }),
 
   // ---------- validate ----------

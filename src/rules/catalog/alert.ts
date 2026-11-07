@@ -11,7 +11,7 @@ const msg = section("message", "T6", "planned", "plan 04 §2.5");
 export const ALERT_RULES: RuleDef[] = [
   // ---------- classify ----------
   classify("classify.monitor.metric", 10, "exact", 'monitor type "metric alert" or "query alert"', "goes through the query stages and the monitor stage"),
-  classify("classify.monitor.log", 20, "exact", 'monitor type "log alert"', "goes through the logs stage (logs.alert)"),
+  classify("classify.monitor.log", 20, "exact", 'monitor type "log alert"', "goes through the logs stage (log.monitor.count)"),
   classify("classify.monitor.other", 999, "manual", "composite, service check, event, synthetics, SLO, process, anomaly-type and any other monitor", "no rule; original kept", {
     fallback: true,
     findingCode: "monitor.type",
