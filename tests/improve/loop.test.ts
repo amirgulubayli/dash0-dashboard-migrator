@@ -83,10 +83,24 @@ describe("gates", () => {
     ], [0.45, 0.55]);
     const r = evaluate(before, none, "metric.unmapped:postgresql", ["mappings/datadog/postgresql.yaml"], OK);
     expect(r.ok).toBe(true);
-    expect(r.honestDowngrades).toEqual(["a: exact-under -> unsupported"]);
+    expect(r.honestDowngrades).toEqual(["a: exact-under -> unsupported (no equivalent / derived)"]);
     // The same drop without the no-equivalent finding is a regression.
     const bad = snap(none.items.map((i) => (i.id === "a" ? { ...i, findings: [] } : i)), [0.45, 0.55]);
     expect(evaluate(before, bad, "metric.unmapped:postgresql", ["mappings/datadog/postgresql.yaml"], OK).ok).toBe(false);
+  });
+
+  it("allow an in-gap guess to be replaced by an honest approximate row (to bounded), but not to drop further", () => {
+    const approx = { status: "bounded", code: "metric.approximate", message: "postgresql.rows_fetched -> postgresql.tup_fetched is approximate" };
+    const toBounded = snap([...mapped.items.filter((i) => i.id !== "a"), item("a", "bounded", [approx], "h-a3")], [0.45, 0.6]);
+    const r = evaluate(before, toBounded, "metric.unmapped:postgresql", ["mappings/datadog/postgresql.yaml"], OK);
+    expect(r.ok).toBe(true);
+    expect(r.honestDowngrades).toEqual(["a: exact-under -> bounded (guess replaced by a researched mapping)"]);
+    // Dropping to manual without saying why is still a regression, even though the guess is gone.
+    const toManual = snap(toBounded.items.map((i) => (i.id === "a" ? { ...i, status: "manual" } : i)), [0.45, 0.55]);
+    expect(evaluate(before, toManual, "metric.unmapped:postgresql", ["mappings/datadog/postgresql.yaml"], OK).ok).toBe(false);
+    // An item outside the gap may never get worse.
+    const outside = snap(toBounded.items.map((i) => (i.id === "c" ? { ...i, status: "bounded" } : i)), [0.45, 0.6]);
+    expect(evaluate(before, outside, "metric.unmapped:postgresql", ["mappings/datadog/postgresql.yaml"], OK).ok).toBe(false);
   });
 
   it("allowedPath: mapping tables (not the generated redisdb.yaml) and generated tests only", () => {

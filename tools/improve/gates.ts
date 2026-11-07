@@ -1,7 +1,7 @@
 // The mechanical gates a candidate change must pass. Pure functions over two snapshots, plus the command results.
 // No model judges anything here: a change is accepted only if every gate holds.
 import { gapKey, gapSize } from "./gaps.js";
-import type { Snapshot } from "./snapshot.js";
+import type { Snapshot, SnapshotItem } from "./snapshot.js";
 
 /** Lower is better. "unsupported" is a placeholder panel (report-only status). */
 export const RANK: Record<string, number> = { exact: 0, "exact-under": 1, bounded: 2, manual: 3, unsupported: 4 };
@@ -11,7 +11,7 @@ export interface GateResult {
   gates: { name: string; ok: boolean; detail: string }[];
   gapBefore: number;
   gapAfter: number;
-  /** In-gap items that got worse only because a metric was mapped to "no equivalent". */
+  /** In-gap items whose status dropped because a guess was replaced honestly (approximate, no equivalent, derived). */
   honestDowngrades: string[];
 }
 
@@ -55,9 +55,15 @@ export function evaluate(before: Snapshot, after: Snapshot, gap: string, changed
       continue;
     }
     if ((RANK[a.status] ?? 9) > (RANK[b.status] ?? 9)) {
-      // An item in the gap may get worse only by an honest "no equivalent" (the old status rested on the guess
-      // that the Datadog name exists in Dash0). Those are listed for the reviewer, not hidden.
-      if (inGap.has(b.id) && a.findings.some((f) => f.code === "metric.no_equivalent")) honest.push(`${b.id}: ${b.status} -> ${a.status}`);
+      // An item in the gap rested on a guess: that the Datadog name exists in Dash0 as a gauge (metric.unmapped,
+      // exact-under). Replacing the guess with a researched row may honestly lower its claimed status:
+      //  - to bounded or better, when its gap findings went down (an approximate mapping replaced the guess);
+      //  - to anything, when the item now says why (metric.no_equivalent or metric.derived).
+      // Every such item is listed for the reviewer, not hidden. Anything else is a regression.
+      const gapFindings = (i: SnapshotItem) => i.findings.filter((f) => gapKey(f.code, f.message).key === gap).length;
+      const says = a.findings.some((f) => f.code === "metric.no_equivalent" || f.code === "metric.derived");
+      const replaced = gapFindings(a) < gapFindings(b) && (RANK[a.status] ?? 9) <= RANK.bounded!;
+      if (inGap.has(b.id) && (says || replaced)) honest.push(`${b.id}: ${b.status} -> ${a.status}${says ? " (no equivalent / derived)" : " (guess replaced by a researched mapping)"}`);
       else worse.push(`${b.id}: ${b.status} -> ${a.status}`);
     }
     if (!inGap.has(b.id) && a.outputHash !== b.outputHash) drifted.push(b.id);
@@ -68,7 +74,7 @@ export function evaluate(before: Snapshot, after: Snapshot, gap: string, changed
     worse.length || lost.length
       ? [...worse, ...lost.map((x) => `${x}: missing`)].slice(0, 10).join("; ")
       : honest.length
-        ? `no item got worse except ${honest.length} now marked "no equivalent" (review these): ${honest.slice(0, 5).join("; ")}`
+        ? `no item got worse except ${honest.length} in-gap item(s) whose guess was replaced honestly (review these): ${honest.slice(0, 5).join("; ")}`
         : "no item got worse",
   );
   gate("untouched-stable", drifted.length === 0, drifted.length ? `${drifted.length} item(s) outside the gap changed output: ${drifted.slice(0, 5).join(", ")}` : "items outside the gap are byte-identical");
@@ -81,7 +87,7 @@ export function evaluate(before: Snapshot, after: Snapshot, gap: string, changed
   gate(
     "coverage",
     kept || (worse.length === 0 && honest.length > 0),
-    `exact ${before.coverageExact} -> ${after.coverageExact}, translated ${before.coverageTranslated} -> ${after.coverageTranslated}${kept ? "" : " (drop explained by the no-equivalent items above)"}`,
+    `exact ${before.coverageExact} -> ${after.coverageExact}, translated ${before.coverageTranslated} -> ${after.coverageTranslated}${kept ? "" : " (drop explained by the honestly replaced guesses above)"}`,
   );
 
   return { ok: gates.every((g) => g.ok), gates, gapBefore, gapAfter, honestDowngrades: honest };

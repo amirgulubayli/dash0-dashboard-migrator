@@ -56,7 +56,9 @@ Rules:
 - Correctness over coverage. Map a Datadog metric to an OTel metric only when the upstream sources you were given say
   they measure the same thing. Use status "exact" only for the same quantity and unit; "approximate" (with a note
   saying what differs) when close; status "none" (otel: null, with a note) when there is no equivalent. A wrong
-  "exact" row is worse than a missing one.
+  "exact" row is worse than a missing one. An honest "approximate" row is welcome even when it lowers a panel from
+  exact-under (which only rested on the guess that the Datadog name exists) to bounded: the gates allow that and
+  list it for the reviewer. Rows that would make a panel manual need a no-equivalent or derived reason.
 - Every row's note says where the evidence is (metadata.csv description vs receiver metadata.yaml description).
 - Kinds matter: ddKind is how Datadog stores the metric (gauge | rate | count | distribution, from metadata.csv),
   otelKind how the receiver emits it (gauge | counter | updowncounter | histogram). The translator inserts rate()

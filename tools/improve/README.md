@@ -37,7 +37,9 @@ npm run improve -- --gap metric.unmapped:nginx
    | progress | the gap has fewer findings |
    | coverage | coverage doesn't drop (see the exception below) |
 
-   The one exception: an item in the gap may drop because a metric is honestly mapped to "no equivalent". Those
+   The one exception: an item in the gap rested on a guess (that the Datadog name exists in Dash0 as a gauge), so
+   it may drop when that guess is replaced honestly. It may drop to bounded when a researched approximate row
+   replaces the guess, or further when the item now says why (`metric.no_equivalent`, `metric.derived`). Those
    items are listed in the round log for the reviewer.
 5. **Pass:** commit on a local branch `improve/<gap>-<date>`. Nothing is pushed: review it, then push and open a
    draft PR. **Fail:** discard the worktree and record why in `out/improve/round-N-<gap>.json`.
