@@ -7,7 +7,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 66 | 40 | 17 | 37 | 160 |
+| implemented | 68 | 42 | 17 | 37 | 164 |
 | planned | 18 | 22 | 2 | 14 | 56 |
 
 ## Pipeline order
@@ -26,7 +26,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 8 | Formulas over named queries, constants, division. |
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
-| 13 | `message` Message → annotations | template token | yes | 9 | Deterministic Mustache token rewrite into Go-template annotations. |
+| 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
 | 14 | `widget` Widget → panel | widget | yes | 16 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
 | 15 | `panel` Panel options | panel attribute | no | 4 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 6 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
@@ -288,7 +288,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 40 | `alert.msg.conditional.label` | {{#is_alert}} / {{#is_warning}} / {{#is_recovery}} blocks | {{ if eq $labels.<threshold> "failed" }} … {{ end }} | exact | — | probe:threshold-label | T6 | planned |
 | 50 | `alert.msg.conditional` | {{#is_alert}} / {{#is_warning}} blocks (until probe:threshold-label is yes) | markers removed, the block's text kept unconditionally | exact-under(A.msg-conditional) | unit | — | T6 | implemented |
 | 55 | `alert.msg.conditional.drop` | {{#is_recovery}}, {{#is_no_data}}, {{#is_renotify}}, {{^is_alert}} … blocks | block removed (never part of a firing notification) | exact-under(A.msg-recovery) | unit | — | T6 | implemented |
-| 60 | `alert.msg.handle` | @slack-… / @pagerduty-… / @user@… handles | removed from the text, listed in the report as channels to create | exact-under(A.notify-manual) | unit | — | T6 | implemented |
+| 60 | `alert.msg.handle` | @slack-… / @pagerduty-… / @user@… handles with no entry in the channel file | removed from the text, listed in the report as channels to create | exact-under(A.notify-manual) | unit | — | T6 | implemented |
+| 61 | `alert.notify.channel` | @handle in the main message, mapped in the channel file | annotation dash0.com/notification-channel-ids: "<channel id>" | exact | unit | — | T6 | implemented |
+| 62 | `alert.notify.channel.critical-only` | @handle only inside {{#is_alert}}, mapped in the channel file | "<channel id>:critical-only" (Dash0 sends this channel only critical = failed notifications) | exact | unit | — | T6 | implemented |
+| 63 | `alert.notify.channel.wider` | @handle only inside {{#is_warning}} or a recovery section, mapped in the channel file | "<channel id>": the channel gets every notification of the rule | exact-under(A.notify-wider) | unit | — | T6 | implemented |
+| 70 | `alert.msg.truncate` | description over 2048 or summary over 255 characters | cut at the limit on a {{ … }} boundary, ending in … | exact-under(A.msg-length) | unit | — | T6 | implemented |
 | 999 (fallback) | `alert.msg.unknown-token` | any other {{…}} token, and stray {{ / }} in text | escaped as a Go string literal {{ "{{token}}" }} so the template still parses | exact-under(A.msg-verbatim) | unit | — | T6 | implemented |
 
 ## Widget → panel (`widget`)
@@ -448,6 +452,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.msg-conditional` | the reader of a notification can tell failed from degraded by the rule's threshold, so text from {{#is_alert}} / {{#is_warning}} blocks may appear unconditionally | 1 |
 | `A.msg-recovery` | text Datadog only sends on recovery, no-data or renotify notifications is not needed in a firing notification | 1 |
 | `A.no-data-manual` | the monitor's no-data alert is recreated by hand in Dash0 (the companion absent_over_time rule is not generated yet) | 1 |
+| `A.notify-wider` | the channel may also receive notifications Datadog did not send to it (Dash0 has no degraded-only or recovery-only channel binding) | 1 |
+| `A.msg-length` | text beyond Dash0's annotation limits (description 2048, summary 255 characters) is not needed in the notification; the full original stays in the report | 1 |
 | `A.msg-verbatim` | showing an unknown Datadog template token as literal text is acceptable in the notification | 1 |
 | `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 10 |
 | `A.row-height` | one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export) | 1 |
@@ -506,6 +512,8 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `alert.msg.conditional` (exact-under(A.msg-conditional), implemented, T6)
 - `alert.msg.conditional.drop` (exact-under(A.msg-recovery), implemented, T6)
 - `alert.msg.handle` (exact-under(A.notify-manual), implemented, T6)
+- `alert.notify.channel.wider` (exact-under(A.notify-wider), implemented, T6)
+- `alert.msg.truncate` (exact-under(A.msg-length), implemented, T6)
 - `alert.msg.unknown-token` (exact-under(A.msg-verbatim), implemented, T6)
 - `widget.query_value` (exact-under(A.align, A.boundary), planned, T5)
 - `widget.toplist` (exact-under(A.top-uniform), planned, T5)

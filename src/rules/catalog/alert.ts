@@ -78,7 +78,11 @@ export const ALERT_RULES: RuleDef[] = [
   }),
   msg("alert.msg.conditional", 50, "exact-under", "{{#is_alert}} / {{#is_warning}} blocks (until probe:threshold-label is yes)", "markers removed, the block's text kept unconditionally", { assumptions: ["A.msg-conditional"] }),
   msg("alert.msg.conditional.drop", 55, "exact-under", "{{#is_recovery}}, {{#is_no_data}}, {{#is_renotify}}, {{^is_alert}} … blocks", "block removed (never part of a firing notification)", { assumptions: ["A.msg-recovery"] }),
-  msg("alert.msg.handle", 60, "exact-under", "@slack-… / @pagerduty-… / @user@… handles", "removed from the text, listed in the report as channels to create", { assumptions: ["A.notify-manual"] }),
+  msg("alert.msg.handle", 60, "exact-under", "@slack-… / @pagerduty-… / @user@… handles with no entry in the channel file", "removed from the text, listed in the report as channels to create", { assumptions: ["A.notify-manual"] }),
+  msg("alert.notify.channel", 61, "exact", "@handle in the main message, mapped in the channel file", 'annotation dash0.com/notification-channel-ids: "<channel id>"'),
+  msg("alert.notify.channel.critical-only", 62, "exact", "@handle only inside {{#is_alert}}, mapped in the channel file", '"<channel id>:critical-only" (Dash0 sends this channel only critical = failed notifications)'),
+  msg("alert.notify.channel.wider", 63, "exact-under", "@handle only inside {{#is_warning}} or a recovery section, mapped in the channel file", '"<channel id>": the channel gets every notification of the rule', { assumptions: ["A.notify-wider"] }),
+  msg("alert.msg.truncate", 70, "exact-under", "description over 2048 or summary over 255 characters", "cut at the limit on a {{ … }} boundary, ending in …", { assumptions: ["A.msg-length"] }),
   msg("alert.msg.unknown-token", 999, "exact-under", "any other {{…}} token, and stray {{ / }} in text", 'escaped as a Go string literal {{ "{{token}}" }} so the template still parses', {
     assumptions: ["A.msg-verbatim"],
     fallback: true,

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { MonitorQuery } from "../../src/parse/index.js";
 import { CATALOG } from "../../src/rules/index.js";
-import { checkRuleId, checkRuleUuid, labelName, NAMESPACE_DD2DASH0, rewriteMessage, translateAlert, uuidv5, type MonitorTranslationLike } from "../../src/translate/alerts/index.js";
+import { CHANNEL_ANNOTATION, checkRuleId, checkRuleUuid, fitTemplate, labelName, NAMESPACE_DD2DASH0, parseChannelMap, rewriteMessage, translateAlert, uuidv5, type MonitorTranslationLike } from "../../src/translate/alerts/index.js";
 import { fixtureMonitors, monitor } from "./alerts.helpers.js";
 
 /** Stands in for T4's translateMonitor: records what it was given and answers like T4 does for > and <. */
@@ -220,7 +220,10 @@ describe("T6: fixtures and the catalog", () => {
       monitor({ type: "event alert", query: "events('x').rollup('count').last('5m') > 1" }),
       monitor({ query: "nope(" }),
     ];
+    const channels = parseChannelMap('channels:\n  "@slack-x": c-all\n  "@pagerduty-db": c-crit\n  "@slack-warn": c-warn\n');
     for (const a of all) for (const id of translateAlert(a, { translateMonitor: s.fn, keepManual: true }).rules) used.add(id);
+    const withChannels = monitor({ query: "avg(last_5m):avg:foo{*} > 1", thresholds: { critical: 1, warning: 0.5 }, message: "@slack-x {{#is_alert}}@pagerduty-db{{/is_alert}}{{#is_warning}}@slack-warn{{/is_warning}} " + "x".repeat(3000), name: "n".repeat(300) });
+    for (const id of translateAlert(withChannels, { translateMonitor: s.fn, channels }).rules) used.add(id);
     const ids = new Set(CATALOG.map((r) => r.id));
     for (const id of used) expect(ids.has(id), id).toBe(true);
     const t6 = CATALOG.filter((r) => r.owner === "T6" && r.state === "implemented").map((r) => r.id);
@@ -259,5 +262,55 @@ describe("T6: check-rule ids for POST /api/import/check-rule", () => {
     expect(checkRuleUuid("130187665")).not.toBe(a);
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(a).toMatch(/^[a-z0-9][a-z0-9-]{0,127}$/);
+  });
+});
+
+describe("T6: notification channels (brief p.7) and Dash0 annotation limits", () => {
+  const channels = parseChannelMap('# handle -> Dash0 channel id\nchannels:\n  "@slack-ops": ch-ops\n  pagerduty-db: ch-pd\n  "@slack-warn": ch-warn\n');
+  const base = { query: "avg(last_5m):avg:foo{*} > 90", thresholds: { critical: 90, warning: 70 } };
+
+  it("binds mapped handles: main message -> all notifications, is_alert only -> :critical-only", () => {
+    const r = translateAlert(monitor({ ...base, message: "Memory high @slack-ops\n{{#is_alert}}Page now @pagerduty-db{{/is_alert}}" }), { translateMonitor: T(), channels });
+    expect(r.rule!.annotations![CHANNEL_ANNOTATION]).toBe("ch-ops,ch-pd:critical-only");
+    expect(r.rules).toEqual(expect.arrayContaining(["alert.notify.channel", "alert.notify.channel.critical-only"]));
+    expect(r.rules).not.toContain("alert.msg.handle");
+    expect(r.channels).toEqual([]);
+    expect(r.rule!.annotations!.description).not.toMatch(/@slack|@pagerduty/);
+  });
+
+  it("a handle used only for warnings binds for all notifications, with a finding (alert.notify.channel.wider)", () => {
+    const r = translateAlert(monitor({ ...base, message: "{{#is_warning}}heads up @slack-warn{{/is_warning}}" }), { translateMonitor: T(), channels });
+    expect(r.rule!.annotations![CHANNEL_ANNOTATION]).toBe("ch-warn");
+    expect(r.findings.some((f) => f.ruleId === "alert.notify.channel.wider" && f.original === "@slack-warn")).toBe(true);
+    expect(r.assumptions).toContain("A.notify-wider");
+  });
+
+  it("unmapped handles stay manual (alert.msg.handle) and no annotation is invented", () => {
+    const r = translateAlert(monitor({ ...base, message: "@opsgenie-team and @slack-ops" }), { translateMonitor: T(), channels });
+    expect(r.channels).toEqual(["@opsgenie-team"]);
+    expect(r.rule!.annotations![CHANNEL_ANNOTATION]).toBe("ch-ops");
+    expect(r.findings.find((f) => f.ruleId === "alert.msg.handle")!.original).toBe("@opsgenie-team");
+    const none = translateAlert(monitor({ ...base, message: "@slack-ops" }), { translateMonitor: T() });
+    expect(none.rule!.annotations).not.toHaveProperty(CHANNEL_ANNOTATION);
+    expect(none.channels).toEqual(["@slack-ops"]);
+  });
+
+  it("parseChannelMap rejects malformed files instead of dropping channels", () => {
+    expect(() => parseChannelMap("channels:\n  - a\n")).toThrow(/map/);
+    expect(() => parseChannelMap('channels:\n  "@x": ""\n')).toThrow(/channel id/);
+    expect(parseChannelMap("")("@x")).toBeUndefined();
+  });
+
+  it("fits Dash0's limits without splitting a {{ }} action (alert.msg.truncate)", () => {
+    const long = "a".repeat(2040) + " {{ $value }} tail";
+    const f = fitTemplate(long, 2048);
+    expect(f.cut).toBe(true);
+    expect(f.text.length).toBeLessThanOrEqual(2048);
+    expect(f.text).not.toMatch(/\{\{[^}]*$/);
+    expect(fitTemplate("short", 2048)).toEqual({ text: "short", cut: false });
+    const r = translateAlert(monitor({ ...base, name: "N".repeat(300), message: "m".repeat(5000) }), { translateMonitor: T() });
+    expect(r.rule!.annotations!.summary!.length).toBeLessThanOrEqual(255);
+    expect(r.rule!.annotations!.description!.length).toBeLessThanOrEqual(2048);
+    expect(r.findings.filter((x) => x.ruleId === "alert.msg.truncate").map((x) => x.original)).toEqual(["description: 5000 characters", "summary: 300 characters"]);
   });
 });

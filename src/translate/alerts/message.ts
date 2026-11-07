@@ -19,7 +19,17 @@ export interface MessageResult {
   unknown: string[];
   /** Sections removed because they only apply to recovery / no-data notifications. */
   dropped: string[];
+  /**
+   * Where each handle appeared: "always" (outside any section), "alert" ({{#is_alert}}), "warning"
+   * ({{#is_warning}}), or "recovery" (a dropped recovery / no-data section). Decides the Dash0 channel binding.
+   */
+  handleScopes: Record<string, HandleScope[]>;
 }
+
+export type HandleScope = "always" | "alert" | "warning" | "recovery";
+
+/** Firing sections that narrow who Datadog notifies. */
+const SCOPE_OF: Record<string, HandleScope> = { is_alert: "alert", is_warning: "warning", is_alert_to_warning: "warning", is_warning_to_alert: "alert" };
 
 /** Sections whose text applies while the alert fires: keep the text, drop the markers. */
 const FIRING = new Set(["is_alert", "is_warning", "is_alert_to_warning", "is_warning_to_alert"]);
@@ -31,10 +41,12 @@ const goString = (s: string) => JSON.stringify(s);
 const literal = (s: string) => `{{ ${goString(s)} }}`;
 
 /** Remove @handles. A handle starts a word: "@slack-ops", "@pagerduty-db", "@jane@example.com". */
-function stripHandles(text: string, channels: string[]): string {
+function stripHandles(text: string, channels: string[], scopes: Record<string, HandleScope[]>, scope: HandleScope): string {
   return text.replace(/(^|[\s(])@([A-Za-z0-9][A-Za-z0-9_.+-]*(?:@[A-Za-z0-9.-]+)?)/g, (_m, pre: string, h: string) => {
-    const handle = h.replace(/[.]+$/, "");
-    if (!channels.includes(`@${handle}`)) channels.push(`@${handle}`);
+    const handle = `@${h.replace(/[.]+$/, "")}`;
+    if (!channels.includes(handle)) channels.push(handle);
+    const list = (scopes[handle] ??= []);
+    if (!list.includes(scope)) list.push(scope);
     return pre;
   });
 }
@@ -44,6 +56,7 @@ export function rewriteMessage(src: string, ctx: MessageContext): MessageResult 
   const channels: string[] = [];
   const unknown: string[] = [];
   const dropped: string[] = [];
+  const handleScopes: Record<string, HandleScope[]> = {};
   const use = (id: string) => {
     if (!rules.includes(id)) rules.push(id);
   };
@@ -61,9 +74,14 @@ export function rewriteMessage(src: string, ctx: MessageContext): MessageResult 
 
   let out = "";
   const skip: string[] = []; // stack of NOT_FIRING sections currently open
+  const firing: string[] = []; // stack of open FIRING sections (their markers are removed, their text kept)
   for (const p of parts) {
     if ("text" in p) {
-      if (skip.length === 0) out += stripHandles(p.text, channels).replace(/\{\{|\}\}/g, (b) => literal(b));
+      if (skip.length > 0) stripHandles(p.text, channels, handleScopes, "recovery"); // text dropped, handles still recorded
+      else {
+        const inner = firing.length > 0 ? (SCOPE_OF[firing[firing.length - 1]!] ?? "always") : "always";
+        out += stripHandles(p.text, channels, handleScopes, inner).replace(/\{\{|\}\}/g, (b) => literal(b));
+      }
       continue;
     }
     const t = p.token;
@@ -82,6 +100,8 @@ export function rewriteMessage(src: string, ctx: MessageContext): MessageResult 
       }
       if (FIRING.has(name)) {
         use("alert.msg.conditional");
+        if (kind === "#") firing.push(name);
+        else if (kind === "/" && firing[firing.length - 1] === name) firing.pop();
         continue; // marker removed, its text stays
       }
     }
@@ -109,5 +129,18 @@ export function rewriteMessage(src: string, ctx: MessageContext): MessageResult 
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return { text, rules, channels, unknown, dropped };
+  return { text, rules, channels, unknown, dropped, handleScopes };
+}
+
+/**
+ * Cut text to Dash0's limit (description 2048, summary 255 characters) without splitting a {{ … }} action, so the
+ * Go template still parses. Returns the text unchanged when it fits.
+ */
+export function fitTemplate(text: string, max: number): { text: string; cut: boolean } {
+  if (text.length <= max) return { text, cut: false };
+  const mark = "…";
+  let cut = text.slice(0, max - mark.length);
+  const open = cut.lastIndexOf("{{");
+  if (open >= 0 && cut.indexOf("}}", open) < 0) cut = cut.slice(0, open);
+  return { text: cut.replace(/\s+$/, "") + mark, cut: true };
 }

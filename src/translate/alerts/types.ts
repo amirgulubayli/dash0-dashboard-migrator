@@ -49,6 +49,8 @@ export interface AlertDeps {
   translateMonitor: MonitorTranslator;
   /** Datadog tag key -> PromQL label (T1's tagLookup). Unmapped keys are sanitised. */
   tag?: (ddTag: string) => string | undefined;
+  /** Datadog notification handle ("@slack-ops") -> existing Dash0 notification channel id (parseChannelMap). */
+  channels?: (handle: string) => string | undefined;
   /** Emit a rule even when the item is manual, imported disabled for review (kb 06 §8 override). Default false. */
   keepManual?: boolean;
 }
@@ -68,5 +70,6 @@ export interface AlertTranslation {
   epsilon: string[];
   findings: Finding[];
   /** Notification handles removed from the message (@slack-…), to recreate in Dash0 by hand. */
+  /** Handles with no Dash0 channel in the channel map: recreate these by hand. */
   channels: string[];
 }

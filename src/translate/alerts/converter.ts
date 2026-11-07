@@ -9,6 +9,8 @@ import type { CheckRule, MonitorTranslationLike } from "./types.js";
 /** The parts of T4's TranslateContext T6 uses; the rest is passed through to translateMonitor untouched. */
 export interface ConverterContext {
   tag?: (ddTag: string) => string | undefined;
+  /** Datadog handle -> Dash0 notification channel id (parseChannelMap of the user's channel file). */
+  channels?: (handle: string) => string | undefined;
   [key: string]: unknown;
 }
 
@@ -33,6 +35,7 @@ export function makeAlertConverter<C extends ConverterContext>(translateMonitor:
     const r = translateAlert(alert, {
       translateMonitor: (mq, t) => translateMonitor(mq, t, ctx),
       ...(ctx.tag && { tag: ctx.tag }),
+      ...(ctx.channels && { channels: ctx.channels }),
       ...(opts.keepManual && { keepManual: true }),
     });
     return {

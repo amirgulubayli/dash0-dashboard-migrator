@@ -3,7 +3,8 @@
 import type { Alert, Finding, Status } from "../../ir/index.js";
 import { parseMonitorQuery, type Expr, type MonitorQuery, type Span } from "../../parse/index.js";
 import { ASSUMPTIONS, CATALOG, compose, findingFor, hasRule, rule, type AssumptionId } from "../../rules/index.js";
-import { rewriteMessage } from "./message.js";
+import { CHANNEL_ANNOTATION } from "./channels.js";
+import { fitTemplate, rewriteMessage } from "./message.js";
 import { checkRuleUuid } from "./uuid.js";
 import type { AlertDeps, AlertTranslation, CheckRule, UpstreamFinding } from "./types.js";
 
@@ -218,13 +219,42 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
   const msg = rewriteMessage(alert.message, msgCtx);
   const summary = rewriteMessage(alert.name, msgCtx);
   apply("alert.msg.summary");
+  // Handles: mapped ones bind a Dash0 channel (scope decides :critical-only); unmapped ones are listed for manual setup.
+  const bindings: string[] = [];
+  const unmapped: string[] = [];
+  for (const handle of msg.channels) {
+    const id = deps.channels?.(handle);
+    if (!id) {
+      unmapped.push(handle);
+      continue;
+    }
+    const scopes = msg.handleScopes[handle] ?? ["always"];
+    const all = scopes.includes("always") || (scopes.includes("alert") && scopes.includes("warning"));
+    if (all) {
+      apply("alert.notify.channel");
+      bindings.push(id);
+    } else if (scopes.length === 1 && scopes[0] === "alert") {
+      apply("alert.notify.channel.critical-only");
+      bindings.push(`${id}:critical-only`);
+    } else {
+      apply("alert.notify.channel.wider", handle, `${handle} is only used in ${scopes.join("/")} notifications in Datadog; in Dash0 the channel gets every notification of this rule`);
+      bindings.push(id);
+    }
+  }
   for (const id of [...summary.rules, ...msg.rules]) {
+    if (id === "alert.msg.handle" && unmapped.length === 0) continue; // every handle was bound to a channel
     const original =
-      id === "alert.msg.unknown-token" ? [...summary.unknown, ...msg.unknown].join(" ") : id === "alert.msg.conditional.drop" ? msg.dropped.join(" ") : id === "alert.msg.handle" ? msg.channels.join(" ") : undefined;
+      id === "alert.msg.unknown-token" ? [...summary.unknown, ...msg.unknown].join(" ") : id === "alert.msg.conditional.drop" ? msg.dropped.join(" ") : id === "alert.msg.handle" ? unmapped.join(" ") : undefined;
     apply(id, original);
   }
   let description = msg.text;
   if (mt.negated) description = `${description}\n\nNote: this rule negates the query to compare with $__threshold, so {{ $value }} is shown negated.`.trim();
+  // Dash0 limits (OpenAPI): description 2048, summary 255 characters. Longer text would get the whole rule rejected.
+  const fitD = fitTemplate(description, 2048);
+  const fitS = fitTemplate(summary.text, 255);
+  if (fitD.cut) apply("alert.msg.truncate", `description: ${description.length} characters`);
+  if (fitS.cut) apply("alert.msg.truncate", `summary: ${summary.text.length} characters`);
+  description = fitD.text;
 
   // ---------- defaults ----------
   apply("alert.defaults");
@@ -239,10 +269,14 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
     for: "0s",
     keep_firing_for: "0s",
     labels: Object.fromEntries(Object.entries(labels).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))),
-    annotations: { description, summary: summary.text },
+    annotations: {
+      ...(bindings.length > 0 && { [CHANNEL_ANNOTATION]: [...new Set(bindings)].sort().join(",") }),
+      description,
+      summary: fitS.text,
+    },
     enabled: false,
   };
-  return result(ruleOut, msg.channels);
+  return result(ruleOut, unmapped);
 }
 
 /**
