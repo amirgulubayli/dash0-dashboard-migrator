@@ -6,6 +6,7 @@ import type { DatadogLogQuery, LogTranslateContext } from "../../src/translate/l
 import { translateQuery } from "../../src/translate/query/index.js";
 import type { FormulaEnv } from "../../src/translate/query/index.js";
 import { validatePromQL } from "../../src/validate/promql.js";
+import { CATALOG } from "../../src/rules/index.js";
 
 const attributes = loadLogAttributes("mappings/log-attributes.yaml");
 const CTX: LogTranslateContext = { attributes, variables: { Host: { tag: "host" }, User: { tag: "@usr.name" }, scope: { tag: null } } };
@@ -213,6 +214,11 @@ describe("scalar form (interval $__range): query_value, top list, table", () => 
         expect(r.findings.some((x) => x.code === "log.scalar.mixed")).toBe(true);
       }
     }
+  });
+  it("the finding codes the scalar form raises resolve to catalog rows", () => {
+    const codes = new Set(CATALOG.map((r) => r.findingCode ?? r.id));
+    expect(codes.has("log.scalar.mixed")).toBe(true);
+    expect(CATALOG.find((r) => r.id === "log.scalar.window")).toMatchObject({ status: "bounded", state: "implemented" });
   });
   it("every emitted scalar query parses", () => {
     for (const s of ["", "service:a", "@http.status_code:>=500", "service:a OR host:b"]) {

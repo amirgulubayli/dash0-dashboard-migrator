@@ -26,7 +26,7 @@ export const LOG_ASSUMPTIONS = {
   "A.group-limit": "the number of groups stays within the widget's group limit, so Datadog shows every group too",
   "A.severity-map": "the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level)",
   "A.all-indexes": "every Datadog log index is queried (Dash0 has no indexes)",
-  "A.log-range": "the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (calculation last), so a scalar covers the same timeframe Datadog aggregates over",
+  "A.log-range": "the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (calculation last-number), so a scalar covers the same timeframe Datadog aggregates over",
 } as const;
 export type LogAssumptionId = keyof typeof LOG_ASSUMPTIONS;
 

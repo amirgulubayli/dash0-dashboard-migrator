@@ -146,7 +146,7 @@ export const QUERY_RULES: RuleDef[] = [
   fn("fn.count_not_null", 120, "exact", "count_not_null(q)", "count(q)"),
   fn("fn.count_nonzero", 125, "exact", "count_nonzero(q)", "count(q != 0)"),
   fn("fn.default_zero.single", 130, "exact", "default_zero(q) on a single-series query", "q or vector(0)"),
-  fn("fn.default_zero.grouped", 127, "exact-under", "default_zero(q) on a grouped dashboard query", "q or 0 * q[$__range] @ end()", { assumptions: ["A.at-range"], requires: ["probe:at-modifier"] }),
+  fn("fn.default_zero.grouped", 127, "exact-under", "default_zero(q) on a grouped dashboard query", "q or 0 * q[$__range] @ end()", { assumptions: ["A.at-range"], requires: ["probe:at-modifier", "probe:range-var"] }),
   fn("fn.default_zero.grouped.monitor", 128, "exact-under", "default_zero(q) on a grouped monitor query", "q or 0 * q over the evaluation window", { assumptions: ["A.monitor-rollup-60s"] }),
   fn("fn.exclude_null", 131, "exact", "exclude_null(q)", "label!=\"\" on every selector for each group-by label (drops the N/A group)"),
   fn("fn.monotonic_diff", 132, "exact-under", "monotonic_diff(q)", "(q - (q offset interval)) >= 0", { assumptions: ["A.align", "A.no-gaps", "A.mono-diff"] }),
@@ -155,7 +155,7 @@ export const QUERY_RULES: RuleDef[] = [
   fn("fn.max_min.series", 135, "exact-under", "max(a, b) / min(a, b) of two queries with the same group-by", "a >= b or b / a <= b or b (pointwise)", { assumptions: ["A.both-present"] }),
   fnPlan("fn.top.window", 140, "exact-under", "top(q, N, 'mean'|'max'|'min'|'sum', 'desc'|'asc')", "x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc)", {
     assumptions: ["A.top-uniform"],
-    requires: ["probe:at-modifier"],
+    requires: ["probe:at-modifier", "probe:range-var"],
     note: "Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105).",
   }),
   fnPlan("fn.histogram.quantile", 150, "bounded", "pXX:metric on a distribution", "histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w])))", {
@@ -174,6 +174,10 @@ export const QUERY_RULES: RuleDef[] = [
   arith("arith.div", 30, "exact-under", "division between queries", "a / b", { assumptions: ["A.nonzero-denominator"], evidence: ["unit", "proof:T6"] }),
   arith("arith.neg", 40, "exact", "unary minus", "-x"),
   arith("arith.div-zero", 45, "manual", "division by the constant 0", "no output: Datadog drops the point, PromQL gives ±Inf/NaN"),
+  arith("arith.scalar-log-mixed", 52, "manual", "a scalar log count (over [$__range]) combined with a per-interval value (a metric, or a log time series)", "no output: the two cover different windows", {
+    findingCode: "log.scalar.mixed",
+    note: "Raised by T4 when a formula references a query carrying log.scalar.window next to anything evaluated per [$__interval].",
+  }),
   arith("arith.group-mismatch", 50, "manual", "arithmetic between queries with different groupings", "no output", {
     note: "Planned arith.group-subset (on(...) group_left) waits on probe:dd-formula-join.",
   }),
