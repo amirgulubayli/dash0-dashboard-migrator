@@ -2,8 +2,6 @@
 // plan.lock hash a review binds to. It reuses migrate() in dry-run mode, so plan and migrate translate identically.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalJson, sha256 } from "../targets/dash0/index.js";
-import { CATALOG } from "../rules/index.js";
 import { reportToEvents } from "../report/events.js";
 import { writeReport } from "../report/index.js";
 import type { ResolvedConfig } from "./config.js";
@@ -28,10 +26,8 @@ export interface PlanResult {
   files: { json: string; md: string };
 }
 
-/** The rule version behind a plan: sha256 of the canonical catalog. */
-export function catalogHash(): string {
-  return sha256(canonicalJson(CATALOG));
-}
+export { catalogHash } from "../report/build.js";
+import { catalogHash } from "../report/build.js";
 
 export async function runPlan(o: PlanOptions): Promise<PlanResult> {
   const src = o.config.source;
@@ -43,6 +39,8 @@ export async function runPlan(o: PlanOptions): Promise<PlanResult> {
     mode: "dry-run",
     enableRules: o.config.enableRules,
     version: o.version,
+    source: src.kind === "folder" ? { kind: "folder", site: null, path: src.path } : { kind: "api", site: src.site, path: null },
+    config: { ...o.config, ...(o.only ? { only: o.only } : {}) } as unknown as Record<string, unknown>,
   });
   const files = writeReport(result.report, o.outDir);
   writeFileSync(join(o.outDir, "events.jsonl"), reportToEvents(result.report).map((e) => JSON.stringify(e)).join("\n") + "\n");

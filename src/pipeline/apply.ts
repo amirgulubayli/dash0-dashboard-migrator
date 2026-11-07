@@ -118,6 +118,7 @@ export async function runApply(o: ApplyOptions): Promise<ApplyOutcome> {
   const result = (kind: "dashboard" | "check-rule", id: string) => manifest.results.find((r) => r.kind === kind && r.id === id);
   const applied: Report = {
     ...report,
+    run: { ...report.run, planHash: plan.planHash },
     summary: {
       ...report.summary,
       import: { mode: o.dryRun ? "dry-run" : "live", written: manifest.summary["dry-run"], imported: manifest.summary.imported, failed: manifest.summary.failed, rejected: manifest.summary["rejected-preflight"], readBackMatch: manifest.summary.readBackMatch },

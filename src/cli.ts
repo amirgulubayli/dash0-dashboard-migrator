@@ -139,6 +139,7 @@ async function runMigrate(args: string[]): Promise<number> {
   try {
     const r = await migrate({
       ingest: { ...(f.input ? { input: resolve(f.input) } : { api: true }), ...(f.only ? { only: f.only } : {}) },
+      source: f.input ? { kind: "folder", site: null, path: f.input } : { kind: "api", site: process.env.DD_SITE || "datadoghq.eu", path: null },
       mappingsDir: resolve(f.mappings),
       ...(f.channels ? { channelsFile: resolve(f.channels) } : {}),
       outDir: resolve(f.out),
