@@ -4,10 +4,12 @@ import type { MonitorQuery } from "../../parse/index.js";
 
 /**
  * Body of a Dash0 check rule. Structurally a subset of T7's PrometheusAlertRule (src/targets/dash0/schema.ts, PR #5).
- * It has no `id`: Dash0 rejects a body that carries one (400, docs/research/dash0.md "Idempotent imports").
- * The rule is addressed by its origin instead (AlertTranslation.origin): PUT /api/alerting/check-rules/{origin} upserts.
+ * `id` is a deterministic UUIDv5 of the Datadog monitor id: POST /api/import/check-rule upserts by a UUID id
+ * (Ali's live probe, hub #289), so re-imports overwrite. A non-UUID id ("dd-…") is rejected with 400.
+ * `origin` (AlertTranslation.origin) stays available for PUT /api/alerting/check-rules/{origin}.
  */
 export interface CheckRule {
+  id: string;
   name: string;
   expression: string;
   thresholds?: { degraded?: number; failed?: number };
@@ -54,7 +56,7 @@ export interface AlertDeps {
 export interface AlertTranslation {
   /** "dd-monitor-<id>": the report item id. */
   itemId: string;
-  /** Dash0 origin of the check rule ("dd-monitor-<id>", same as itemId). T7 imports with PUT /api/alerting/check-rules/{origin}, so re-runs overwrite. */
+  /** Dash0 origin of the check rule ("dd-monitor-<id>", same as itemId), for PUT /api/alerting/check-rules/{origin}. The rule body carries the UUID id for POST /api/import/check-rule. */
   origin: string;
   status: Status;
   /** null when the monitor is manual (unless keepManual). Canonical key order, labels sorted. */

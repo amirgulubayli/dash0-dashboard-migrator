@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { MonitorQuery } from "../../src/parse/index.js";
 import { CATALOG } from "../../src/rules/index.js";
-import { checkRuleId, labelName, rewriteMessage, translateAlert, type MonitorTranslationLike } from "../../src/translate/alerts/index.js";
+import { checkRuleId, checkRuleUuid, labelName, NAMESPACE_DD2DASH0, rewriteMessage, translateAlert, uuidv5, type MonitorTranslationLike } from "../../src/translate/alerts/index.js";
 import { fixtureMonitors, monitor } from "./alerts.helpers.js";
 
 /** Stands in for T4's translateMonitor: records what it was given and answers like T4 does for > and <. */
@@ -55,11 +55,12 @@ describe("T6: classify and parse", () => {
 describe("T6: the check rule", () => {
   const base = monitor({ query: "avg(last_5m):avg:redis.mem.used{*} > 90", thresholds: { critical: 90, warning: 70 }, name: "[Redis] High memory" });
 
-  it("has the canonical shape: no id, $__threshold, {failed, degraded}, defaults, disabled; origin dd-monitor-<id>", () => {
+  it("has the canonical shape: UUIDv5 id, $__threshold, {failed, degraded}, defaults, disabled; origin dd-monitor-<id>", () => {
     const r = translateAlert(base, { translateMonitor: T() });
     expect(r.origin).toBe("dd-monitor-12345");
-    expect(r.rule).not.toHaveProperty("id");
+    expect(r.rule!.id).toBe(checkRuleUuid("12345"));
     expect(r.rule).toEqual({
+      id: checkRuleUuid("12345"),
       name: "[Redis] High memory",
       expression: "avg_over_time(x[5m:1m]) > $__threshold",
       thresholds: { degraded: 70, failed: 90 },
@@ -70,7 +71,7 @@ describe("T6: the check rule", () => {
       annotations: { description: "", summary: "[Redis] High memory" },
       enabled: false,
     });
-    expect(Object.keys(r.rule!)).toEqual(["name", "expression", "thresholds", "interval", "for", "keep_firing_for", "labels", "annotations", "enabled"]);
+    expect(Object.keys(r.rule!)).toEqual(["id", "name", "expression", "thresholds", "interval", "for", "keep_firing_for", "labels", "annotations", "enabled"]);
     expect(r.rules).toEqual(expect.arrayContaining(["classify.monitor.metric", "monitor.window", "monitor.cmp.gt", "alert.threshold.both", "alert.id", "alert.defaults", "emit.rules-disabled"]));
     expect(r.status).toBe("exact-under");
     expect(r.assumptions).toEqual(["A.boundary", "A.eval-1m", "A.monitor-rollup-60s"]);
@@ -243,5 +244,20 @@ describe("T6 as T8's AlertConverter", () => {
     expect(Object.keys(out).sort()).toEqual(["assumptions", "channels", "epsilon", "findings", "origin", "promql", "rule", "rules", "status"]);
     expect(out.origin).toBe("dd-monitor-12345");
     expect(out.rule!.annotations!.description).toBe("on {{ $labels.host_name }}");
+  });
+});
+
+describe("T6: check-rule ids for POST /api/import/check-rule", () => {
+  it("uuidv5 follows RFC 4122 (Appendix B example) and our name space is pinned", () => {
+    expect(uuidv5("www.example.com", "6ba7b810-9dad-11d1-80b4-00c04fd430c8")).toBe("2ed6657d-e927-568b-95e1-2665a8aea6a2");
+    expect(uuidv5("https://github.com/vimouzin/dash0-dashboard-migrator", "6ba7b811-9dad-11d1-80b4-00c04fd430c8")).toBe(NAMESPACE_DD2DASH0);
+  });
+
+  it("same monitor, same id; different monitors, different ids; valid version-5 UUIDs that also pass T7's id rule", () => {
+    const a = checkRuleUuid("130187664");
+    expect(checkRuleUuid("130187664")).toBe(a);
+    expect(checkRuleUuid("130187665")).not.toBe(a);
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(a).toMatch(/^[a-z0-9][a-z0-9-]{0,127}$/);
   });
 });

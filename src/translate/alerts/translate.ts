@@ -4,6 +4,7 @@ import type { Alert, Finding, Status } from "../../ir/index.js";
 import { parseMonitorQuery, type Expr, type MonitorQuery, type Span } from "../../parse/index.js";
 import { ASSUMPTIONS, CATALOG, compose, findingFor, hasRule, rule, type AssumptionId } from "../../rules/index.js";
 import { rewriteMessage } from "./message.js";
+import { checkRuleUuid } from "./uuid.js";
 import type { AlertDeps, AlertTranslation, CheckRule, UpstreamFinding } from "./types.js";
 
 const METRIC_TYPES = new Set(["metric alert", "query alert"]);
@@ -230,6 +231,7 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
   apply("emit.rules-disabled");
 
   const ruleOut: CheckRule = {
+    id: checkRuleUuid(alert.source.id),
     name: alert.name,
     expression: mt.promql,
     thresholds: { ...(mt.thresholds.degraded !== undefined && { degraded: mt.thresholds.degraded }), ...(mt.thresholds.failed !== undefined && { failed: mt.thresholds.failed }) },

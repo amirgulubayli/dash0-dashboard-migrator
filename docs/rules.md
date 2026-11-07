@@ -252,7 +252,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
-| 10 | `alert.id` | monitor id | origin "dd-monitor-<id>" (lowercased, [^a-z0-9-] → "-"), imported with PUT /api/alerting/check-rules/{origin} so re-runs overwrite; no id in the body (Dash0 rejects it, live 2026-11-07); label dd_monitor_id="<id>" | exact | unit | — | T6 | implemented |
+| 10 | `alert.id` | monitor id | id = UUIDv5("datadog:monitor:<id>") in our fixed name space, so POST /api/import/check-rule upserts (live 2026-11-07, hub #289); origin "dd-monitor-<id>" for PUT by origin; label dd_monitor_id="<id>" | exact | unit | — | T6 | implemented |
 | 20 | `alert.name` | monitor name | name as is (template tokens in names are not expanded) | exact | unit | — | T6 | implemented |
 | 30 | `alert.threshold.both` | critical (from the query) and warning thresholds | thresholds {failed: critical, degraded: warning} | exact | unit | — | T6 | implemented |
 | 40 | `alert.threshold.critical` | critical threshold only | thresholds {failed: critical} | exact | unit | — | T6 | implemented |
