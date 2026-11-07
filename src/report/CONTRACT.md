@@ -121,7 +121,6 @@ T17 (Michael) adds the rows, and the corpus/fixture conformance test (Ali offere
 | `source_layout` | `{x,y,w,h} \| null` | **Datadog** position, 12 columns, relative to its group. **The console's map uses this.** The existing `layout` stays the Dash0 position (24 columns) |
 | `condition` | `string \| null` | For `exact-under`: the item's assumptions as plain sentences, joined with "; ". Otherwise `null` |
 | `explain` | `{ technical: string; plain: string }` | From catalog templates over the item's rules. Example: technical "time.rollup.explicit: exact-under(A.align, A.boundary)"; plain "Same values as Datadog as long as both tools line their minutes up the same way." |
-| `ruleSpans` | `{ ruleId; query: number; start: number; end: number }[]` | Which part of which source query each rule handled (query-diff view). **Emitted by T4/T12 (Ali)**; `[]` until then |
 | `decision_required` | `boolean` | `true` exactly for the items in `summary.reviewOrder` |
 
 ### 5.5 After apply (`apply/report.json`) and parity
@@ -193,10 +192,13 @@ T17 (Michael) adds the rows, and the corpus/fixture conformance test (Ali offere
 - **Web UI:** console unit tests for the new fields (the old fixture still parses), plus **one Playwright e2e** on the fixtures: plan → review in the browser → approve/flag → save → apply in dry-run → check the result.
 
 ## 10. Changes from rev 1
+
+**Rev 3:** `ruleSpans` removed (Ali, hub #661): it needs changes inside T4/T12 lowering before the freeze, for a visual-only gain. The query view shows the Datadog query, the PromQL and the rule list with `explain` texts. Per-part highlighting can come back later as an optional field.
+
 - **Commands:** `migrate --dry-run` + `import --approved` becomes `plan` / `review` / `apply` (plus `diff` and `parity`), with a config file and exit codes.
 - **Review binding:** the review binds to the **plan hash** (all report and payload files), with `report_sha256` kept as a transition alias.
 - **Review order (Henry):** exact-under items are excluded and `decision_required` is added.
 - **Henry's other points:** a per-item `condition`, `group_id` matching, and `source_layout` confirmed for the map.
-- **Reason codes (Ali):** the invariant is enforced, with no fallback; the 14 unresolved codes are listed for T17 and `plain` is added. Plus `explain` (technical + plain), `ruleSpans` (Ali), `summary.gaps` and `summary.flow` for the visual views.
+- **Reason codes (Ali):** the invariant is enforced, with no fallback; the 14 unresolved codes are listed for T17 and `plain` is added. Plus `explain` (technical + plain), `summary.gaps` and `summary.flow` for the visual views.
 - **Links:** the `target.url` format is filled in from Ali's decoding (#543), with `target.dash0Uid` and `dash0.orgId` config; check-rule links stay `null`.
 - **Drift checks:** for the source and the target.
