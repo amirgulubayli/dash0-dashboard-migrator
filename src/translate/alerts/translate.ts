@@ -18,6 +18,8 @@ const NOTIFICATION_OPTIONS = new Set([
   "escalation_message",
   "notify_audit",
   "include_tags",
+  "enable_logs_sample",
+  "groupby_simple_monitor",
   "notification_preset_name",
   "groupby_simple_monitor",
   "notify_by",
@@ -117,19 +119,25 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
   };
 
   // ---------- classify ----------
-  if (!METRIC_TYPES.has(alert.type)) {
-    manual("classify.monitor.other", alert.type, `monitor type "${alert.type}" has no check-rule translation yet`);
+  // Log alerts go through T12 (logs stage) instead of T3/T4; everything after the monitor query is shared.
+  const isLog = alert.type === "log alert" && deps.translateLogMonitor !== undefined;
+  if (!METRIC_TYPES.has(alert.type) && !isLog) {
+    const why = alert.type === "log alert" ? " (no log-attribute table loaded, so T12 can't translate it)" : " yet";
+    manual("classify.monitor.other", alert.type, `monitor type "${alert.type}" has no check-rule translation${why}`);
     return result(null);
   }
-  apply("classify.monitor.metric");
+  apply(isLog ? "classify.monitor.log" : "classify.monitor.metric");
 
-  // ---------- parse ----------
-  const parsed = parseMonitorQuery(alert.query);
-  if (!parsed.ok) {
-    manual("parse.error", alert.query, `monitor query does not parse: ${parsed.error.message} at ${parsed.error.pos}`);
-    return result(null);
+  // ---------- parse (metric monitors; T12 parses log monitor queries itself) ----------
+  let mq: MonitorQuery | null = null;
+  if (!isLog) {
+    const parsed = parseMonitorQuery(alert.query);
+    if (!parsed.ok) {
+      manual("parse.error", alert.query, `monitor query does not parse: ${parsed.error.message} at ${parsed.error.pos}`);
+      return result(null);
+    }
+    mq = parsed.value;
   }
-  let mq = parsed.value;
 
   // ---------- options (sorted, so the order of findings is stable) ----------
   const opts = alert.options;
@@ -139,7 +147,8 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
     const show = `${key}: ${JSON.stringify(v)}`;
     if (key === "evaluation_delay") {
       if (inert(v)) continue;
-      if (typeof v === "number" && Number.isInteger(v) && v > 0) {
+      if (isLog || !mq) manual("alert.opt.unknown", show, "evaluation_delay on a log monitor has no rule yet (the dash0.logs translation has no offset)");
+      else if (typeof v === "number" && Number.isInteger(v) && v > 0) {
         mq = wrapTimeshift(mq, v);
         apply("alert.opt.evaluation_delay", show);
       } else manual("alert.opt.unknown", show, `evaluation_delay ${JSON.stringify(v)} is not a whole number of seconds`);
@@ -158,6 +167,8 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
       if (v === "resolve") apply("alert.opt.on_missing_data.resolve", show);
       else if (v === "show_no_data" || v === "show_and_notify_no_data") apply("alert.opt.no_data.report", show);
       else manual("alert.opt.unknown", show);
+    } else if (key === "variables" && isLog) {
+      // The named log queries of a formula(...) log monitor: part of the query, translated by T12 below.
     } else if (NOTIFICATION_OPTIONS.has(key)) {
       if (!inert(v)) apply("alert.opt.notification", show);
     } else if (!inert(v)) manual("alert.opt.unknown", show, `monitor option ${key} has no rule`);
@@ -169,7 +180,10 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
     manual("alert.threshold.recovery", JSON.stringify({ critical_recovery: t.criticalRecovery, warning_recovery: t.warningRecovery }));
 
   // ---------- monitor query (T4) ----------
-  const mt = deps.translateMonitor(mq, { ...(t.critical !== undefined && { critical: t.critical }), ...(t.warning !== undefined && { warning: t.warning }) });
+  const crit = { ...(t.critical !== undefined && { critical: t.critical }), ...(t.warning !== undefined && { warning: t.warning }) };
+  const variables = Array.isArray(opts.variables) ? opts.variables : undefined;
+  const lmt = isLog ? deps.translateLogMonitor!(alert.query, { ...crit, ...(variables && { variables }) }) : null;
+  const mt = lmt ?? deps.translateMonitor(mq!, crit);
   for (const id of mt.rules) if (hasRule(id) && !applied.includes(id)) applied.push(id);
   for (const a of mt.assumptions) if (a.startsWith("A.")) extra.add(a as AssumptionId);
   for (const f of mt.findings) {
@@ -184,7 +198,7 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
   // The query always carries the critical threshold (T4 maps it to failed); warning is optional.
   apply(mt.thresholds.degraded !== undefined ? "alert.threshold.both" : "alert.threshold.critical");
 
-  if (grouped(mq.query)) apply("alert.group");
+  if (lmt ? (lmt.groups?.length ?? 0) > 0 : grouped(mq!.query)) apply("alert.group");
 
   // ---------- labels ----------
   apply("alert.id");

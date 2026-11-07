@@ -1,17 +1,42 @@
 // T5: IR Dashboard -> Dash0 DashboardDefinition (Perses), plus a per-panel result list for the report (T8).
 // Layout (knowledge base D-24): Datadog's ordered grid is 12 columns, Dash0's 24, so x and width double.
+// A group's children are laid out inside the group's own width (a 6-wide group has children spanning 0..6), and
+// Datadog puts groups side by side. A Perses Grid section is always full width, so children scale by 24 / group
+// width to fill it (catalog layout.group.scale).
 // Height has no documented ratio; ROW_SCALE is a heuristic until it's tuned against a Dash0 golden export.
 // Groups become titled Grid sections; runs of top-level widgets become untitled sections, in source order.
 import { worst, isGroup, type Dashboard, type Finding, type Layout, type Panel, type Status } from "../../ir/index.js";
 import { dash0Id, type DashboardDefinition, type GridItem, type GridLayout, type PersesPanel } from "../../targets/dash0/index.js";
 import { toPersesPanel, type PanelResult } from "./panels.js";
-import { translateRequests, type TranslateExpr, type TranslateOptions } from "./queries.js";
+import { translateRequests, type TranslateExpr, type TranslateLog, type TranslateOptions } from "./queries.js";
 
 export { translateRequests } from "./queries.js";
-export type { TranslateExpr, TranslateOptions, ExprTranslation, PanelQuery, RequestTranslation } from "./queries.js";
+export type { TranslateExpr, TranslateLog, TranslateOptions, ExprTranslation, PanelQuery, RequestTranslation } from "./queries.js";
 export type { PanelResult } from "./panels.js";
 
 export const ROW_SCALE = 3;
+
+const SCALAR_KINDS = new Set<string>(["stat", "toplist", "table"]);
+
+/** A log query in a scalar widget: manual, with the reason, until T12's window form (log.scalar.window) is merged. */
+const scalarLogPending: TranslateLog = (q, t) => ({
+  status: "manual",
+  promql: null,
+  rules: [],
+  assumptions: [],
+  findings: [
+    {
+      status: "manual",
+      code: "query.datasource",
+      message: "log query in a scalar widget: Datadog evaluates it over the whole timeframe, and the per-interval form would show a per-bucket value; it needs the window form (log.scalar.window)",
+      itemKind: "query",
+      itemId: t.where,
+      ...(q.search?.query !== undefined && { original: q.search.query }),
+    },
+  ],
+  node: null,
+  groups: null,
+});
 const AUTO = { w: 12, h: 6 };
 
 export interface DashboardTranslation {
@@ -22,7 +47,8 @@ export interface DashboardTranslation {
   findings: Finding[];
 }
 
-export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTranslation {
+/** `translateLog` (T12) is optional: without it, log queries fail closed as before. */
+export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: TranslateLog): DashboardTranslation {
   const dashItem = `dd-dash-${d.source.id}`;
   const findings: Finding[] = [];
 
@@ -57,7 +83,11 @@ export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTrans
     return k;
   };
   const convert = (p: Panel, itemId: string): { key: string; layout: Layout | null } => {
-    const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId);
+    // Scalar widgets (stat, toplist, table) evaluate a log query over the whole timeframe in Datadog; T12's
+    // per-interval increase(...[$__interval]) would show a per-bucket value. Until the window form lands
+    // (log.scalar.window, PR #26), their log queries fail closed (Ali's review of #19).
+    const logFor = translateLog && SCALAR_KINDS.has(p.kind) ? scalarLogPending : translateLog;
+    const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId, logFor);
     const r = toPersesPanel(p, itemId, q);
     const k = key(p.id);
     panels[k] = r.panel;
@@ -74,7 +104,7 @@ export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTrans
     if (isGroup(item)) {
       flush();
       const children = item.panels.map((p) => convert(p, `${dashItem}/${item.id}/${p.id}`));
-      if (children.length) layouts.push(grid(children, item.title ?? null, findings, dashItem));
+      if (children.length) layouts.push(grid(children, item.title ?? null, findings, dashItem, groupColumns(item.layout?.w, item.panels)));
     } else run.push(convert(item, `${dashItem}/${item.id}`));
   }
   flush();
@@ -98,8 +128,22 @@ export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTrans
   };
 }
 
-/** One Grid section. Datadog x/width double (12 -> 24); y/height scale by ROW_SCALE; missing layouts auto-flow. */
-function grid(items: { key: string; layout: Layout | null }[], title: string | null, findings: Finding[], dashItem: string): GridLayout {
+/**
+ * The width the children of a group are laid out in: the group's own width. A group with no layout, or children
+ * reaching past it (old exports), uses the widest child edge instead, never less than 1 and never more than 12.
+ */
+export function groupColumns(groupWidth: number | undefined, children: Panel[]): number {
+  const edge = Math.max(0, ...children.map((c) => (c.layout ? c.layout.x + c.layout.w : 0)));
+  const w = groupWidth && groupWidth > 0 ? Math.max(groupWidth, edge) : edge || 12;
+  return Math.min(12, Math.max(1, w));
+}
+
+/**
+ * One Grid section. `cols` is the width of the Datadog grid the items are laid out in (12 at top level, the group's
+ * width inside a group); x and width scale by 24 / cols. Edges are rounded, not widths, so neighbours stay adjacent
+ * when 24 / cols isn't a whole number. y/height scale by ROW_SCALE; missing layouts auto-flow.
+ */
+function grid(items: { key: string; layout: Layout | null }[], title: string | null, findings: Finding[], dashItem: string, cols = 12): GridLayout {
   const placed = items.filter((i) => i.layout);
   const y0 = placed.length ? Math.min(...placed.map((i) => i.layout!.y)) : 0;
   const out: GridItem[] = [];
@@ -107,8 +151,9 @@ function grid(items: { key: string; layout: Layout | null }[], title: string | n
   let flowX = 0;
   for (const i of items) {
     if (i.layout) {
-      let x = i.layout.x * 2;
-      let width = Math.max(1, i.layout.w * 2);
+      const f = 24 / cols;
+      let x = Math.round(i.layout.x * f);
+      let width = Math.max(1, Math.round((i.layout.x + i.layout.w) * f) - x);
       if (x + width > 24) {
         findings.push({ status: "bounded", code: "layout.clamped", message: `panel ${i.key} overflowed the 24-column grid and was clamped`, itemKind: "panel", itemId: dashItem });
         x = Math.min(x, 23);

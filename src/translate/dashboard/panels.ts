@@ -4,6 +4,7 @@
 import { worst, type Finding, type Panel, type Status } from "../../ir/index.js";
 import type { PersesPanel } from "../../targets/dash0/index.js";
 import type { RequestTranslation } from "./queries.js";
+import { conditionalFormatsToThresholds, markersToThresholds } from "./thresholds.js";
 
 export interface PanelResult {
   itemId: string;
@@ -100,6 +101,12 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       if (types.length && types.every((t) => t === "bars")) spec.visual = { display: "bar" };
       else if (types.some((t) => t === "area" || t === "bars")) styleLost.push(`display types ${[...new Set(types)].join(", ")} drawn as lines`);
       if (p.options.showLegend === true) spec.legend = { position: "bottom" };
+      const mk = markersToThresholds(p.options.markers);
+      if (mk.thresholds) {
+        spec.thresholds = mk.thresholds;
+        under("panel.markers", ["A.style"], [`${mk.thresholds.steps.length} marker line(s) -> TimeSeriesChart thresholds`, ...mk.notes].join("; "), JSON.stringify(p.options.markers));
+      }
+      if (mk.skipped.length) styleLost.push(`marker(s) ${mk.skipped.map((m) => `'${m}'`).join(", ")} not migrated (unrecognised value)`);
       if (styleLost.length) under("panel.style", ["A.style"], styleLost.join("; "));
       return result("TimeSeriesChart", spec);
     }
@@ -114,7 +121,14 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       if (q.queries.length > 1) under("widget.query_value.multi", ["A.stat-first"], `${q.queries.length} queries on one stat panel; Dash0 shows the first`);
       const spec: Record<string, unknown> = { calculation };
       if (typeof p.options.precision === "number") spec.format = { unit: "decimal", decimalPlaces: p.options.precision };
-      if (p.options.conditionalFormats) under("panel.style", ["A.style"], "conditional colour formats are not migrated");
+      if (p.options.conditionalFormats) {
+        const cf = conditionalFormatsToThresholds(p.options.conditionalFormats);
+        if (cf.thresholds) {
+          spec.thresholds = cf.thresholds;
+          const msg = `${(p.options.conditionalFormats as unknown[]).length} conditional format rule(s) -> StatChart thresholds`;
+          under("panel.conditional-format", ["A.style"], [msg, ...cf.notes].join("; "), JSON.stringify(p.options.conditionalFormats));
+        } else if (cf.unsupported) under("panel.style", ["A.style"], `conditional colour formats are not migrated (no equivalent for ${cf.unsupported})`, JSON.stringify(p.options.conditionalFormats));
+      }
       return result("StatChart", spec);
     }
     case "toplist": {

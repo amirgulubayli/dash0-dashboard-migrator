@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { stringify } from "yaml";
 import { ingestDatadog, ingestFolder, ingestApi, dashboardFromDatadog } from "../../src/sources/datadog/index.js";
 import { isGroup, type Dashboard, type Panel } from "../../src/ir/index.js";
 
@@ -159,5 +160,68 @@ describe("normalizer edge cases", () => {
     const r = dashboardFromDatadog({ title: "F", layout_type: "free", widgets: [{ id: 1, definition: { type: "note", content: "x" } }] }, { vendor: "datadog", id: "f" });
     expect(r.findings.map((f) => f.code)).toEqual(["layout.free"]);
     expect(r.dashboard.items[0]).toMatchObject({ kind: "markdown", layout: null });
+  });
+});
+
+/** Copy every .json under `src` to a fresh folder as YAML (same document), renaming x.json -> x<ext>. */
+function yamlTwin(src: string, ext = ".yaml"): string {
+  const out = mkdtempSync(join(tmpdir(), "t2-yaml-"));
+  const walk = (d: string) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (n.endsWith(".json")) {
+        const dest = join(out, relative(src, p)).replace(/\.json$/, ext);
+        mkdirSync(dirname(dest), { recursive: true });
+        writeFileSync(dest, stringify(JSON.parse(readFileSync(p, "utf8"))));
+      }
+    }
+  };
+  walk(src);
+  return out;
+}
+/** The ingest result with each origin's file extension dropped, so a JSON run and its YAML twin compare directly. */
+const noExt = (r: unknown) => JSON.stringify(r).replace(/"origin":"([^"]*)\.(json|ya?ml)"/g, '"origin":"$1"');
+
+describe("YAML exports (brief: 'Datadog dashboards exported as YAML files')", () => {
+  it("every fixture as YAML ingests exactly like its JSON twin (ids, panels, alerts, findings)", () => {
+    const y = ingestFolder(yamlTwin(FIX));
+    expect(y.dashboards).toHaveLength(4);
+    expect(y.alerts).toHaveLength(6);
+    expect(noExt(y)).toBe(noExt(all));
+    expect(y.dashboards[0]!.source.origin).toMatch(/\.yaml$/);
+  });
+  it(".yml and upper-case extensions are read too", () => {
+    expect(ingestFolder(yamlTwin(join(FIX, "monitors"), ".yml")).alerts).toHaveLength(6);
+    expect(ingestFolder(yamlTwin(join(FIX, "monitors"), ".YAML")).alerts).toHaveLength(6);
+  });
+  it("YAML 1.2 core schema: yes/on/dates stay strings, as in the JSON they came from", () => {
+    const dir = mkdtempSync(join(tmpdir(), "t2-"));
+    writeFileSync(join(dir, "d.yaml"), "title: yes\ndescription: 2026-11-07\nwidgets: []\ntemplate_variables:\n  - name: on\n    prefix: on\n");
+    const d = ingestFolder(dir).dashboards[0]!;
+    expect(d.title).toBe("yes");
+    expect(d.description).toBe("2026-11-07");
+  });
+  it("broken YAML, duplicate keys, several documents and an empty file become findings; the rest still ingests", () => {
+    const dir = mkdtempSync(join(tmpdir(), "t2-"));
+    writeFileSync(join(dir, "a-broken.yaml"), "title: [unclosed\n");
+    writeFileSync(join(dir, "b-dup.yaml"), "title: A\ntitle: B\nwidgets: []\n");
+    writeFileSync(join(dir, "c-multi.yml"), "title: A\nwidgets: []\n---\ntitle: B\nwidgets: []\n");
+    writeFileSync(join(dir, "d-empty.yaml"), "");
+    writeFileSync(join(dir, "e-mon.yaml"), stringify(JSON.parse(readFileSync(join(FIX, "monitors", "redisdb__high_mem.json"), "utf8"))));
+    const r = ingestFolder(dir);
+    expect(r.alerts).toHaveLength(1);
+    expect(r.dashboards).toHaveLength(0);
+    const f = r.findings.map((x) => [x.code, x.itemId, x.message]);
+    expect(f.map((x) => x.slice(0, 2))).toEqual([
+      ["source.unreadable", "a-broken.yaml"],
+      ["source.unreadable", "b-dup.yaml"],
+      ["source.unreadable", "c-multi.yml"],
+      ["source.unreadable", "d-empty.yaml"],
+    ]);
+    expect(f[0]![2]).toMatch(/not valid YAML/);
+    expect(f[1]![2]).toMatch(/not valid YAML.*unique/);
+    expect(f[2]![2]).toMatch(/2 YAML documents in one file/);
+    expect(f[3]![2]).toMatch(/neither a Datadog dashboard/);
   });
 });

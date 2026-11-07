@@ -4,6 +4,8 @@
 // so this module depends only on the parser and the IR, not on T4's module.
 import { formatParseError, parseFormula, parseQuery, parseQueryList, type Expr } from "../../parse/index.js";
 import { worst, type Finding, type QuerySet, type Status } from "../../ir/index.js";
+import type { FormulaEnv } from "../query/types.js";
+import { logRef, type DatadogLogQuery, type LogTranslation } from "../logs/index.js";
 
 /** What T4 returns per expression (structurally; findings may still be in T4's older shape). */
 export interface ExprTranslation {
@@ -15,13 +17,21 @@ export interface ExprTranslation {
 }
 
 export interface TranslateOptions {
-  env?: Map<string, Expr>;
+  /** Formula refs: parsed metric queries, or log queries already lowered by T12 (logRef). */
+  env?: FormulaEnv;
   /** Dashboard variables for T4: name -> the tag key it filters, or null (free-form / pinned). */
   variables: Record<string, { tag: string | null }>;
   where: string;
 }
 
 export type TranslateExpr = (e: Expr, o: TranslateOptions) => ExprTranslation;
+
+/**
+ * T12's translateLogQuery, wrapped by the caller with the log-attribute table:
+ *   (q, o) => translateLogQuery(q, { attributes, variables: o.variables, where: o.where })
+ * Optional: without it, log queries fail closed as before.
+ */
+export type TranslateLog = (q: DatadogLogQuery, o: Omit<TranslateOptions, "env">) => LogTranslation;
 
 export interface PanelQuery {
   promql: string;
@@ -41,6 +51,7 @@ export function translateRequests(
   translate: TranslateExpr,
   variables: TranslateOptions["variables"],
   itemId: string,
+  translateLog?: TranslateLog,
 ): RequestTranslation {
   const out: RequestTranslation = { queries: [], status: "exact", rules: [], assumptions: [], findings: [] };
   const add = (r: ExprTranslation, where: string, legend?: string) => {
@@ -57,12 +68,19 @@ export function translateRequests(
 
   for (const [si, set] of sets.entries()) {
     const where = sets.length > 1 ? `${itemId}/request-${si}` : itemId;
-    // Parse every metrics query once; formulas reference them by refId.
-    const env = new Map<string, Expr>();
+    // Parse every metrics query once and lower every log query once (T12); formulas reference both by refId.
+    const env: FormulaEnv = new Map();
+    const logs = new Map<string, LogTranslation>();
+    const translatable = (ds: string) => ds === "metrics" || (ds === "logs" && translateLog !== undefined);
     for (const q of set.queries) {
-      if (q.dataSource !== "metrics") continue;
-      const p = parseQuery(q.expr);
-      if (p.ok) env.set(q.refId, p.value);
+      if (q.dataSource === "metrics") {
+        const p = parseQuery(q.expr);
+        if (p.ok) env.set(q.refId, p.value);
+      } else if (q.dataSource === "logs" && translateLog) {
+        const t = translateLog(q.raw as DatadogLogQuery, { variables, where });
+        logs.set(q.refId, t);
+        if (t.promql) env.set(q.refId, logRef(t));
+      }
     }
     if (set.formulas.length) {
       for (const f of set.formulas) {
@@ -72,9 +90,16 @@ export function translateRequests(
           continue;
         }
         const refs = refsOf(p.value);
-        const nonMetric = set.queries.filter((q) => refs.has(q.refId) && q.dataSource !== "metrics");
+        const nonMetric = set.queries.filter((q) => refs.has(q.refId) && !translatable(q.dataSource));
         if (nonMetric.length) {
-          manual("query.datasource", `formula '${f.expr}' reads ${nonMetric.map((q) => q.dataSource).join(", ")} data; only metrics translate to PromQL`, nonMetric.map((q) => q.expr).join(" | "));
+          manual("query.datasource", `formula '${f.expr}' reads ${nonMetric.map((q) => q.dataSource).join(", ")} data; only metrics and logs translate to PromQL`, nonMetric.map((q) => q.expr).join(" | "));
+          continue;
+        }
+        // A log query T12 couldn't translate: its own (manual) findings say why, and the formula is skipped.
+        const failedLogs = [...refs].map((r) => logs.get(r)).filter((t): t is LogTranslation => !!t && !t.promql);
+        if (failedLogs.length) {
+          for (const t of failedLogs) add(t, where);
+          out.status = "manual";
           continue;
         }
         const missing = [...refs].filter((r) => !env.has(r));
@@ -91,8 +116,13 @@ export function translateRequests(
     // No formulas: plot every non-hidden query. Legacy `q` may hold several comma-separated expressions.
     for (const q of set.queries) {
       if (q.hidden) continue;
+      const lt = logs.get(q.refId);
+      if (lt) {
+        add(lt, where);
+        continue;
+      }
       if (q.dataSource !== "metrics") {
-        manual("query.datasource", `query ${q.refId} reads ${q.dataSource} data; only metrics translate to PromQL`, q.expr);
+        manual("query.datasource", `query ${q.refId} reads ${q.dataSource} data; only metrics${translateLog ? " and logs" : ""} translate to PromQL`, q.expr);
         continue;
       }
       const p = parseQueryList(q.expr);
