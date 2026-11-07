@@ -32,9 +32,15 @@ const TYPES: Record<string, string> = {
   ".txt": "text/plain; charset=utf-8",
 };
 
-/** Candidate console builds: the packaged copy next to the CLI, then the repo's console/dist. */
+/** Candidate console builds: the packaged copy next to the CLI, then the repo's console build (SPA: console/.output/public). */
 export function findConsoleDir(fromDir: string): string | undefined {
-  for (const c of [join(fromDir, "..", "console"), join(fromDir, "..", "..", "console", "dist"), join(fromDir, "..", "..", "console", "dist", "client")])
+  for (const c of [
+    join(fromDir, "..", "console"),
+    join(fromDir, "..", "console", ".output", "public"),
+    join(fromDir, "..", "..", "console", ".output", "public"),
+    join(fromDir, "..", "..", "console", "dist"),
+    join(fromDir, "..", "..", "console", "dist", "client"),
+  ])
     if (existsSync(join(c, "index.html"))) return c;
   return undefined;
 }
