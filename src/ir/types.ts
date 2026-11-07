@@ -50,8 +50,11 @@ export interface QuerySet {
 
 export interface Variable {
   name: string;
-  /** The tag the variable filters on, e.g. "host". */
-  tagKey: string;
+  /**
+   * The tag the variable filters on, e.g. "host" (Datadog `prefix`). null for a free-form variable such as `$scope`
+   * (`prefix: null`), whose value is a whole tag: T4 drops it under assumption A.var-default with a finding.
+   */
+  tagKey: string | null;
   default?: string;
   multi?: boolean;
 }
