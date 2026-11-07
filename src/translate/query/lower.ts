@@ -170,6 +170,42 @@ class Lowerer {
       const x = this.expr(exprArg(0), env);
       return { node: { k: "call", fn: e.name, args: [x.node, { k: "num", value: numArg(1) }] }, groups: x.groups };
     }
+    // round(q): nearest integer.
+    if (e.name === "round" && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      this.use("fn.round");
+      return { node: { k: "call", fn: "round", args: [x.node] }, groups: x.groups };
+    }
+
+    // exclude_null(q): drop the N/A group, i.e. series that lack a group-by label.
+    if (e.name === "exclude_null" && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      this.use("fn.exclude_null");
+      const labels = x.groups ?? [];
+      const node = labels.length
+        ? mapSelectors(x.node, (sel) => ({ ...sel, matchers: [...sel.matchers, ...labels.filter((l) => !sel.matchers.some((m) => m.label === l && m.op === "!=" && m.value === "")).map((label) => ({ label, op: "!=" as const, value: "" }))] }))
+        : x.node;
+      return { node, groups: x.groups };
+    }
+
+    // max(a, b) / min(a, b): pointwise. With a constant it is a clamp; between queries a filter-or.
+    if ((e.name === "max" || e.name === "min") && e.args.length === 2) {
+      const a = this.expr(exprArg(0), env);
+      const b = this.expr(exprArg(1), env);
+      const clamp = e.name === "max" ? "clamp_min" : "clamp_max";
+      if (a.groups === null && b.groups === null) this.manual("fn.max_min.constants", `${e.name}() of two constants`);
+      if (a.groups === null || b.groups === null) {
+        const [q, n] = a.groups === null ? [b, a] : [a, b];
+        if (n.node.k !== "num") this.manual("fn.max_min.args", `${e.name}(): the scalar argument must be a number`);
+        this.use("fn.max_min.scalar");
+        return { node: { k: "call", fn: clamp, args: [q.node, n.node] }, groups: q.groups };
+      }
+      if (a.groups.join(",") !== b.groups.join(",")) this.manual("arith.group-mismatch", `${e.name}() between different group-bys`);
+      this.use("fn.max_min.series");
+      const cmp = e.name === "max" ? ">=" : "<=";
+      return { node: { k: "binary", op: "or", lhs: { k: "binary", op: cmp, lhs: a.node, rhs: b.node }, rhs: b.node }, groups: a.groups };
+    }
+
     // top/bottom: rank and keep N series. topk ranks per step; Datadog ranks once over the window (A.top-stable).
     const short = TOP_SHORTCUT.exec(e.name);
     if (short && (e.name !== "top" && e.name !== "bottom" ? e.args.length === 1 : e.args.length >= 1 && e.args.length <= 4)) {
@@ -235,8 +271,8 @@ class Lowerer {
       return { node, groups: x.groups };
     }
 
-    // diff: each point minus the previous one, one rollup interval earlier.
-    if (e.name === "diff" && e.args.length === 1) {
+    // diff: each point minus the previous one, one rollup interval earlier. monotonic_diff keeps only increases.
+    if ((e.name === "diff" || e.name === "monotonic_diff") && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
       const step = this.interval;
       const shifted = mapSelectors(x.node, (sel) => {
@@ -244,8 +280,13 @@ class Lowerer {
         if (typeof sel.offset === "number" && typeof step === "number") return { ...sel, offset: sel.offset + step };
         this.manual("fn.diff.offset", "diff() over a query that already has a variable offset");
       });
-      this.use("fn.diff");
-      return { node: { k: "binary", op: "-", lhs: x.node, rhs: shifted }, groups: x.groups };
+      const delta: PNode = { k: "binary", op: "-", lhs: x.node, rhs: shifted };
+      if (e.name === "diff") {
+        this.use("fn.diff");
+        return { node: delta, groups: x.groups };
+      }
+      this.use("fn.monotonic_diff");
+      return { node: { k: "binary", op: ">=", lhs: delta, rhs: { k: "num", value: 0 } }, groups: x.groups };
     }
 
     let shift: number | undefined;

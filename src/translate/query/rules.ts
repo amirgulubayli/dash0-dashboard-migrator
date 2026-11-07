@@ -22,6 +22,8 @@ export const ASSUMPTIONS = {
     "Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog)",
   "A.kind-suffix":
     "a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming)",
+  "A.mono-diff": "Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0",
+  "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
 } as const;
 
@@ -128,6 +130,11 @@ export const RULES = {
   "fn.count_not_null": exact("count_not_null(q) -> count(q): the number of series with a value at each step"),
   "fn.count_nonzero": exact("count_nonzero(q) -> count(q != 0)"),
   "fn.default_zero.single": exact("default_zero(q) on a single-series query -> q or vector(0)"),
+  "fn.exclude_null": exact("exclude_null(q) -> label!=\"\" on every selector for each group-by label (drops the N/A group)"),
+  "fn.monotonic_diff": under(["A.align", "A.no-gaps", "A.mono-diff"], "monotonic_diff(q) -> (q - (q offset interval)) >= 0"),
+  "fn.round": exact("round(q) -> round(x)"),
+  "fn.max_min.scalar": exact("max(q, n) -> clamp_min(x, n); min(q, n) -> clamp_max(x, n)"),
+  "fn.max_min.series": under(["A.both-present"], "max(a, b) -> a >= b or b; min(a, b) -> a <= b or b (pointwise, same group-by)"),
   "map.timeshift": exact("timeshift(q, -s) / hour_before(q) / ... -> offset s on every selector"),
   "arith.number": exact("arithmetic with a constant"),
   "arith.same-groups": exact("arithmetic between queries with identical group-by labels (one-to-one matching)"),
