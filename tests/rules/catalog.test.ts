@@ -80,8 +80,12 @@ describe("rule catalog: claims (plan 03 §2)", () => {
     }
   });
 
-  it("findingCode, when set, is a CONTRACT-001 finding code", () => {
-    for (const r of CATALOG.filter((r) => r.findingCode)) expect(r.findingCode! in FINDING_CODES, r.id).toBe(true);
+  it("findingCode, when set, is a dotted code (CONTRACT-002: codes are free-form, grouped by first segment)", () => {
+    for (const r of CATALOG.filter((r) => r.findingCode)) expect(r.findingCode!, r.id).toMatch(ID);
+    // The CONTRACT-001 codes that name a rule outcome are used by at least one rule.
+    const used = new Set(CATALOG.map((r) => r.findingCode ?? r.id));
+    for (const c of ["metric.unmapped", "metric.no_equivalent", "metric.derived", "tag.unmapped", "widget.unsupported", "query.parse_error", "fn.unsupported", "variable.pinned", "monitor.option", "monitor.type"])
+      expect(c in FINDING_CODES && used.has(c), c).toBe(true);
   });
 });
 

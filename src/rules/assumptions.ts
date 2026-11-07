@@ -1,5 +1,5 @@
 // Assumptions behind exact-under claims (plan 03 §2). Each is phrased so it can be checked on live data.
-// The first six are T4's (src/translate/query/rules.ts, PR #3), copied verbatim; tests/rules keeps them in sync.
+// The first nine are T4's (src/translate/query/rules.ts, PR #3), copied verbatim; tests/rules keeps them in sync.
 
 export const ASSUMPTIONS = {
   // T4
@@ -9,6 +9,9 @@ export const ASSUMPTIONS = {
   "A.monitor-rollup-60s": "Datadog evaluates the monitor's inner query on 60 s buckets",
   "A.nonzero-denominator": "the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN)",
   "A.var-default": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
+  "A.var-regex": "the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a|b) for several)",
+  "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
+  "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
   // T17 additions
   "A.same-samples": "Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s)",
   "A.full-window": "every evaluated series has samples across the whole monitor window (Datadog require_full_window)",
@@ -35,4 +38,7 @@ export const T4_ASSUMPTION_IDS = [
   "A.monitor-rollup-60s",
   "A.nonzero-denominator",
   "A.var-default",
+  "A.var-regex",
+  "A.tag-default",
+  "A.query-threshold",
 ] as const satisfies readonly AssumptionId[];

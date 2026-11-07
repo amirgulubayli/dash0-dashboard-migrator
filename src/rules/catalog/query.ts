@@ -34,19 +34,21 @@ export const QUERY_RULES: RuleDef[] = [
     note: "Applied together with select.metric.mapped or select.metric.approximate (it refines their selector, it does not replace it).",
   }),
   select("select.metric.approximate", 10, "bounded", "mapping entry marked approximate", "selector as mapped, status at best bounded", {
+    findingCode: "metric.approximate",
     epsilon: "per mapping entry: the difference stated in the entry's note (e.g. RSS vs used memory)",
     note: "Tried before select.metric.mapped: an entry marked approximate never counts as exact.",
   }),
   select("select.labels.clash", 40, "manual", "query filters on a label the mapping already fixes", "no output"),
   select("query.value-filter", 50, "manual", "distribution value filter (v: ...)", "no output: PromQL has no per-value filter"),
-  select("select.metric.no-equivalent", 60, "manual", "mapping says the OTel receiver emits no equivalent", "placeholder panel", { findingCode: "metric.no_equivalent" }),
-  selectPlan("select.metric.needs-transform", 65, "manual", "mapping entry with scale or sumBy (CONTRACT-002: metricAvailability = needs_transform)", "no output until a scale/sum rule exists", {
-    note: "Candidate: multiply by the entry's scale (exact) and sum by its sumBy labels (exact); T4 treats it as manual for now (hub #158).",
+  select("metric.no_equivalent", 60, "manual", "mapping says the OTel receiver emits no equivalent", "no output; placeholder panel"),
+  select("metric.needs_transform", 62, "manual", "mapping entry with scale or sumBy (CONTRACT-002)", "no output until select.metric.transform ships"),
+  select("metric.derived", 64, "manual", "mapping entry that is an expression over several OTel metrics", "no output until select.metric.derived ships"),
+  selectPlan("select.metric.transform", 66, "exact", "mapping entry with scale k and/or sumBy labels", "k * x, sum without(<sumBy>) (x): both exact rewrites", {
+    note: "Replaces metric.needs_transform. Each part is an exact identity; needs T4 support and a unit test per entry shape.",
   }),
-  selectPlan("select.metric.derived", 70, "exact-under", "mapping entry with a derived expression over several OTel metrics", "the entry's PromQL expression, status from the entry's own claim", {
+  selectPlan("select.metric.derived", 68, "exact-under", "mapping entry with a derived expression over several OTel metrics", "the entry's PromQL expression, status from the entry's own claim", {
     assumptions: ["A.align"],
-    findingCode: "metric.derived",
-    note: "Today T4 fails closed (metric.derived). The claim comes from the mapping row, which must carry its own status and test.",
+    note: "Replaces metric.derived. The claim comes from the mapping row, which must carry its own status and test.",
   }),
   select("select.metric.unmapped", 999, "exact-under", "Datadog metric with no mapping entry", "keep the Datadog name, assume gauge", {
     assumptions: ["A.kind-gauge"],
@@ -63,7 +65,8 @@ export const QUERY_RULES: RuleDef[] = [
   scope("scope.in", 50, "exact", "key IN (a,b)", 'key=~"^(a|b)$"'),
   scope("scope.or.same-key", 60, "exact", "key:a OR key:b", 'key=~"^(a|b)$"'),
   scope("scope.not", 70, "exact", "NOT key:a", 'key!="a"'),
-  scope("scope.var", 80, "exact", "$var bound to a tag key", 'label=~"$var" (value substituted by the dashboard)'),
+  scope("scope.var", 80, "exact-under", "$var bound to a tag key", 'label=~"^($var)$" (anchored: Dash0 regex is unanchored)', { assumptions: ["A.var-regex"] }),
+  scope("label.default", 85, "exact-under", "tag without a tag-table entry", "label with dots replaced by underscores", { assumptions: ["A.tag-default"], findingCode: "tag.unmapped" }),
   scope("scope.var.free-form", 90, "exact-under", "$var with no tag key ($scope)", "dropped; filters nothing at its default", { assumptions: ["A.var-default"] }),
   scope("scope.same-key", 100, "manual", "the same tag key twice in one scope", "no output: Datadog's meaning is ambiguous"),
   scope("scope.or.cross-key", 110, "manual", "key1:a OR key2:b", "no output: not a matcher set", {
@@ -152,6 +155,7 @@ export const QUERY_RULES: RuleDef[] = [
   arith("arith.same-groups", 20, "exact", "arithmetic between queries with identical group-by labels", "one-to-one vector matching"),
   arith("arith.div", 30, "exact-under", "division between queries", "a / b", { assumptions: ["A.nonzero-denominator"], evidence: ["unit", "proof:T6"] }),
   arith("arith.neg", 40, "exact", "unary minus", "-x"),
+  arith("arith.div-zero", 45, "manual", "division by the constant 0", "no output: Datadog drops the point, PromQL gives ±Inf/NaN"),
   arith("arith.group-mismatch", 50, "manual", "arithmetic between queries with different groupings", "no output", {
     note: "Planned arith.group-subset (on(...) group_left) waits on probe:dd-formula-join.",
   }),
@@ -169,7 +173,8 @@ export const QUERY_RULES: RuleDef[] = [
   mon("monitor.cmp.gt", 20, "exact", "> / >=", "expr > $__threshold (>= for >=), critical → failed, warning → degraded"),
   mon("monitor.cmp.lt", 30, "exact", "< / <=", "-(expr) > $__threshold with negated thresholds", { evidence: ["unit", "proof:T7", "exhaustive:E4"], requires: ["probe:lt-threshold"] }),
   monPlan("alert.window.sum.count", 40, "bounded", "sum(last_W) on a count or .as_count() query", "increase(x[W]) (anchored once probe:anchored is yes, then exact-under)", { epsilon: EPS_RATE, evidence: ["proof:T3", "proof:T4"] }),
-  mon("monitor.threshold.mismatch", 50, "manual", "query threshold differs from options.thresholds.critical", "no output; error finding"),
+  mon("monitor.threshold.mismatch", 50, "exact-under", "query threshold differs from options.thresholds.critical", "the query's threshold is used; warn finding", { assumptions: ["A.query-threshold"] }),
+  mon("monitor.as_count", 55, "manual", ".as_count() inside a monitor query", "no output (Datadog's monitor evaluation order for counts differs, kb 06 §7.1); alert.window.sum.count is the planned rule"),
   mon("monitor.change", 60, "manual", "change() / pct_change() monitors", "no output until a claim is derived"),
   mon("monitor.window.kind", 70, "manual", "window other than last_* (e.g. a cumulative window)", "no output"),
   mon("monitor.window.width", 80, "manual", "window that is not whole minutes", "no output"),
@@ -195,6 +200,7 @@ export const T4_TABLE_IDS = [
   "scope.or.same-key",
   "scope.not",
   "scope.var",
+  "label.default",
   "time.rollup.default",
   "time.rollup.explicit",
   "time.rollup.monitor-bucket",

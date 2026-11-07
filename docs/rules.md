@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 35 | 8 | 4 | 33 | 80 |
-| planned | 35 | 30 | 9 | 22 | 96 |
+| implemented | 34 | 11 | 4 | 36 | 85 |
+| planned | 36 | 30 | 9 | 21 | 96 |
 
 ## Pipeline order
 
@@ -17,14 +17,14 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 1 | `ingest` Ingest and normalise | source item | no | 3 | Read the source JSON, unwrap containers, coerce types, keep the raw original. |
 | 2 | `classify` Classify the item | monitor | yes | 3 | Decide which pipeline a monitor goes through; anything unknown stops here as manual. |
 | 3 | `parse` Parse | query string | yes | 4 | Datadog query / formula / monitor strings → AST (T3). Unparseable text is manual with the original kept. |
-| 4 | `select` Select the metric | metric reference | yes | 9 | Datadog metric → OTel metric through the mapping table. |
-| 5 | `scope` Scope filters | filter term | no | 14 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
+| 4 | `select` Select the metric | metric reference | yes | 11 | Datadog metric → OTel metric through the mapping table. |
+| 5 | `scope` Scope filters | filter term | no | 15 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
 | 7 | `time` Time aggregation | postfix or rollup call | no | 21 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
 | 9 | `function` Functions | function call | yes | 22 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
-| 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 7 | Formulas over named queries, constants, division. |
-| 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 10 | The monitor's window, time aggregation and comparator around the translated inner query. |
+| 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 8 | Formulas over named queries, constants, division. |
+| 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 11 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 18 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 7 | Deterministic Mustache token rewrite into Go-template annotations. |
 | 14 | `widget` Widget → panel | widget | yes | 16 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
@@ -70,15 +70,17 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 30 | `select.labels` | mapping entry with extra labels (redis.cpu.sys) | adds matchers: {otel_metric_name="redis.cpu.time", state="sys"} | exact | unit | — | T4 | implemented |
 | 40 | `select.labels.clash` | query filters on a label the mapping already fixes | no output | manual | unit | — | T4 | implemented |
 | 50 | `query.value-filter` | distribution value filter (v: ...) | no output: PromQL has no per-value filter | manual | unit | — | T4 | implemented |
-| 60 | `select.metric.no-equivalent` | mapping says the OTel receiver emits no equivalent | placeholder panel | manual | unit | — | T4 | implemented |
-| 65 | `select.metric.needs-transform` | mapping entry with scale or sumBy (CONTRACT-002: metricAvailability = needs_transform) | no output until a scale/sum rule exists | manual | — | — | T4 | planned |
-| 70 | `select.metric.derived` | mapping entry with a derived expression over several OTel metrics | the entry's PromQL expression, status from the entry's own claim | exact-under(A.align) | — | — | T4 | planned |
+| 60 | `metric.no_equivalent` | mapping says the OTel receiver emits no equivalent | no output; placeholder panel | manual | unit | — | T4 | implemented |
+| 62 | `metric.needs_transform` | mapping entry with scale or sumBy (CONTRACT-002) | no output until select.metric.transform ships | manual | unit | — | T4 | implemented |
+| 64 | `metric.derived` | mapping entry that is an expression over several OTel metrics | no output until select.metric.derived ships | manual | unit | — | T4 | implemented |
+| 66 | `select.metric.transform` | mapping entry with scale k and/or sumBy labels | k * x, sum without(<sumBy>) (x): both exact rewrites | exact | — | — | T4 | planned |
+| 68 | `select.metric.derived` | mapping entry with a derived expression over several OTel metrics | the entry's PromQL expression, status from the entry's own claim | exact-under(A.align) | — | — | T4 | planned |
 | 999 (fallback) | `select.metric.unmapped` | Datadog metric with no mapping entry | keep the Datadog name, assume gauge | exact-under(A.kind-gauge) | unit | — | T4 | implemented |
 
 - `select.metric.approximate`: ε: per mapping entry: the difference stated in the entry's note (e.g. RSS vs used memory). Tried before select.metric.mapped: an entry marked approximate never counts as exact.
 - `select.labels`: Applied together with select.metric.mapped or select.metric.approximate (it refines their selector, it does not replace it).
-- `select.metric.needs-transform`: Candidate: multiply by the entry's scale (exact) and sum by its sumBy labels (exact); T4 treats it as manual for now (hub #158).
-- `select.metric.derived`: Today T4 fails closed (metric.derived). The claim comes from the mapping row, which must carry its own status and test.
+- `select.metric.transform`: Replaces metric.needs_transform. Each part is an exact identity; needs T4 support and a unit test per entry shape.
+- `select.metric.derived`: Replaces metric.derived. The claim comes from the mapping row, which must carry its own status and test.
 - `select.metric.unmapped`: Biggest lever for coverage: more generated mapping tables (T1 follow-up) turn these into select.metric.mapped.
 
 ## Scope filters (`scope`)
@@ -92,7 +94,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 50 | `scope.in` | key IN (a,b) | key=~"^(a\|b)$" | exact | unit | — | T4 | implemented |
 | 60 | `scope.or.same-key` | key:a OR key:b | key=~"^(a\|b)$" | exact | unit | — | T4 | implemented |
 | 70 | `scope.not` | NOT key:a | key!="a" | exact | unit | — | T4 | implemented |
-| 80 | `scope.var` | $var bound to a tag key | label=~"$var" (value substituted by the dashboard) | exact | unit | — | T4 | implemented |
+| 80 | `scope.var` | $var bound to a tag key | label=~"^($var)$" (anchored: Dash0 regex is unanchored) | exact-under(A.var-regex) | unit | — | T4 | implemented |
+| 85 | `label.default` | tag without a tag-table entry | label with dots replaced by underscores | exact-under(A.tag-default) | unit | — | T4 | implemented |
 | 90 | `scope.var.free-form` | $var with no tag key ($scope) | dropped; filters nothing at its default | exact-under(A.var-default) | unit | — | T4 | implemented |
 | 100 | `scope.same-key` | the same tag key twice in one scope | no output: Datadog's meaning is ambiguous | manual | unit | — | T4 | implemented |
 | 110 | `scope.or.cross-key` | key1:a OR key2:b | no output: not a matcher set | manual | unit | — | T4 | implemented |
@@ -195,6 +198,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 20 | `arith.same-groups` | arithmetic between queries with identical group-by labels | one-to-one vector matching | exact | unit | — | T4 | implemented |
 | 30 | `arith.div` | division between queries | a / b | exact-under(A.nonzero-denominator) | unit, proof:T6 | — | T4 | implemented |
 | 40 | `arith.neg` | unary minus | -x | exact | unit | — | T4 | implemented |
+| 45 | `arith.div-zero` | division by the constant 0 | no output: Datadog drops the point, PromQL gives ±Inf/NaN | manual | unit | — | T4 | implemented |
 | 50 | `arith.group-mismatch` | arithmetic between queries with different groupings | no output | manual | unit | — | T4 | implemented |
 | 55 | `arith.group-subset` | formula where one side's groups are a subset of the other's | a / on(<common>) group_left b | exact-under(A.nonzero-denominator) | — | probe:dd-formula-join | T4 | planned |
 | 60 | `formula.ref.unknown` | formula references a query that does not exist | no output | manual | unit | — | T4 | implemented |
@@ -209,7 +213,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 20 | `monitor.cmp.gt` | > / >= | expr > $__threshold (>= for >=), critical → failed, warning → degraded | exact | unit | — | T4 | implemented |
 | 30 | `monitor.cmp.lt` | < / <= | -(expr) > $__threshold with negated thresholds | exact | unit, proof:T7, exhaustive:E4 | probe:lt-threshold | T4 | implemented |
 | 40 | `alert.window.sum.count` | sum(last_W) on a count or .as_count() query | increase(x[W]) (anchored once probe:anchored is yes, then exact-under) | bounded(ε) | proof:T3, proof:T4 | — | T6 | planned |
-| 50 | `monitor.threshold.mismatch` | query threshold differs from options.thresholds.critical | no output; error finding | manual | unit | — | T4 | implemented |
+| 50 | `monitor.threshold.mismatch` | query threshold differs from options.thresholds.critical | the query's threshold is used; warn finding | exact-under(A.query-threshold) | unit | — | T4 | implemented |
+| 55 | `monitor.as_count` | .as_count() inside a monitor query | no output (Datadog's monitor evaluation order for counts differs, kb 06 §7.1); alert.window.sum.count is the planned rule | manual | unit | — | T4 | implemented |
 | 60 | `monitor.change` | change() / pct_change() monitors | no output until a claim is derived | manual | unit | — | T4 | implemented |
 | 70 | `monitor.window.kind` | window other than last_* (e.g. a cumulative window) | no output | manual | unit | — | T4 | implemented |
 | 80 | `monitor.window.width` | window that is not whole minutes | no output | manual | unit | — | T4 | implemented |
@@ -365,6 +370,9 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.monitor-rollup-60s` | Datadog evaluates the monitor's inner query on 60 s buckets | 1 |
 | `A.nonzero-denominator` | the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN) | 2 |
 | `A.var-default` | a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing | 2 |
+| `A.var-regex` | the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a\|b) for several) | 1 |
+| `A.tag-default` | the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry) | 1 |
+| `A.query-threshold` | Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical | 1 |
 | `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
@@ -402,11 +410,14 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `select.metric.approximate` (bounded(ε), implemented, T4)
 - `select.metric.derived` (exact-under(A.align), planned, T4)
 - `select.metric.unmapped` (exact-under(A.kind-gauge), implemented, T4)
+- `scope.var` (exact-under(A.var-regex), implemented, T4)
+- `label.default` (exact-under(A.tag-default), implemented, T4)
 - `scope.var.free-form` (exact-under(A.var-default), implemented, T4)
 - `time.as_rate.delta.sum` (exact-under(A.align, A.boundary), planned, T4)
 - `fn.top.window` (exact-under(A.top-uniform), planned, T4)
 - `fn.histogram.quantile` (bounded(ε), planned, T4)
 - `arith.group-subset` (exact-under(A.nonzero-denominator), planned, T4)
+- `monitor.threshold.mismatch` (exact-under(A.query-threshold), implemented, T4)
 - `alert.defaults` (exact-under(A.eval-1m), planned, T6)
 - `alert.opt.require_full_window.true` (exact-under(A.full-window), planned, T6)
 - `alert.opt.new_group_delay` (exact-under(A.no-new-groups), planned, T6)
