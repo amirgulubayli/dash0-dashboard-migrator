@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { formatParseError, parseMonitorQuery, parseQueryList } from "./index.js";
+import { formatParseError, parseMonitorQuery, parseQueryList } from "../../src/parse/index.js";
 
 const candidates = [
   process.env.DD_QUERY_CORPUS,

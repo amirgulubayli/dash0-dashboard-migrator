@@ -42,8 +42,11 @@ const METRIC_CHAR = /[A-Za-z0-9_.]/;
 const COMPARATORS: Comparator[] = [">=", "<=", "==", "!=", ">", "<"];
 const WINDOW_UNITS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400, w: 604800, mo: 2592000 };
 
+const MAX_DEPTH = 200;
+
 class Parser {
   pos = 0;
+  depth = 0;
   constructor(
     readonly src: string,
     readonly mode: Mode,
@@ -80,13 +83,16 @@ class Parser {
     while (IDENT_CHAR.test(this.peek())) this.pos++;
     return this.src.slice(start, this.pos);
   }
-  /** Keyword (case-insensitive, whole word) at the current position, after whitespace. Does not consume. */
+  /**
+   * Keyword (case-insensitive) at the current position, after whitespace. Does not consume.
+   * It must be followed by whitespace, '(' , '{' or the end, so tags like `not-ready` or `not.flag:1` stay tags.
+   */
   atKeyword(kw: string): boolean {
     const save = this.pos;
     this.ws();
+    const after = this.src[this.pos + kw.length] ?? "";
     const ok =
-      this.src.slice(this.pos, this.pos + kw.length).toUpperCase() === kw.toUpperCase() &&
-      !IDENT_CHAR.test(this.src[this.pos + kw.length] ?? "");
+      this.src.slice(this.pos, this.pos + kw.length).toUpperCase() === kw.toUpperCase() && (after === "" || /[\s({]/.test(after));
     this.pos = save;
     return ok;
   }
@@ -102,7 +108,12 @@ class Parser {
   // ---------- expressions ----------
 
   expr(): Expr {
-    return this.add();
+    if (++this.depth > MAX_DEPTH) this.fail(`nesting deeper than ${MAX_DEPTH} levels`);
+    try {
+      return this.add();
+    } finally {
+      this.depth--;
+    }
   }
 
   add(): Expr {
@@ -136,23 +147,34 @@ class Parser {
     const start = this.pos;
     if (this.peek() === "-") {
       this.pos++;
-      const expr = this.unary();
+      if (++this.depth > MAX_DEPTH) this.fail(`nesting deeper than ${MAX_DEPTH} levels`);
+      let expr: Expr;
+      try {
+        expr = this.unary();
+      } finally {
+        this.depth--;
+      }
       return { type: "neg", expr, span: this.span(start) };
     }
     if (this.peek() === "+") {
+      if (++this.depth > MAX_DEPTH) this.fail(`nesting deeper than ${MAX_DEPTH} levels`);
       this.pos++; // unary plus is a no-op: `anomalies(+ avg:a{*}, ...)`
-      return this.unary();
+      try {
+        return this.unary();
+      } finally {
+        this.depth--;
+      }
     }
     return this.postfix(this.primary());
   }
 
   postfix(target: Expr): Expr {
-    // `.name(` directly after the target (Datadog writes no whitespace there).
-    while (this.peek() === "." && IDENT_START.test(this.peek(1))) {
+    // `.name(` after the target; whitespace is allowed before the dot and before '('.
+    while (/^\s*\.[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(this.src.slice(this.pos))) {
+      this.ws();
       const callStart = this.pos;
       this.pos++;
       const name = this.ident();
-      if (this.peek() !== "(") this.fail(`expected '(' after .${name}`);
       const args = this.args(true);
       const call: PostfixCall = { name, args, span: this.span(callStart) };
       target = { type: "postfix", target, call, span: { start: target.span.start, end: this.pos } };
@@ -173,7 +195,14 @@ class Parser {
     if (/[0-9]/.test(c) || (c === "." && /[0-9]/.test(this.peek(1)))) return this.number();
     if (!IDENT_START.test(c)) this.fail(`expected a query, number or '(' but found ${this.describe()}`);
 
-    const word = this.ident();
+    let word = this.ident();
+    // `p99.9:` - ident() stops at '.', so take the decimal part of a percentile aggregator here.
+    if (/^p\d+$/.test(word) && this.peek() === "." && /[0-9]/.test(this.peek(1))) {
+      this.pos++;
+      while (/[0-9]/.test(this.peek())) this.pos++;
+      word = this.src.slice(start, this.pos);
+      if (this.peek() !== ":") this.fail(`expected ':' after ${word}`);
+    }
     if (this.peek() === ":") {
       if (!SPACE_AGG.test(word)) this.fail(`unknown space aggregator '${word}'`, start);
       this.pos++;
@@ -189,7 +218,9 @@ class Parser {
       const args = this.args(false);
       return { type: "call", name: word, args, span: this.span(start) };
     }
-    if (this.mode === "formula" && this.peek() !== "." && this.peek() !== "{") {
+    // In a formula a bare identifier is a query reference, also when a postfix call follows (`query1.rollup(sum, 60)`).
+    const postfixNext = /^\s*\.[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(this.src.slice(this.pos));
+    if (this.mode === "formula" && this.peek() !== "{" && (this.peek() !== "." || postfixNext)) {
       return { type: "ref", name: word, span: this.span(start) };
     }
     this.pos = start; // legacy form: bare metric name, no aggregator
@@ -221,7 +252,10 @@ class Parser {
   signedNumber(): number {
     this.ws();
     const neg = this.peek() === "-";
-    if (neg) this.pos++;
+    if (neg || this.peek() === "+") {
+      this.pos++;
+      this.ws();
+    }
     const num = this.number();
     const value = num.type === "number" ? num.value : NaN;
     return neg ? -value : value;
@@ -288,7 +322,10 @@ class Parser {
     return tags;
   }
 
-  /** `(arg, arg, ...)`. `wordsForBareIdents`: postfix args like `rollup(sum, 60)` are always words. */
+  /**
+   * `(arg, arg, ...)`. `wordsForBareIdents`: in postfix args (`rollup(sum, 60)`, `fill(null)`) a bare identifier is a word.
+   * In function args it is a query (`abs(uptime)`) or, in a formula, a ref (`per_minute(query1)`).
+   */
   args(wordsForBareIdents: boolean): Arg[] {
     this.expect("(");
     const args: Arg[] = [];
@@ -318,10 +355,18 @@ class Parser {
     const c = this.peek();
     if (c === "'" || c === '"') {
       this.pos++;
-      const close = this.src.indexOf(c, this.pos);
-      if (close < 0) this.fail("unterminated string", start);
-      const value = this.src.slice(this.pos, close);
-      this.pos = close + 1;
+      let value = "";
+      for (;;) {
+        if (this.eof()) this.fail("unterminated string", start);
+        const ch = this.peek();
+        this.pos++;
+        if (ch === c) break;
+        if (ch === "\\") {
+          if (this.eof()) this.fail("unterminated string", start);
+          value += this.peek(); // `\'` -> `'`, `\\` -> `\`
+          this.pos++;
+        } else value += ch;
+      }
       return { type: "string", value, span: this.span(start) };
     }
     if (c === "{") {
@@ -339,7 +384,7 @@ class Parser {
         return { type: "named", name: word, value, span: this.span(start) };
       }
       const next = this.peek();
-      if ((next === "," || next === ")") && (wordsForBareIdents || this.mode === "query")) {
+      if ((next === "," || next === ")") && wordsForBareIdents) {
         this.pos = afterWord;
         return { type: "word", value: word, span: this.span(start) };
       }
@@ -352,6 +397,15 @@ class Parser {
   // ---------- scope ----------
 
   scopeOr(): ScopeExpr {
+    if (++this.depth > MAX_DEPTH) this.fail(`scope nesting deeper than ${MAX_DEPTH} levels`);
+    try {
+      return this.scopeOrInner();
+    } finally {
+      this.depth--;
+    }
+  }
+
+  scopeOrInner(): ScopeExpr {
     this.ws();
     const start = this.pos;
     const items = [this.scopeAnd()];
@@ -381,7 +435,7 @@ class Parser {
   scopeUnary(): ScopeExpr {
     this.ws();
     const start = this.pos;
-    if (this.atKeyword("NOT") && !/^NOT\s+IN\b/i.test(this.src.slice(this.pos))) {
+    if (this.atKeyword("NOT") && !/^NOT\s+IN(?=[\s(])/i.test(this.src.slice(this.pos))) {
       this.keyword("NOT");
       const expr = this.scopeUnary();
       return { type: "not", expr, span: this.span(start) };
@@ -423,7 +477,7 @@ class Parser {
 
     // `key IN (...)` / `key NOT IN (...)`
     let inNegated = false;
-    if (/^\s*NOT\s+IN\b/i.test(this.src.slice(this.pos))) {
+    if (/^\s*NOT\s+IN(?=[\s(])/i.test(this.src.slice(this.pos))) {
       this.keyword("NOT");
       inNegated = true;
     }
@@ -515,6 +569,8 @@ function run<T>(src: string, mode: Mode, f: (p: Parser) => T): ParseResult<T> {
     return { ok: true, value: f(p) };
   } catch (e) {
     if (e instanceof Fail) return { ok: false, error: { message: e.message, pos: e.pos, source: src } };
+    // Last line of defence for the "never throws on bad input" contract (e.g. stack exhaustion).
+    if (e instanceof RangeError) return { ok: false, error: { message: `input too complex: ${e.message}`, pos: p.pos, source: src } };
     throw e;
   }
 }

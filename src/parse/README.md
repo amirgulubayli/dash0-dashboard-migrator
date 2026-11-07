@@ -24,7 +24,7 @@ Every AST node has a `span` (`{start, end}` offsets into the source) so findings
 The parser is purely syntactic: function and postfix names are **not** validated here. T4 decides what each one means and emits a `manual` finding for anything it can't translate.
 
 ## Tests
-- `ddquery.test.ts`: unit tests per construct.
-- `corpus.test.ts`: parses every distinct metric query from DataDog/integrations-core (7371 today, 100%). Generate the input in the dash0-team workspace with
+- `tests/parse/ddquery.test.ts`: unit tests per construct, plus regressions from the PR #1 review.
+- `tests/parse/corpus.test.ts`: parses every distinct metric query from DataDog/integrations-core (7371 today, 100%). Generate the input in the dash0-team workspace with
   `python scripts/survey_corpus.py corpus/integrations-core-master --dump-queries corpus/queries.jsonl`.
   The test finds it at `../../corpus/queries.jsonl` from a task worktree, or via `DD_QUERY_CORPUS`. It's skipped if the file is missing, so CI without the corpus still passes.

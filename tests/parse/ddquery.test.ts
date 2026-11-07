@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseFormula, parseMonitorQuery, parseQuery, parseQueryList } from "./index.js";
-import type { Expr, ParseResult } from "./index.js";
+import { parseFormula, parseMonitorQuery, parseQuery, parseQueryList } from "../../src/parse/index.js";
+import type { Expr, ParseResult } from "../../src/parse/index.js";
 
 function ok<T>(r: ParseResult<T>): T {
   if (!r.ok) throw new Error(`${r.error.message} at ${r.error.pos} in ${r.error.source}`);
@@ -298,5 +298,79 @@ describe("corpus edge cases", () => {
 
   it("unary plus is a no-op", () => {
     expect(strip(ok(parseQuery("+ avg:a{*}")))).toMatchObject({ type: "metric", metric: "a" });
+  });
+});
+
+// Regressions from Amir's review of PR #1, numbered as in the review.
+describe("PR #1 review", () => {
+  const scopeOf = (q: string) => {
+    const e = ok(parseQuery(q));
+    if (e.type !== "metric") throw new Error("expected metric");
+    return strip(e.scope);
+  };
+
+  it("1. tags starting with not/and/or followed by - . : stay tags", () => {
+    expect(scopeOf("avg:m{not-ready}")).toEqual({ type: "tag", key: null, value: "not-ready", negated: false });
+    expect(scopeOf("avg:m{env:prod,not.flag:1}")).toEqual({
+      type: "and",
+      items: [
+        { type: "tag", key: "env", value: "prod", negated: false },
+        { type: "tag", key: "not.flag", value: "1", negated: false },
+      ],
+    });
+    expect(scopeOf("avg:m{and-x:1 OR or:2}")).toMatchObject({
+      type: "or",
+      items: [{ key: "and-x" }, { key: "or" }],
+    });
+    // The keywords themselves still work, also directly before '('.
+    expect(scopeOf("avg:m{NOT(env:dev)}")).toMatchObject({ type: "not" });
+    expect(scopeOf("avg:m{kind NOT IN (a,b)}")).toMatchObject({ type: "in", negated: true });
+  });
+
+  it("2. a formula ref followed by a postfix call stays a ref", () => {
+    expect(strip(ok(parseFormula("query1.rollup(sum, 60)")))).toEqual({
+      type: "postfix",
+      target: { type: "ref", name: "query1" },
+      call: { name: "rollup", args: [{ type: "word", value: "sum" }, { type: "expr", expr: { type: "number", value: 60, raw: "60" } }] },
+    });
+    expect(strip(ok(parseFormula("query1 .as_count()")))).toMatchObject({ target: { type: "ref", name: "query1" } });
+  });
+
+  it("3. a single-segment bare metric in a function argument is a query, not a word", () => {
+    expect(strip(ok(parseQuery("abs(uptime)")))).toMatchObject({
+      type: "call",
+      args: [{ type: "expr", expr: { type: "metric", metric: "uptime", spaceAgg: null } }],
+    });
+    // Postfix args keep bare words.
+    expect(strip(ok(parseQuery("avg:m{*}.fill(null)")))).toMatchObject({ call: { args: [{ type: "word", value: "null" }] } });
+  });
+
+  it("4. decimal percentile aggregators", () => {
+    expect(ok(parseQuery("p99.9:latency{*}"))).toMatchObject({ spaceAgg: "p99.9", metric: "latency" });
+  });
+
+  it("5. deep nesting fails with a position instead of throwing", () => {
+    for (const src of ["(".repeat(20000), "-".repeat(20000) + "1", "avg:m{" + "(".repeat(20000) + "a:b}"]) {
+      const r = parseQuery(src);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.message).toMatch(/nesting deeper than|too complex/);
+    }
+  });
+
+  it("6. signed thresholds with + and whitespace", () => {
+    expect(ok(parseMonitorQuery("avg(last_5m):avg:a{*} > +5"))).toMatchObject({ threshold: 5 });
+    expect(ok(parseMonitorQuery("avg(last_5m):avg:a{*} > - 5"))).toMatchObject({ threshold: -5 });
+  });
+
+  it("7. backslash escapes in string arguments", () => {
+    expect(strip(ok(parseQuery("top(avg:a{*}, 10, 'it\\'s', \"a\\\\b\")")))).toMatchObject({
+      args: [{}, {}, { type: "string", value: "it's" }, { type: "string", value: "a\\b" }],
+    });
+    expect(parseQuery("top(avg:a{*}, 'open").ok).toBe(false);
+  });
+
+  it("8. whitespace before a postfix call", () => {
+    expect(strip(ok(parseQuery("avg:m{*} .as_count()")))).toMatchObject({ type: "postfix", call: { name: "as_count" } });
+    expect(strip(ok(parseQuery("avg:m{*}.rollup (sum, 60)")))).toMatchObject({ type: "postfix", call: { name: "rollup" } });
   });
 });
