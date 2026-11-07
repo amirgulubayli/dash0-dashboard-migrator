@@ -4,6 +4,7 @@
 import { worst, type Finding, type Panel, type Status } from "../../ir/index.js";
 import type { PersesPanel } from "../../targets/dash0/index.js";
 import type { RequestTranslation } from "./queries.js";
+import type { LogTableTranslation } from "./logtable.js";
 
 export interface PanelResult {
   itemId: string;
@@ -23,7 +24,7 @@ export interface PanelResult {
 /** query_value aggregator -> StatChart calculation. */
 const CALC: Record<string, string> = { avg: "mean", sum: "sum", min: "min", max: "max", last: "last-number" };
 
-export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | null): PanelResult {
+export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | null, logs?: LogTableTranslation): PanelResult {
   const title = p.title?.trim() || p.sourceType;
   const findings: Finding[] = [...(q?.findings ?? [])];
   let status: Status = q?.status ?? "exact";
@@ -84,8 +85,20 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       // T2 already emitted the widget.unsupported finding for this panel.
       return placeholder(unsupportedRule(p.sourceType), `Dash0 has no panel for the Datadog '${p.sourceType}' widget.`);
     case "logs":
-      note("manual", "query.datasource", "log widgets are not migrated by this panel mapper yet (T12 translates log queries; LogTable integration is pending)", p.requests[0]?.queries[0]?.expr);
-      return placeholder("widget.logs", "Log widgets are not migrated yet.");
+      // log_stream / list_stream -> LogTable (logs.stream) when the search has an AND-of-filters form.
+      if (logs?.spec) {
+        status = worst(status, logs.status);
+        for (const r of logs.rules) if (!rules.includes(r)) rules.push(r);
+        for (const a of logs.assumptions) if (!assumptions.includes(a)) assumptions.push(a);
+        findings.push(...logs.findings);
+        return result("LogTable", { ...logs.spec });
+      }
+      if (logs) {
+        findings.push(...logs.findings);
+        return placeholder("widget.logs", "The log search has no Dash0 LogTable filter form (see the findings).");
+      }
+      note("manual", "query.datasource", "log widgets need the log-attribute table (mappings/log-attributes.yaml) to become a LogTable", p.requests[0]?.queries[0]?.expr);
+      return placeholder("widget.logs", "Log widgets are not migrated without the log-attribute table.");
   }
 
   // Query-backed panels: with no PromQL at all, show a placeholder instead of an empty chart.
