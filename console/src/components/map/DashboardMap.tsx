@@ -78,7 +78,7 @@ function GroupSection({ g, row }: { g: CompactGroup; row: number }) {
       <div
         className="grid flex-1"
         style={{
-          gridTemplateColumns: `repeat(${g.w}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${g.cols ?? g.w}, minmax(0, 1fr))`,
           // Rows keep at least row*weight px but stretch to the band height, so shorter groups have no empty strip.
           gridTemplateRows: g.tracks.map((weight) => `minmax(${Math.max(14, row * weight)}px, ${weight}fr)`).join(" "),
           gap: GAP,
@@ -120,11 +120,12 @@ export function DashboardMap() {
     return () => observer.disconnect();
   }, []);
   const units = layout.bands.reduce((sum, band) => sum + Math.max(1, ...band.groups.map((g) => g.tracks.reduce((a, b) => a + b, 0))), 0);
-  const row = Math.max(ROW, (height - 4 - layout.bands.length * 33 - units * GAP) / Math.max(1, units));
+  const row = Math.max(ROW, (height - 4 - (layout.grouped ? 32 : 0) - layout.bands.length * 33 - units * GAP) / Math.max(1, units));
 
   return (
     <div ref={container} className="flex h-full min-h-0 flex-col">
       <div className="map-canvas flex min-w-0 flex-col gap-2">
+        {layout.grouped && <div className="section-label px-1 leading-4" title="The report has no group layouts, so groups are built from each widget's group field.">Grouped overview</div>}
         {layout.bands.map((b, i) => (
           <div key={i} className="grid gap-0.5" style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))" }}>
             {b.groups.map((g) => <GroupSection key={g.title} g={g} row={row} />)}
