@@ -15,7 +15,7 @@ const msgPlan = section("message", "T6", "planned", "plan 04 §2.5");
 export const ALERT_RULES: RuleDef[] = [
   // ---------- classify ----------
   classify("classify.monitor.metric", 10, "exact", 'monitor type "metric alert" or "query alert"', "goes through the query stages and the monitor stage"),
-  classifyPlan("classify.monitor.log", 20, "exact", 'monitor type "log alert"', "goes through the logs stage (logs.alert)", {
+  classifyPlan("classify.monitor.log", 20, "exact", 'monitor type "log alert"', "goes through the logs stage (log.monitor.count)", {
     note: "Until T12 lands, log alerts take classify.monitor.other.",
   }),
   classify("classify.monitor.other", 999, "manual", "composite, service check, event, synthetics, SLO, process, log (until T12) and any other monitor", "no rule; original kept", {

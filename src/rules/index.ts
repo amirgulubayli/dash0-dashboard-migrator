@@ -1,19 +1,20 @@
 // T17: the rule catalog, the single list of every deterministic rule the migrator may apply.
 // Translators look rules up here; the report, the docs (docs/rules.md) and the tests read the same data.
 import { worst, type Finding, type ItemKind, type Status } from "../ir/index.js";
-import { ASSUMPTIONS, T4_ASSUMPTION_IDS, type AssumptionId } from "./assumptions.js";
+import { ASSUMPTIONS, T12_ASSUMPTION_IDS, T4_ASSUMPTION_IDS, type AssumptionId } from "./assumptions.js";
 import { ALERT_RULES } from "./catalog/alert.js";
 import { DASHBOARD_RULES } from "./catalog/dashboard.js";
-import { PIPELINE_RULES } from "./catalog/pipeline.js";
+import { PIPELINE_RULES, T12_TABLE_IDS } from "./catalog/pipeline.js";
 import { QUERY_RULES, T4_TABLE_IDS } from "./catalog/query.js";
 import { STAGES } from "./stages.js";
 import type { RuleDef, StageId } from "./types.js";
 
 export * from "./types.js";
-export { ASSUMPTIONS, T4_ASSUMPTION_IDS, type AssumptionId } from "./assumptions.js";
+export { ASSUMPTIONS, T12_ASSUMPTION_IDS, T4_ASSUMPTION_IDS, type AssumptionId } from "./assumptions.js";
 export { PROBES, type ProbeId, type Probe } from "./probes.js";
 export { STAGES } from "./stages.js";
 export { T4_TABLE_IDS } from "./catalog/query.js";
+export { T12_TABLE_IDS } from "./catalog/pipeline.js";
 
 const STAGE_INDEX = new Map(STAGES.map((s, i) => [s.id, i]));
 
@@ -124,4 +125,17 @@ export const RULES_T4: Readonly<Record<T4RuleId, T4Rule>> = Object.freeze(
 /** T4's ASSUMPTIONS slice, same ids and text. */
 export const ASSUMPTIONS_T4: Readonly<Record<T4AssumptionId, string>> = Object.freeze(
   Object.fromEntries(T4_ASSUMPTION_IDS.map((a) => [a, ASSUMPTIONS[a]])) as Record<T4AssumptionId, string>,
+);
+
+export type T12RuleId = (typeof T12_TABLE_IDS)[number];
+export type T12AssumptionId = (typeof T12_ASSUMPTION_IDS)[number];
+
+/** T12's rule table (LOG_RULES in src/translate/logs), built from the catalog; checked by tests/rules/conformance.test.ts. */
+export const RULES_T12: Readonly<Record<T12RuleId, { status: Status; assumptions: T12AssumptionId[] }>> = Object.freeze(
+  Object.fromEntries(
+    T12_TABLE_IDS.map((id) => {
+      const r = rule(id);
+      return [id, { status: r.status, assumptions: r.assumptions as T12AssumptionId[] }];
+    }),
+  ) as Record<T12RuleId, { status: Status; assumptions: T12AssumptionId[] }>,
 );

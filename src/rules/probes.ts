@@ -55,8 +55,8 @@ export const PROBES = {
   },
   "probe:log-labels": {
     question: "What are the label names for severity and body on {otel_metric_name=\"dash0.logs\"}?",
-    how: "dash0-target #10: Metrics Explorer once logs reach Dash0",
-    answer: "open",
+    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): severity otel_log_severity_range / otel_log_severity_text, body otel_log_body (unanchored regex), attributes with dots as underscores; docs/research/dash0.md \"dash0.logs labels\", dash0-team 71e47aa",
+    answer: "yes",
   },
   "probe:dd-formula-join": {
     question: "In a Datadog formula over queries with different groupings, do unmatched groups drop?",

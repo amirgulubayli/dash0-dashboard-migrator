@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 60 | 28 | 11 | 36 | 135 |
-| planned | 23 | 22 | 4 | 15 | 64 |
+| implemented | 65 | 37 | 14 | 36 | 152 |
+| planned | 19 | 22 | 2 | 15 | 58 |
 
 ## Pipeline order
 
@@ -31,7 +31,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 15 | `panel` Panel options | panel attribute | no | 4 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 6 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
-| 18 | `logs` Log queries | log query or search term | yes | 11 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
+| 18 | `logs` Log queries | log query or search term | yes | 22 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
 | 19 | `validate` Validate | emitted artefact | no | 3 | Every output parses and passes preflight before it may be emitted. |
 | 20 | `canonical` Canonical form and hash | emitted artefact | no | 3 | One spelling per meaning, so the output hash is a function of the input only. |
 | 21 | `emit` Import and report | emitted artefact or run | no | 6 | Idempotent single-item import, read-back, and a certificate for every source item. |
@@ -49,7 +49,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
 | 10 | `classify.monitor.metric` | monitor type "metric alert" or "query alert" | goes through the query stages and the monitor stage | exact | unit | — | T6 | implemented |
-| 20 | `classify.monitor.log` | monitor type "log alert" | goes through the logs stage (logs.alert) | exact | — | — | T6 | planned |
+| 20 | `classify.monitor.log` | monitor type "log alert" | goes through the logs stage (log.monitor.count) | exact | — | — | T6 | planned |
 | 999 (fallback) | `classify.monitor.other` | composite, service check, event, synthetics, SLO, process, log (until T12) and any other monitor | no rule; original kept | manual | unit | — | T6 | implemented |
 
 - `classify.monitor.log`: Until T12 lands, log alerts take classify.monitor.other.
@@ -342,21 +342,33 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
-| 10 | `logs.count` | log query, compute count, search Q, group_by facets | sum by (<labels>) (increase({otel_metric_name="dash0.logs", <matchers(Q)>}[$__interval])) | bounded(ε) | proof:T3 | probe:log-labels | T12 | planned |
-| 20 | `logs.rate` | log count shown as a rate | sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m])) | bounded(ε) | proof:T3 | probe:log-labels | T12 | planned |
-| 30 | `logs.search.kv` | key:value / -key:value | label="value" / label!="value" | exact | — | probe:log-labels | T12 | planned |
-| 40 | `logs.search.wildcard` | key:val* | label=~"^val.*$" | exact | — | — | T12 | planned |
-| 50 | `logs.search.status` | status:error | severity label matcher | exact | — | probe:log-labels | T12 | planned |
-| 60 | `logs.search.word` | bare words | body regex matcher | exact | — | probe:log-labels | T12 | planned |
-| 70 | `logs.search.or.cross-key` | key1:a OR key2:b | count(A) + count(B) − count(A and B) (inclusion–exclusion) | exact | proof:log-or, exhaustive:E5 | — | T12 | planned |
-| 80 | `logs.alert` | log alert monitor | sum(increase({otel_metric_name="dash0.logs", …}[W])) > $__threshold | bounded(ε) | proof:T3 | probe:log-labels | T12 | planned |
-| 90 | `logs.measure` | avg / sum / percentile / cardinality over @attr | no output: dash0.logs only counts | manual | — | — | T12 | planned |
-| 100 | `logs.stream` | log_stream / list_stream widget | placeholder until the LogTable schema comes from T0 | manual | — | — | T12 | planned |
+| 10 | `log.count` | log query, compute count, search Q, group_by g | sum by (g) (increase({otel_metric_name="dash0.logs", m(Q)}[w])) | bounded(ε) | unit, proof:T3, live:dash0-4110 | probe:log-labels | T12 | implemented |
+| 20 | `log.cardinality` | cardinality of @a | count by (g) (sum by (g, a) (increase(...[w])) > 0) | bounded(ε) | unit, proof:T3, live:dash0-4110 | probe:log-labels | T12 | implemented |
+| 30 | `log.match.reserved` | service / host / env / version:x | the resource label (service_name, ...) | exact | unit | probe:log-labels | T12 | implemented |
+| 40 | `log.match.reserved.approx` | source:x | source="x" (no OTel counterpart) | exact-under(A.log-source) | unit | — | T12 | implemented |
+| 50 | `log.match.attr` | @a.b:x | a_b="x" (renames from mappings/log-attributes.yaml applied) | exact-under(A.log-attr-default) | unit | probe:log-labels | T12 | implemented |
+| 60 | `log.match.value` | k:v, k:v*, k:(a OR b), k:*, and their negations | =, =~"^v.*$", =~"^(a\|b)$", =~".+", != / !~ | exact | unit | — | T12 | implemented |
+| 70 | `log.match.status` | status:error | otel_log_severity_range="ERROR" | exact | unit | probe:log-labels | T12 | implemented |
+| 80 | `log.match.status.approx` | status:critical / notice / ok / ... | the nearest OTel severity range | exact-under(A.severity-map) | unit | probe:log-labels | T12 | implemented |
+| 90 | `log.match.text` | free text w | otel_log_body=~"(?i).*w.*" | exact-under(A.log-fulltext) | unit | probe:log-labels | T12 | implemented |
+| 100 | `log.match.var` | $var on a facet | label=~"^($var)$" | exact-under(A.var-regex) | unit | — | T12 | implemented |
+| 110 | `log.match.var.dropped` | $var without a facet | dropped while it is '*' | exact-under(A.var-default) | unit | — | T12 | implemented |
+| 120 | `log.group_by` | group_by facets | by (labels) | exact | unit | — | T12 | implemented |
+| 130 | `log.group_by.limit` | one facet with a limit N | topk(N, ...) (bottomk for asc) | exact-under(A.top-stable) | unit | — | T12 | implemented |
+| 140 | `log.group_by.multi-limit` | several facets with limits | by (labels), limits not applied | exact-under(A.group-limit) | unit | — | T12 | implemented |
+| 150 | `log.group_by.exclude-missing` | should_exclude_missing: true | label!="" for each group-by label | exact | unit | — | T12 | implemented |
+| 160 | `log.indexes` | indexes other than '*' | all logs (Dash0 has no indexes) | exact-under(A.all-indexes) | unit | — | T12 | implemented |
+| 170 | `log.monitor.count` | logs(Q).rollup(count).by(g).last(W) op T | sum by (g) (increase(...[W])) op $__threshold | bounded(ε) | unit, proof:T3 | probe:log-labels | T12 | implemented |
+| 200 | `logs.rate` | log count shown as a rate | sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m])) | bounded(ε) | proof:T3 | probe:log-labels | T12 | planned |
+| 210 | `logs.search.or.cross-key` | key1:a OR key2:b | count(A) + count(B) − count(A and B) (inclusion–exclusion) | exact | proof:log-or, exhaustive:E5 | — | T12 | planned |
+| 220 | `logs.measure` | avg / sum / percentile over @attr | no output: dash0.logs only counts | manual | — | — | T12 | planned |
+| 230 | `logs.stream` | log_stream / list_stream widget | placeholder until the LogTable schema comes from T0 | manual | — | — | T12 | planned |
 | 999 (fallback) | `logs.unparsed` | log search the log-search parser does not accept | no output; original kept | manual | — | — | T12 | planned |
 
-- `logs.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). exact-under(A.same-samples) once probe:anchored is yes (maths.md §8).
+- `log.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). exact-under(A.same-samples) once probe:anchored is yes (maths.md §8).
+- `log.cardinality`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `log.monitor.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `logs.rate`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
-- `logs.alert`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 
 ## Validate (`validate`)
 
@@ -394,20 +406,27 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.kind-gauge` | the metric is a gauge; there is no mapping-table entry to confirm its kind | 1 |
 | `A.monitor-rollup-60s` | Datadog evaluates the monitor's inner query on 60 s buckets | 1 |
 | `A.nonzero-denominator` | the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN) | 2 |
-| `A.var-default` | a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing | 2 |
-| `A.var-regex` | the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a\|b) for several) | 2 |
+| `A.var-default` | a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing | 3 |
+| `A.var-regex` | the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a\|b) for several) | 3 |
 | `A.tag-default` | the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry) | 1 |
 | `A.query-threshold` | Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical | 1 |
 | `A.dd-per-unit` | Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog) | 2 |
 | `A.no-gaps` | every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier | 2 |
 | `A.kind-metadata` | the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry) | 3 |
 | `A.otel-counter` | the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry) | 3 |
-| `A.top-stable` | the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same series as PromQL's per-step topk | 1 |
+| `A.top-stable` | the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same series as PromQL's per-step topk | 2 |
 | `A.static-tags` | each series keeps its tags for the whole window, so .weighted() has nothing to re-weight | 1 |
 | `A.dd-count-default` | Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog) | 1 |
 | `A.kind-suffix` | a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming) | 1 |
 | `A.mono-diff` | Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0 | 1 |
 | `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
+| `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 3 |
+| `A.log-source` | logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent | 1 |
+| `A.log-attr-default` | a log attribute without a table entry keeps its name in OTel (dots become underscores in the label) | 1 |
+| `A.log-fulltext` | Datadog's free-text match of a word equals a case-insensitive substring match on the log body | 1 |
+| `A.group-limit` | the number of groups stays within the widget's group limit, so Datadog shows every group too | 1 |
+| `A.severity-map` | the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level) | 1 |
+| `A.all-indexes` | every Datadog log index is queried (Dash0 has no indexes) | 1 |
 | `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
@@ -437,7 +456,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `probe:row-height` (open) | Is one Dash0 grid row as tall as one Datadog grid row? | T0: compare a golden export with the Datadog source | `layout.ordered.height` |
 | `probe:collapse` (open) | Does Dash0 honour Grid display.collapse.open for titled sections? | T0: export a dashboard with one collapsed group | `layout.group.collapsed` |
 | `probe:piechart` (open) | Does Dash0 render a Perses PieChart from a PromQL query with a grouping? | T0 or T7 dry-run | `widget.pie` |
-| `probe:log-labels` (open) | What are the label names for severity and body on {otel_metric_name="dash0.logs"}? | dash0-target #10: Metrics Explorer once logs reach Dash0 | `logs.count`, `logs.rate`, `logs.search.kv`, `logs.search.status`, `logs.search.word`, `logs.alert` |
+| `probe:log-labels` (yes) | What are the label names for severity and body on {otel_metric_name="dash0.logs"}? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): severity otel_log_severity_range / otel_log_severity_text, body otel_log_body (unanchored regex), attributes with dots as underscores; docs/research/dash0.md "dash0.logs labels", dash0-team 71e47aa | `log.count`, `log.cardinality`, `log.match.reserved`, `log.match.attr`, `log.match.status`, `log.match.status.approx`, `log.match.text`, `log.monitor.count`, `logs.rate` |
 | `probe:dd-formula-join` (open) | In a Datadog formula over queries with different groupings, do unmatched groups drop? | maths.md §11 probe 3 | `arith.group-subset` |
 
 ## Claims not yet backed by a proof, exhaustive check, property test or live run
@@ -489,6 +508,15 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `layout.powerpack` (exact-under(A.style), planned, T5)
 - `variable.list` (exact-under(A.var-values), planned, T5)
 - `variable.pinned` (exact-under(A.var-default), planned, T5)
+- `log.match.reserved.approx` (exact-under(A.log-source), implemented, T12)
+- `log.match.attr` (exact-under(A.log-attr-default), implemented, T12)
+- `log.match.status.approx` (exact-under(A.severity-map), implemented, T12)
+- `log.match.text` (exact-under(A.log-fulltext), implemented, T12)
+- `log.match.var` (exact-under(A.var-regex), implemented, T12)
+- `log.match.var.dropped` (exact-under(A.var-default), implemented, T12)
+- `log.group_by.limit` (exact-under(A.top-stable), implemented, T12)
+- `log.group_by.multi-limit` (exact-under(A.group-limit), implemented, T12)
+- `log.indexes` (exact-under(A.all-indexes), implemented, T12)
 
 ## Implemented ahead of an open probe
 
