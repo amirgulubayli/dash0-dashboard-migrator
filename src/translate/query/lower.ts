@@ -42,6 +42,8 @@ class Lowerer {
 
   /** Set by translateMonitor for sum(last_W): the window in seconds, so .as_count() can become increase(x[W]). */
   monitorSumWindow?: number;
+  /** A metric was lowered as a window total (increase over W); see translateMonitor. */
+  sawWindowed = false;
   /** Set by translateMonitor: the evaluation window W in seconds. */
   monitorWindow?: number;
 
@@ -107,7 +109,7 @@ class Lowerer {
       case "neg": {
         this.use("arith.neg");
         const x = this.expr(e.expr, env);
-        return { node: { k: "neg", expr: x.node }, groups: x.groups };
+        return { node: { k: "neg", expr: x.node }, groups: x.groups, ...(x.windowed && { windowed: true }) };
       }
       case "metric":
         return this.metric(e, []);
@@ -160,7 +162,21 @@ class Lowerer {
     if (op === "/" && r.node.k === "num" && r.node.value === 0)
       this.manual("arith.div-zero", "division by the constant 0: Datadog drops the points, PromQL would return ±Inf/NaN");
     if (op === "/" && r.groups) this.use("arith.div");
-    return { node: { k: "binary", op, lhs: l.node, rhs: r.node }, groups: l.groups ?? r.groups };
+    // sum(last_W):…as_count() is a window total. Totals stay totals only under linear arithmetic:
+    // a ± b of two totals, or a total scaled by a constant. Anything else (a/b, a*b, a + 5) is summed per
+    // bucket by Datadog and can't be taken from the window totals, so the monitor fails closed.
+    let windowed = false;
+    if (l.windowed || r.windowed) {
+      const linear =
+        op === "+" || op === "-"
+          ? !!(l.windowed && r.windowed)
+          : op === "*"
+            ? (l.windowed && r.groups === null) || (r.windowed && l.groups === null)
+            : !!(l.windowed && r.groups === null);
+      if (!linear) this.manual("monitor.as_count", `sum(last_W) with .as_count() combined by '${op}' is not a window total; no rule`);
+      windowed = true;
+    }
+    return { node: { k: "binary", op, lhs: l.node, rhs: r.node }, groups: l.groups ?? r.groups, ...(windowed && { windowed: true }) };
   }
 
   call(e: Extract<Expr, { type: "call" }>, env?: FormulaEnv): Lowered {
@@ -232,6 +248,8 @@ class Lowerer {
       if (e.name === "top" || e.name === "bottom") {
         if (e.args.length >= 2) n = numArg(1);
         const order = e.args[3];
+        // bottom()'s direction argument isn't documented the same way as top()'s: don't guess which way it flips.
+        if (order && e.name === "bottom") this.manual("fn.top.args", "bottom() with an explicit order: semantics not confirmed");
         if (order) {
           if (order.type !== "string" || !["asc", "desc"].includes(order.value)) this.manual("fn.top.args", `${e.name}(): order must be 'asc' or 'desc'`);
           if (order.value === "asc") k = k === "topk" ? "bottomk" : "topk";
@@ -257,7 +275,9 @@ class Lowerer {
       const x = this.expr(exprArg(0), env);
       this.use(`fn.${e.name}`);
       const inner: PNode = e.name === "count_nonzero" ? { k: "binary", op: "!=", lhs: x.node, rhs: { k: "num", value: 0 } } : x.node;
-      return { node: { k: "agg", op: "count", by: [], expr: inner }, groups: [] };
+      // No matching series means 0 in Datadog, and no data in PromQL: add the zero explicitly (the result has no labels).
+      const count: PNode = { k: "agg", op: "count", by: [], expr: inner };
+      return { node: { k: "binary", op: "or", lhs: count, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: [] };
     }
 
     if (e.name === "default_zero" && e.args.length === 1) {
@@ -304,6 +324,8 @@ class Lowerer {
     // diff: each point minus the previous one, one rollup interval earlier. monotonic_diff keeps only increases.
     if ((e.name === "diff" || e.name === "monotonic_diff") && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
+      // Datadog diffs each series before space aggregation; that commutes only with sum/avg (and linear arithmetic).
+      if (!linearInSeries(x.node)) this.manual(`fn.${e.name}.agg`, `${e.name}() over max/min/count or non-linear functions isn't exact`);
       const step = this.interval;
       const shifted = mapSelectors(x.node, (sel) => {
         if (sel.offset === undefined || sel.offset === 0) return { ...sel, offset: step };
@@ -499,7 +521,10 @@ class Lowerer {
       this.use("time.fill.zero.single");
       return { node: { k: "binary", op: "or", lhs: node, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: by };
     }
-    if (windowed) return { node, groups: by, windowed: true };
+    if (windowed) {
+      this.sawWindowed = true;
+      return { node, groups: by, windowed: true };
+    }
     if (kind === "gauge" && !counterMode && !explicitRollup && !runningTotal && (agg === "sum" || agg === "avg")) {
       const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
       const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
@@ -634,6 +659,23 @@ class Lowerer {
   }
 }
 
+/** True if every space aggregation is sum/avg and the arithmetic is linear (± of terms, scaling by constants). */
+function linearInSeries(n: PNode): boolean {
+  switch (n.k) {
+    case "agg":
+      return (n.op === "sum" || n.op === "avg") && n.expr.k === "call" && /_over_time$|^rate$|^increase$/.test(n.expr.fn);
+    case "neg":
+      return linearInSeries(n.expr);
+    case "binary":
+      if (n.op === "+" || n.op === "-") return linearInSeries(n.lhs) && linearInSeries(n.rhs);
+      if (n.op === "*") return (n.lhs.k === "num" && linearInSeries(n.rhs)) || (n.rhs.k === "num" && linearInSeries(n.lhs));
+      if (n.op === "/") return n.rhs.k === "num" && linearInSeries(n.lhs);
+      return false;
+    default:
+      return false;
+  }
+}
+
 /** AST fragment without source spans, for a finding's `original`. */
 function stripSpans(x: unknown): unknown {
   if (Array.isArray(x)) return x.map(stripSpans);
@@ -691,6 +733,8 @@ export function translateMonitor(
     l.monitorWindow = mq.windowSeconds;
     const lowered = l.expr(mq.query);
     let expr: PNode;
+    if (!lowered.windowed && l.sawWindowed)
+      l.manual("monitor.as_count", "sum(last_W) with .as_count() inside a function: the window total can't be taken from per-bucket values");
     if (lowered.windowed) {
       l.use("monitor.sum.as_count");
       expr = lowered.node;

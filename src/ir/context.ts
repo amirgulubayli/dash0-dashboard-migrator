@@ -55,6 +55,14 @@ export function metricLookup(m: Mappings): (dd: string) => MetricLookup | undefi
   };
 }
 
+/**
+ * ctx.ddKind for T4: Datadog's declared kind for a metric WITHOUT a curated entry (curated entries win; T4 only
+ * consults it when ctx.metric has no mapping). Build it from loadDdKinds(mappingsDir).
+ */
+export function ddKindLookup(kinds: Record<string, DatadogKind>, m?: Mappings): (dd: string) => DatadogKind | undefined {
+  return (dd) => (m?.metrics.has(dd) ? undefined : kinds[dd]);
+}
+
 /** ctx.tag for T4. undefined for unmapped tags (T4 then replaces dots with underscores and emits tag.unmapped). */
 export function tagLookup(m: Mappings): (dd: string) => string | undefined {
   return (dd) => m.tags.get(dd)?.label;
