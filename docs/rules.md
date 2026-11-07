@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 68 | 42 | 17 | 37 | 164 |
-| planned | 18 | 22 | 2 | 14 | 56 |
+| implemented | 69 | 42 | 17 | 37 | 165 |
+| planned | 17 | 27 | 3 | 15 | 62 |
 
 ## Pipeline order
 
@@ -27,9 +27,9 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
-| 14 | `widget` Widget → panel | widget | yes | 16 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
-| 15 | `panel` Panel options | panel attribute | no | 4 | Units, markers and visual options on a panel a widget rule produced. |
-| 16 | `layout` Layout and groups | widget position or group | no | 6 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
+| 14 | `widget` Widget → panel | widget | yes | 20 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
+| 15 | `panel` Panel options | panel attribute | no | 5 | Units, markers and visual options on a panel a widget rule produced. |
+| 16 | `layout` Layout and groups | widget position or group | no | 8 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
 | 18 | `logs` Log queries | log query or search term | yes | 24 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
 | 19 | `validate` Validate | emitted artefact | no | 3 | Every output parses and passes preflight before it may be emitted. |
@@ -49,10 +49,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
 | 10 | `classify.monitor.metric` | monitor type "metric alert" or "query alert" | goes through the query stages and the monitor stage | exact | unit | — | T6 | implemented |
-| 20 | `classify.monitor.log` | monitor type "log alert" | goes through the logs stage (log.monitor.count) | exact | — | — | T6 | planned |
-| 999 (fallback) | `classify.monitor.other` | composite, service check, event, synthetics, SLO, process, log (until T12) and any other monitor | no rule; original kept | manual | unit | — | T6 | implemented |
+| 20 | `classify.monitor.log` | monitor type "log alert", with the log-attribute table loaded | goes through the logs stage (T12 translateLogMonitor: log.monitor.count, log.monitor.formula), then the shared alert and message stages | exact | unit | — | T6 | implemented |
+| 999 (fallback) | `classify.monitor.other` | composite, service check, event, synthetics, SLO, process, log alert without a log-attribute table, and any other monitor | no rule; original kept | manual | unit | — | T6 | implemented |
 
-- `classify.monitor.log`: Until T12 lands, log alerts take classify.monitor.other.
+- `classify.monitor.log`: Without mappings/log-attributes.yaml, log alerts take classify.monitor.other.
 
 ## Parse (`parse`)
 
@@ -266,7 +266,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 135 | `alert.opt.no_data` | notify_no_data + no_data_timeframe T, ungrouped monitor | companion rule absent_over_time(<selector>[T]), id "dd-monitor-<id>-nodata", behind a CLI flag | exact-under(A.boundary) | — | — | T6 | planned |
 | 140 | `alert.opt.no_data.report` | notify_no_data: true (with no_data_timeframe, timeout_h) or on_missing_data: show_no_data | main rule unchanged; the no-data alert is listed in the report | exact-under(A.no-data-manual) | unit | — | T6 | implemented |
 | 150 | `alert.opt.on_missing_data.resolve` | on_missing_data: resolve | expression unchanged: with no samples a PromQL comparison returns nothing, so the alert resolves | exact | unit | — | T6 | implemented |
-| 200 | `alert.opt.notification` | renotify_*, escalation_message, notify_audit, include_tags, notification_preset_name, notify_by, locked, restricted_roles, silenced | not emitted; listed in the report as manual setup | exact-under(A.notify-manual) | unit | — | T6 | implemented |
+| 200 | `alert.opt.notification` | renotify_*, escalation_message, notify_audit, include_tags, enable_logs_sample, groupby_simple_monitor, notification_preset_name, notify_by, locked, restricted_roles, silenced | not emitted; listed in the report as manual setup | exact-under(A.notify-manual) | unit | — | T6 | implemented |
 | 210 | `alert.priority` | priority n (1-5) | label priority="P<n>" | exact | unit | — | T6 | implemented |
 | 220 | `alert.tags` | tags k:v with valid label keys | labels {k: v}; a tag without ':' becomes {tag: "true"} | exact | unit | — | T6 | implemented |
 | 230 | `alert.tags.rename` | tags whose keys are not valid label names, clash with our labels, or repeat with several values | key sanitised to [a-zA-Z_][a-zA-Z0-9_]* (dd_tag_ prefix on a clash), repeated values joined with ',' | exact-under(A.label-rename) | unit | — | T6 | implemented |
@@ -301,7 +301,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 |---|---|---|---|---|---|---|---|---|
 | 10 | `widget.timeseries` | timeseries | TimeSeriesChart, one query per Datadog query/formula | exact | — | — | T5 | planned |
 | 20 | `widget.query_value` | query_value with aggregator avg\|max\|min\|sum\|last | StatChart with the matching calculation | exact-under(A.align, A.boundary) | — | probe:statchart-calculation | T5 | planned |
+| 21 | `widget.query_value.default-agg` | query_value with no aggregator, or one StatChart has no calculation for | StatChart with calculation mean (Datadog's default avg) | exact-under(A.agg-default) | — | — | T5 | planned |
+| 22 | `widget.query_value.multi` | query_value with more than one query | StatChart; Dash0 shows the first query | exact-under(A.stat-first) | — | — | T5 | planned |
 | 30 | `widget.toplist` | toplist | TimeSeriesTable sorted by value, limited to N (uses fn.top.window for the ranking) | exact-under(A.top-uniform) | — | probe:at-modifier | T5 | planned |
+| 31 | `widget.toplist.unranked` | toplist while fn.top.window is not shipped | TimeSeriesTable of every series, without the top-N limit and ranking | exact-under(A.top-unlimited) | — | — | T5 | planned |
 | 40 | `widget.query_table` | query_table | TimeSeriesTable | exact-under(A.table-single-query) | — | — | T5 | planned |
 | 45 | `widget.query_table.complex` | query_table with several queries, custom sort or conditional formats | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 50 | `widget.note` | note / free_text | Markdown with the same text | exact-under(A.style) | — | — | T5 | planned |
@@ -314,9 +317,13 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 160 | `widget.treemap` | treemap | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 170 | `widget.scatterplot` | scatterplot | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 180 | `widget.unsupported` | hostmap, service_map, manage_status, check_status, slo, trace_service, geomap, funnel, iframe, event_stream, event_timeline, split_graph | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
+| 190 | `query.empty` | widget with no query to translate | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 999 (fallback) | `widget.unknown` | any other widget type | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 
+- `widget.query_value.default-agg`: T5 panels.ts. With an explicit aggregator that has no StatChart calculation the finding message names it.
+- `widget.toplist.unranked`: T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.
 - `widget.alert_graph`: Reuses the monitor's query translation; status = worst(this, that query).
+- `query.empty`: Emitted by T5 queries.ts; the id is also the finding code.
 
 ## Panel options (`panel`)
 
@@ -325,6 +332,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 100 | `panel.unit` | Datadog unit with a Perses format entry (bytes, percent, seconds, …) | format.unit | exact | — | — | T5 | planned |
 | 110 | `panel.unit.unmapped` | unit without a format entry | format.unit decimal; original unit in the panel description | exact-under(A.style) | — | — | T5 | planned |
 | 120 | `panel.markers` | markers / y-axis lines | TimeSeriesChart thresholds | exact-under(A.style) | — | — | T5 | planned |
+| 125 | `panel.conditional-format` | query_value conditional formats (first matching rule wins; > >= < <=; red/yellow/green/blue/gray or custom hex) | StatChart thresholds: one step wherever the colour changes; pieces Perses can't colour the same way are named in the finding | exact-under(A.style) | — | — | T5 | planned |
 | 130 | `panel.style` | palette, legend, display type, title alignment | closest Perses visual option | exact-under(A.style) | — | — | T5 | planned |
 
 ## Layout and groups (`layout`)
@@ -335,8 +343,12 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 20 | `layout.ordered.height` | ordered layout y, height | y and height unchanged | exact-under(A.row-height) | — | probe:row-height | T5 | planned |
 | 30 | `layout.free` | free layout | deterministic repack into the 24-column grid (row-major by y, then x) | exact-under(A.style) | — | — | T5 | planned |
 | 40 | `layout.group` | group widget | its own Grid layout with display.title; children recurse | exact | — | — | T5 | planned |
+| 45 | `layout.group.scale` | children of a group w columns wide (Datadog lays them out inside the group, groups sit side by side) | x and width scale by 24 / w with rounded edges, so each group fills its full-width Grid section | exact-under(A.style) | — | — | T5 | planned |
 | 50 | `layout.group.collapsed` | group collapsed / expanded | display.collapse.open | exact | — | probe:collapse | T5 | planned |
 | 60 | `layout.powerpack` | powerpack | inlined like a group, title kept | exact-under(A.style) | — | — | T5 | planned |
+| 70 | `layout.clamped` | panel whose doubled x + width passes column 24 | x = min(x, 23), width = 24 − x | bounded(ε) | — | — | T5 | planned |
+
+- `layout.clamped`: ε: geometry only: the panel loses at most x + width − 24 of its columns; its queries and data are unchanged.
 
 ## Template variables (`variable`)
 
@@ -455,11 +467,14 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.notify-wider` | the channel may also receive notifications Datadog did not send to it (Dash0 has no degraded-only or recovery-only channel binding) | 1 |
 | `A.msg-length` | text beyond Dash0's annotation limits (description 2048, summary 255 characters) is not needed in the notification; the full original stays in the report | 1 |
 | `A.msg-verbatim` | showing an unknown Datadog template token as literal text is acceptable in the notification | 1 |
-| `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 10 |
+| `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 12 |
 | `A.row-height` | one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export) | 1 |
 | `A.var-values` | a label's values in Dash0 are the same set as the matching tag's values in Datadog | 1 |
 | `A.table-single-query` | the table has one query, default sorting and no conditional formats | 1 |
 | `A.top-uniform` | every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie | 2 |
+| `A.top-unlimited` | showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships | 1 |
+| `A.agg-default` | a query_value request without an aggregator uses Datadog's default, avg | 1 |
+| `A.stat-first` | only the first query of a multi-query stat panel matters | 1 |
 
 ## Open probes
 
@@ -516,7 +531,10 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `alert.msg.truncate` (exact-under(A.msg-length), implemented, T6)
 - `alert.msg.unknown-token` (exact-under(A.msg-verbatim), implemented, T6)
 - `widget.query_value` (exact-under(A.align, A.boundary), planned, T5)
+- `widget.query_value.default-agg` (exact-under(A.agg-default), planned, T5)
+- `widget.query_value.multi` (exact-under(A.stat-first), planned, T5)
 - `widget.toplist` (exact-under(A.top-uniform), planned, T5)
+- `widget.toplist.unranked` (exact-under(A.top-unlimited), planned, T5)
 - `widget.query_table` (exact-under(A.table-single-query), planned, T5)
 - `widget.note` (exact-under(A.style), planned, T5)
 - `widget.image` (exact-under(A.style), planned, T5)
@@ -525,10 +543,13 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `widget.pie` (exact-under(A.style), planned, T5)
 - `panel.unit.unmapped` (exact-under(A.style), planned, T5)
 - `panel.markers` (exact-under(A.style), planned, T5)
+- `panel.conditional-format` (exact-under(A.style), planned, T5)
 - `panel.style` (exact-under(A.style), planned, T5)
 - `layout.ordered.height` (exact-under(A.row-height), planned, T5)
 - `layout.free` (exact-under(A.style), planned, T5)
+- `layout.group.scale` (exact-under(A.style), planned, T5)
 - `layout.powerpack` (exact-under(A.style), planned, T5)
+- `layout.clamped` (bounded(ε), planned, T5)
 - `variable.list` (exact-under(A.var-values), planned, T5)
 - `variable.pinned` (exact-under(A.var-default), planned, T5)
 - `log.match.reserved.approx` (exact-under(A.log-source), implemented, T12)

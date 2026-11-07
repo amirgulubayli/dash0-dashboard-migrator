@@ -51,6 +51,9 @@ export const ASSUMPTIONS = {
   "A.var-values": "a label's values in Dash0 are the same set as the matching tag's values in Datadog",
   "A.table-single-query": "the table has one query, default sorting and no conditional formats",
   "A.top-uniform": "every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie",
+  "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
+  "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",
+  "A.stat-first": "only the first query of a multi-query stat panel matters",
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;

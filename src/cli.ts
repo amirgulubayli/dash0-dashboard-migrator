@@ -17,7 +17,7 @@ Usage:
   dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
 
 Options:
-  --input <dir>        folder of exported Datadog JSON (dashboards and monitors, any depth)
+  --input <dir>        folder of exported Datadog JSON or YAML (dashboards and monitors, any depth)
   --api                read from the Datadog API (DD_SITE, default datadoghq.eu; DD_API_KEY, DD_APP_KEY)
   --dry-run            translate and write the Dash0 payloads to <out>/dash0, import nothing
   --no-import          translate and report only
@@ -25,6 +25,7 @@ Options:
   --only <what>        dashboards | monitors
   --enable-rules       import check rules enabled (default: disabled, D-30)
   --mappings <dir>     mapping tables (default: the package's mappings/)
+  --channels <file>    Datadog @handle -> existing Dash0 notification channel id (default: <mappings>/notification-channels.yaml)
 
 migrate writes <out>/report.json, report.md, events.jsonl and (unless --no-import) <out>/dash0/.
 serve replays <out>'s run in the browser; with ELEVENLABS_AGENT_ID + ELEVENLABS_API_KEY set, an ElevenLabs
@@ -61,6 +62,7 @@ interface Flags {
   only?: "dashboards" | "monitors";
   enableRules: boolean;
   mappings: string;
+  channels?: string;
 }
 
 export function parseFlags(args: string[]): Flags | string {
@@ -82,6 +84,7 @@ export function parseFlags(args: string[]): Flags | string {
         case "--out": f.out = val(); break;
         case "--enable-rules": f.enableRules = true; break;
         case "--mappings": f.mappings = val(); break;
+        case "--channels": f.channels = val(); break;
         case "--only": {
           const v = val();
           if (v !== "dashboards" && v !== "monitors") return "--only must be dashboards or monitors";
@@ -120,6 +123,7 @@ async function runMigrate(args: string[]): Promise<number> {
     const r = await migrate({
       ingest: { ...(f.input ? { input: resolve(f.input) } : { api: true }), ...(f.only ? { only: f.only } : {}) },
       mappingsDir: resolve(f.mappings),
+      ...(f.channels ? { channelsFile: resolve(f.channels) } : {}),
       outDir: resolve(f.out),
       mode,
       enableRules: f.enableRules,
