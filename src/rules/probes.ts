@@ -55,8 +55,8 @@ export const PROBES = {
   },
   "probe:piechart": {
     question: "Does Dash0 render a Perses PieChart from a PromQL query with a grouping?",
-    how: "T0 or T7 dry-run",
-    answer: "open",
+    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), read on a rendered throwaway dashboard at the 1h picker: a PieChart over sum by (service_name) (increase({otel_metric_name=\"dash0.logs\"}[$__range])) renders one slice per service (import accepted calculation last-number and mode value). Two pies with the same query, one with calculation last-number and one with spec {}, were proportionally identical but had DIFFERENT absolute values, so the default calculation is not last-number: always set it. Not checked: that the last-number pie's absolute values equal the fixed-window control to the digit (the table in the same probe did).",
+    answer: "yes",
   },
   "probe:log-labels": {
     question: "What are the label names for severity and body on {otel_metric_name=\"dash0.logs\"}?",

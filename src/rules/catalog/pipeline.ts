@@ -85,6 +85,7 @@ export const PIPELINE_RULES: RuleDef[] = [
   log("log.measure", 190, "manual", "avg / sum / min / max / percentile of a log measure (@attr)", "no output: dash0.logs only counts log records", {
     note: "Ali is checking whether Dash0's signal-to-metrics can derive such a metric without guessing (hub #285).",
   }),
+  log("log.status.unknown", 192, "manual", "status:<value> with no OTel severity range in mappings/log-attributes.yaml (or a wildcard status)", "no output: there is no severity range to match, so any guess would count different logs"),
   log("log.monitor.shape", 195, "manual", "log monitor or log formula monitor whose query shape has no rule", "no output; the original monitor query is kept"),
   logs("logs.stream", 230, "manual", "log_stream / list_stream widget", "placeholder until the LogTable schema comes from T0"),
   logs("logs.unparsed", 999, "manual", "log search the log-search parser does not accept", "no output; original kept", { fallback: true, findingCode: "query.parse_error" }),
