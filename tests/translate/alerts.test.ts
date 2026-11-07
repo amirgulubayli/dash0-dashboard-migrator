@@ -225,3 +225,21 @@ describe("T6: fixtures and the catalog", () => {
     expect(t6.filter((id) => !used.has(id))).toEqual([]);
   });
 });
+
+describe("T6 as T8's AlertConverter", () => {
+  it("passes the T4 context through and returns T8's AlertConversion shape", async () => {
+    const { makeAlertConverter } = await import("../../src/translate/alerts/index.js");
+    const seenCtx: unknown[] = [];
+    const s = stubT4();
+    const convert = makeAlertConverter((mq, t, ctx: { tag?: (k: string) => string | undefined; where?: string }) => {
+      seenCtx.push(ctx);
+      return s.fn(mq, t);
+    });
+    const ctx = { tag: (k: string) => (k === "host" ? "host_name" : undefined), where: "x" };
+    const out = convert(monitor({ query: "avg(last_5m):avg:foo{*} > 1", thresholds: { critical: 1 }, message: "on {{host.name}}" }), ctx);
+    expect(seenCtx).toEqual([ctx]);
+    expect(out.promql).toBe(out.rule!.expression);
+    expect(Object.keys(out).sort()).toEqual(["assumptions", "channels", "epsilon", "findings", "promql", "rule", "rules", "status"]);
+    expect(out.rule!.annotations!.description).toBe("on {{ $labels.host_name }}");
+  });
+});
