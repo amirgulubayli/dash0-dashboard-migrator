@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Map,
   ListChecks,
+  Siren,
   Table2,
   Upload,
   RotateCcw,
@@ -22,6 +23,7 @@ const NAV = [
   { to: "/map", label: "Dashboard map", icon: Map },
   { to: "/items", label: "Items", icon: Table2 },
   { to: "/review", label: "Review", icon: ListChecks },
+  { to: "/incident", label: "Incident", icon: Siren },
 ] as const;
 
 function ThemeToggle() {

@@ -3,6 +3,7 @@
 // console then falls back to downloading review.json. Never any other network call.
 import type { Report } from "./report";
 import { buildReviewJson, type ReviewState } from "./review";
+import { parseWatch, type WatchData } from "./watch";
 
 export interface CliPlan {
   planHash: string;
@@ -79,5 +80,30 @@ export async function saveReviewToCli(body: unknown, f: Fetch = fetch): Promise<
       error: `could not reach dd2dash0 review (${(e as Error).message})`,
       problems: [],
     };
+  }
+}
+
+export type WatchFetch =
+  | { state: "live"; data: WatchData }
+  | { state: "none"; message: string }
+  /** The CLI is mid-write, or the request failed: keep showing the last good data. */
+  | { state: "retry" };
+
+/** GET /api/watch: what `dd2dash0 watch` has recorded for the served plan (wow-factor spec W6). */
+export async function fetchWatch(f: Fetch = fetch): Promise<WatchFetch> {
+  try {
+    const res = await f("/api/watch", { cache: "no-store" });
+    if (res.status === 404) {
+      const j = (await res.json().catch(() => ({}))) as { error?: unknown };
+      return {
+        state: "none",
+        message: typeof j.error === "string" ? j.error : "No watch is running for this plan.",
+      };
+    }
+    if (!res.ok) return { state: "retry" };
+    const data = parseWatch(await res.json());
+    return data ? { state: "live", data } : { state: "retry" };
+  } catch {
+    return { state: "retry" };
   }
 }

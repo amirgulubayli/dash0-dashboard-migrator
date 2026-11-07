@@ -7,7 +7,7 @@
 // the rule itself: its expression is run as an instant query with $__threshold set to the failed, then the degraded
 // threshold; any series returned means that level is crossed (method "computed"). The timeline labels which method
 // produced each event, so a computed crossing is never presented as "Dash0 fired".
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Dash0Config } from "../targets/dash0/client.js";
 
@@ -78,6 +78,19 @@ export class Timeline {
   state(side: Side, alertId: string): AlertState | null {
     return this.last.get(`${side}\u0000${alertId}`) ?? null;
   }
+}
+
+/** One computed Dash0 value per poll, for the live value chart (W6). */
+export interface WatchSample {
+  alertId: string;
+  at: string;
+  value: number | null;
+}
+
+/** Write via a temp file and rename, so a reader polling the file never sees half of it. */
+function writeAtomic(file: string, text: string): void {
+  writeFileSync(`${file}.tmp`, text);
+  renameSync(`${file}.tmp`, file);
 }
 
 export interface SideSummary {
@@ -297,6 +310,7 @@ export async function runWatch(o: WatchOptions): Promise<WatchResult> {
   const sleep = o.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const print = o.print ?? (() => {});
   const tl = new Timeline();
+  const samples: WatchSample[] = [];
   const evalDelayMs = new Map<string, number>();
   const answered = { datadog: false, dash0: false };
   const lastError: Record<Side, string> = { datadog: "", dash0: "" };
@@ -308,8 +322,8 @@ export async function runWatch(o: WatchOptions): Promise<WatchResult> {
   const bound = (a: WatchedAlert) => 2 * durationMs(a.rule.interval) + o.everyMs + (evalDelayMs.get(a.alertId) ?? 0);
   const results = () => o.alerts.map((a) => parity(tl.events, a.alertId, bound(a)));
   const save = () => {
-    writeFileSync(files.timeline, JSON.stringify({ schema: "dd2dash0.watch/v1", startedAt: new Date(start).toISOString(), endedAt: lastPoll.toISOString(), events: tl.events }, null, 2) + "\n");
-    writeFileSync(files.parity, JSON.stringify({ schema: "dd2dash0.parity/v1", results: results() }, null, 2) + "\n");
+    writeAtomic(files.timeline, JSON.stringify({ schema: "dd2dash0.watch/v1", startedAt: new Date(start).toISOString(), endedAt: lastPoll.toISOString(), events: tl.events, samples }, null, 2) + "\n");
+    writeAtomic(files.parity, JSON.stringify({ schema: "dd2dash0.parity/v1", results: results() }, null, 2) + "\n");
   };
   const lane = (e: WatchEvent, title: string) =>
     `${e.at.slice(11, 19)}  ${e.side === "datadog" ? `${(e.from ?? "·").padEnd(8)}-> ${e.to.padEnd(8)}` + " ".repeat(6) + "|" : " ".repeat(25) + `| ${(e.from ?? "·").padEnd(8)}-> ${e.to}${e.method === "computed" ? " (computed)" : ""}`}  ${title}${e.value !== undefined ? `  value ${+e.value.toFixed(2)}` : ""}`;
@@ -332,6 +346,8 @@ export async function runWatch(o: WatchOptions): Promise<WatchResult> {
       try {
         const c = await dash0ComputedState(o.dash0, a.rule, at, f);
         answered.dash0 = true;
+        samples.push({ alertId: a.alertId, at: at.toISOString(), value: c.value });
+        if (samples.length > 5000) samples.splice(0, samples.length - 5000);
         const e = tl.record("dash0", a.alertId, c.state, at, "computed", c.value ?? undefined);
         if (e) print(lane(e, a.title));
       } catch (err) {

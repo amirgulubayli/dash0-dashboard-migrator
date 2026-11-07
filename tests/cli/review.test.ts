@@ -108,6 +108,24 @@ describe("review server", () => {
     expect(existsSync(join(planDir, "apply", "report.json"))).toBe(true);
   });
 
+  it("serves the live watch files for the Incident view (404 before a watch, the JSON once there is one)", async () => {
+    const { planDir } = await makePlan();
+    const { server, url } = await startReviewServer({ planDir, port: 0 });
+    servers.push(server);
+    const none = await fetch(url + "api/watch");
+    expect(none.status).toBe(404);
+    expect(((await none.json()) as { error: string }).error).toMatch(/dd2dash0 watch/);
+    mkdirSync(join(planDir, "watch"), { recursive: true });
+    const timeline = { schema: "dd2dash0.watch/v1", startedAt: "2026-11-08T14:00:00.000Z", endedAt: "2026-11-08T14:01:00.000Z", events: [], samples: [{ alertId: "a", at: "2026-11-08T14:00:00.000Z", value: 61 }] };
+    writeFileSync(join(planDir, "watch", "timeline.json"), JSON.stringify(timeline));
+    const res = await fetch(url + "api/watch");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({ timeline, parity: null });
+    writeFileSync(join(planDir, "watch", "timeline.json"), '{"half":');
+    expect((await fetch(url + "api/watch")).status).toBe(503);
+  });
+
   it("without a built console, / explains how to build it", async () => {
     const { planDir } = await makePlan();
     const { server, url } = await startReviewServer({ planDir, port: 0 });

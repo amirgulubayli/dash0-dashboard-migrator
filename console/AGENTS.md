@@ -18,7 +18,7 @@ A Lovable project exists as Henry's personal sandbox only. It is not part of the
 
 ## Handover rules
 
-- Browser-only. No AI calls and no network calls except same-origin ones: `/report.json`, and when served by `dd2dash0 review` (CONTRACT-003 §6-7) `GET /api/plan` and `POST /api/review`, all in `src/lib/cli-server.ts` and `src/lib/report-store.tsx`.
+- Browser-only. No AI calls and no network calls except same-origin ones: `/report.json`, and when served by `dd2dash0 review` (CONTRACT-003 §6-7) `GET /api/plan`, `POST /api/review` and `GET /api/watch` (the live Incident view, polled while `dd2dash0 watch` runs), all in `src/lib/cli-server.ts` and `src/lib/report-store.tsx`.
 - All report parsing and `report.json` field names live only in `src/lib/report.ts`.
 - Every number shown is computed from the loaded file; never hard-code counts.
 - Never show confidence scores.

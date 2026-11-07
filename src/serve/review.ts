@@ -68,6 +68,18 @@ export function startReviewServer(o: ReviewServerOptions): Promise<{ server: Ser
     };
     const json = (x: unknown, code = 200) => send(code, "application/json", JSON.stringify(x));
     try {
+      // The live incident view (W6) polls this while `dd2dash0 watch` runs; it must stay cheap, so it comes before
+      // openReview (which re-hashes the plan).
+      if (req.method === "GET" && url.pathname === "/api/watch") {
+        const tf = join(planDir, "watch", "timeline.json");
+        if (!existsSync(tf)) return json({ error: "no watch for this plan yet: run dd2dash0 watch <plan>" }, 404);
+        try {
+          const pf = join(planDir, "watch", "parity.json");
+          return json({ timeline: JSON.parse(readFileSync(tf, "utf8")), parity: existsSync(pf) ? JSON.parse(readFileSync(pf, "utf8")) : null });
+        } catch {
+          return json({ error: "watch files are being written; try again" }, 503);
+        }
+      }
       const s = openReview(planDir, o.reviewer ?? "");
       if (req.method === "GET" && url.pathname === "/report.json") return send(200, "application/json", readFileSync(join(planDir, "report.json")));
       if (req.method === "GET" && url.pathname === "/api/plan")
