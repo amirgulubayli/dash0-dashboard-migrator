@@ -16,6 +16,8 @@ const KIND: Record<string, PanelKind> = {
   query_table: "table",
   note: "markdown",
   free_text: "markdown",
+  image: "markdown", // only with an http(s) URL, see panel()
+  sunburst: "toplist", // only a single-level breakdown, shown as a PieChart, see panel()
   log_stream: "logs",
 };
 
@@ -124,6 +126,27 @@ function group(w: Json, path: string, find: (f: Omit<Finding, "itemId" | "itemKi
   };
 }
 
+const isHttpUrl = (u: string | undefined): u is string => u !== undefined && /^https?:\/\/\S+$/i.test(u);
+
+/** Levels of grouping of one query: logs: the group_by facets; metrics: the tags in `by {...}`. -1 = not a metric or log query. */
+function groupLevels(q: SourceQuery): number {
+  if (q.dataSource === "logs") {
+    const gb = isObj(q.raw) ? q.raw.group_by : undefined;
+    return Array.isArray(gb) ? gb.length : isObj(gb) && Array.isArray(gb.fields) ? gb.fields.length : 0;
+  }
+  if (q.dataSource === "metrics") {
+    const m = /\bby\s*\{([^}]*)\}/i.exec(q.expr);
+    return m ? m[1]!.split(",").map((t) => t.trim()).filter(Boolean).length : 0;
+  }
+  return -1;
+}
+
+/** A sunburst with exactly one level on every (visible) query is a plain breakdown, which a pie chart shows faithfully. */
+function singleLevel(requests: QuerySet[]): boolean {
+  const qs = requests.flatMap((r) => r.queries).filter((q) => !q.hidden);
+  return qs.length > 0 && qs.every((q) => groupLevels(q) === 1);
+}
+
 function panel(w: unknown, path: string, find: (f: Omit<Finding, "itemId" | "itemKind"> & { itemId?: string; itemKind?: Finding["itemKind"] }) => void): Panel {
   const ww = isObj(w) ? w : {};
   const def = isObj(ww.definition) ? ww.definition : {};
@@ -131,8 +154,18 @@ function panel(w: unknown, path: string, find: (f: Omit<Finding, "itemId" | "ite
   const requests = requestsOf(def);
   let kind: PanelKind = KIND[type] ?? "unsupported";
   if (type === "list_stream") kind = requests.some((r) => r.queries.some((q) => q.dataSource.startsWith("logs"))) ? "logs" : "unsupported";
+  // Why a widget that COULD be translated is not (reported in the finding, not just "no Dash0 panel").
+  let why: string | undefined;
+  if (type === "image" && !isHttpUrl(str(def.url))) {
+    kind = "unsupported";
+    why = `image URL is not an http(s) URL (${str(def.url) === undefined ? "none" : str(def.url)!.startsWith("data:") ? "data URI" : "relative to the Datadog site"}): it cannot be embedded in a Markdown panel`;
+  }
+  if (type === "sunburst" && !singleLevel(requests)) {
+    kind = "unsupported";
+    why = "sunburst is not a single-level breakdown of one metric or log query (several levels, another data source, or no grouping): a pie chart would not show the same thing";
+  }
   if (kind === "unsupported") {
-    find({ status: "manual", code: "widget.unsupported", itemId: path, message: `Datadog '${type}' widget has no Dash0 panel; it becomes a placeholder that keeps the original`, original: type });
+    find({ status: "manual", code: "widget.unsupported", itemId: path, message: why ?? `Datadog '${type}' widget has no Dash0 panel; it becomes a placeholder that keeps the original`, original: type });
   }
   return {
     id: path.split("/").pop()!,
@@ -197,6 +230,12 @@ function optionsOf(type: string, def: Json): Record<string, unknown> {
   if (type === "note" || type === "free_text") {
     o.text = str(def.content) ?? str(def.text) ?? "";
   }
+  if (type === "image" && isHttpUrl(str(def.url))) {
+    // Alt text: the widget title. Parentheses and brackets in the URL or title would end the Markdown early.
+    const alt = (str(def.title) ?? "image").replace(/[\[\]]/g, "");
+    o.text = `![${alt}](${str(def.url)!.replace(/\(/g, "%28").replace(/\)/g, "%29").replace(/\s/g, "%20")})`;
+  }
+  if (type === "sunburst") o.display = "pie";
   copy("precision");
   copy("custom_unit", "unit");
   copy("autoscale");

@@ -7,7 +7,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 69 | 42 | 18 | 54 | 183 |
+| implemented | 69 | 42 | 18 | 55 | 184 |
 | planned | 17 | 27 | 3 | 11 | 58 |
 
 ## Pipeline order
@@ -31,7 +31,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 15 | `panel` Panel options | panel attribute | no | 5 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 8 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
-| 18 | `logs` Log queries | log query or search term | yes | 27 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
+| 18 | `logs` Log queries | log query or search term | yes | 28 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
 | 19 | `validate` Validate | emitted artefact | no | 3 | Every output parses and passes preflight before it may be emitted. |
 | 20 | `canonical` Canonical form and hash | emitted artefact | no | 3 | One spelling per meaning, so the output hash is a function of the input only. |
 | 21 | `emit` Import and report | emitted artefact or run | no | 6 | Idempotent single-item import, read-back, and a certificate for every source item. |
@@ -398,6 +398,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 180 | `log.scalar.window` | scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe) | the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value | bounded(ε) | unit | probe:range-var | T12 | implemented |
 | 185 | `log.or.cross-key` | OR across different keys (or with free text) beyond what inclusion-exclusion covers: more than 3 branches, or outside a count | no output: not a matcher set | manual | unit | — | T12 | implemented |
 | 190 | `log.measure` | avg / sum / min / max / percentile of a log measure (@attr) | no output: dash0.logs only counts log records | manual | unit | — | T12 | implemented |
+| 192 | `log.status.unknown` | status:<value> with no OTel severity range in mappings/log-attributes.yaml (or a wildcard status) | no output: there is no severity range to match, so any guess would count different logs | manual | unit | — | T12 | implemented |
 | 195 | `log.monitor.shape` | log monitor or log formula monitor whose query shape has no rule | no output; the original monitor query is kept | manual | unit | — | T12 | implemented |
 | 200 | `logs.rate` | log count shown as a rate | sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m])) | bounded(ε) | proof:T3 | probe:log-labels | T12 | planned |
 | 230 | `logs.stream` | log_stream / list_stream widget | placeholder until the LogTable schema comes from T0 | manual | — | — | T12 | planned |
@@ -507,7 +508,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `probe:listvariable` (open) | Does Dash0 import accept Perses ListVariable + PrometheusLabelValuesVariable, or only Dash0FilterVariable? | plan 00 open question; T7 dry-run import of a dashboard with one ListVariable | `variable.list` |
 | `probe:row-height` (open) | Is one Dash0 grid row as tall as one Datadog grid row? | T0: compare a golden export with the Datadog source | `layout.ordered.height` |
 | `probe:collapse` (open) | Does Dash0 honour Grid display.collapse.open for titled sections? | T0: export a dashboard with one collapsed group | `layout.group.collapsed` |
-| `probe:piechart` (open) | Does Dash0 render a Perses PieChart from a PromQL query with a grouping? | T0 or T7 dry-run | `widget.pie` |
+| `probe:piechart` (yes) | Does Dash0 render a Perses PieChart from a PromQL query with a grouping? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), read on a rendered throwaway dashboard at the 1h picker: a PieChart over sum by (service_name) (increase({otel_metric_name="dash0.logs"}[$__range])) renders one slice per service (import accepted calculation last-number and mode value). Two pies with the same query, one with calculation last-number and one with spec {}, were proportionally identical but had DIFFERENT absolute values, so the default calculation is not last-number: always set it. Not checked: that the last-number pie's absolute values equal the fixed-window control to the digit (the table in the same probe did). | `widget.pie` |
 | `probe:log-labels` (yes) | What are the label names for severity and body on {otel_metric_name="dash0.logs"}? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): severity otel_log_severity_range / otel_log_severity_text, body otel_log_body (unanchored regex), attributes with dots as underscores; docs/research/dash0.md "dash0.logs labels", dash0-team 71e47aa | `log.count`, `log.cardinality`, `log.match.reserved`, `log.match.attr`, `log.match.status`, `log.match.status.approx`, `log.match.text`, `log.monitor.count`, `logs.rate` |
 | `probe:dd-formula-join` (open) | In a Datadog formula over queries with different groupings, do unmatched groups drop? | maths.md §11 probe 3 | `arith.group-subset` |
 

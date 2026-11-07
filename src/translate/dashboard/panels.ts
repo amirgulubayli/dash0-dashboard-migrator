@@ -80,7 +80,8 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
   // Rule ids and claims follow the T17 catalog (src/rules/catalog/dashboard.ts, PR #8).
   switch (p.kind) {
     case "markdown":
-      under("widget.note", ["A.style"], "note text kept; its colour, font size and alignment are not migrated");
+      if (p.sourceType === "image") under("widget.image", ["A.style"], "image shown as a Markdown image loaded from its original URL when the dashboard is viewed; size, border and alignment are not migrated");
+      else under("widget.note", ["A.style"], "note text kept; its colour, font size and alignment are not migrated");
       return result("Markdown", { text: String(p.options.text ?? "") });
     case "unsupported":
       // T2 already emitted the widget.unsupported finding for this panel.
@@ -158,6 +159,18 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       if (q.rules.includes("log.scalar.window") && !p.requests.every((r) => r.queries.every((x) => x.dataSource === "logs")))
         return placeholder("arith.scalar-log-mixed", "This toplist mixes a whole-timeframe log count with a metric query; one table can't show both as Datadog does.");
       const limits = p.requests.flatMap((r) => r.formulas.map((f) => f.limit).filter((x) => x !== undefined));
+      if (p.options.display === "pie") {
+        // A single-level sunburst (ingest only lets those through) is a breakdown by one grouping: a PieChart of the same
+        // query. Probed on a rendered dashboard (probe:piechart): the pie's DEFAULT calculation is not the last point, so
+        // it is always set: last-number for a window-form log count, else from the aggregator like a stat panel.
+        const logWindow = q.rules.includes("log.scalar.window");
+        if (logWindow && !p.requests.every((r) => r.queries.every((x) => x.dataSource === "logs")))
+          return placeholder("arith.scalar-log-mixed", "This sunburst mixes a whole-timeframe log count with a metric query; one pie can't show both as Datadog does.");
+        const agg = p.requests[0]?.queries[0]?.aggregator;
+        const calculation = logWindow ? "last-number" : agg ? (CALC[agg] ?? "mean") : "mean";
+        under("widget.pie", limits.length ? ["A.style", "A.top-unlimited"] : ["A.style"], `sunburst shown as a pie chart over its single grouping level (calculation ${calculation})${limits.length ? `, without the top-${limits[0]!.count} limit` : ""}`);
+        return result("PieChart", { calculation, mode: "value" });
+      }
       under("widget.toplist.unranked", ["A.top-unlimited"], `toplist shown as a TimeSeriesTable of every series${limits.length ? `, without the top-${limits[0]!.count} limit and ranking` : ""}`);
       return result("TimeSeriesTable", {});
     }
@@ -181,7 +194,7 @@ function unsupportedRule(type: string): string {
   if (KNOWN_UNSUPPORTED.has(type)) return "widget.unsupported";
   return "widget.unknown";
 }
-const KNOWN_UNSUPPORTED = new Set(["hostmap", "service_map", "manage_status", "check_status", "slo", "trace_service", "geomap", "funnel", "iframe", "event_stream", "event_timeline", "split_graph", "change", "sunburst", "list_stream", "log_stream"]);
+const KNOWN_UNSUPPORTED = new Set(["sunburst", "image", "hostmap", "service_map", "manage_status", "check_status", "slo", "trace_service", "geomap", "funnel", "iframe", "event_stream", "event_timeline", "split_graph", "change", "sunburst", "list_stream", "log_stream"]);
 
 /** Assumption wording, from the T17 catalog (src/rules/assumptions.ts). The last three are requested additions. */
 const ASSUMPTION_TEXT: Record<string, string> = {
