@@ -20,7 +20,7 @@ Each call returns `{ status, promql, rules, assumptions, findings }`. Monitors a
 - `interval`: `"$__interval"` by default.
 
 ## Rules are data
-`rules.ts` holds every rule: `ruleId -> {status, assumptions, description}`. `lower.test.ts` asserts one exact PromQL string per rule, and fails if any rule in the table has no test.
+`rules.ts` holds every rule: `ruleId -> {status, assumptions, description}`. `tests/translate/query.test.ts` asserts one exact PromQL string per rule, and fails if any rule in the table has no test.
 
 Choices worth knowing:
 - **Datadog order is kept:** time aggregation per series first, then space aggregation. That gives `avg by (h) (avg_over_time(x[$__interval]))`.

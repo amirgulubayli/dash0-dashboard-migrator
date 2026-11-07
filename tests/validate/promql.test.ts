@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { substitutePlaceholders, validatePromQL } from "./promql.js";
+import { substitutePlaceholders, validatePromQL } from "../../src/validate/promql.js";
 
 describe("validatePromQL", () => {
   it("accepts valid PromQL, including Dash0/Perses placeholders", () => {

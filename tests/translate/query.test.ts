@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseFormula, parseMonitorQuery, parseQuery } from "../../parse/index.js";
-import type { Expr } from "../../parse/index.js";
-import { validatePromQL } from "../../validate/promql.js";
-import { RULES, translateMonitor, translateQuery } from "./index.js";
-import type { MetricMapping, TranslateContext } from "./index.js";
+import { parseFormula, parseMonitorQuery, parseQuery } from "../../src/parse/index.js";
+import type { Expr } from "../../src/parse/index.js";
+import { validatePromQL } from "../../src/validate/promql.js";
+import { RULES, translateMonitor, translateQuery } from "../../src/translate/query/index.js";
+import type { MetricMapping, TranslateContext } from "../../src/translate/query/index.js";
 
 const METRICS: Record<string, MetricMapping> = {
   "redis.mem.used": { otel: "redis.memory.used", kind: "gauge" },
