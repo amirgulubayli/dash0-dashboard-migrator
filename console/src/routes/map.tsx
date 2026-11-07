@@ -34,7 +34,7 @@ function MapPage() {
   return <div className="flex h-full min-h-0 flex-col">
     <header className="shrink-0 border-b px-6 pt-4 pb-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0"><div className="section-label mb-2 break-words">Source dashboard · {report.run.source ?? "n/a"}</div><h2 className="text-[32px] font-semibold leading-tight">What survived the migration?</h2></div>
+        <div className="min-w-0"><div className="section-label mb-2 break-words">Source dashboard · {report.run.source ?? "not recorded"}</div><h2 className="text-[32px] font-semibold leading-tight">What survived the migration?</h2></div>
         <div className="flex flex-wrap items-center gap-3"><span className="font-mono text-xs">{pending} decisions pending</span>{liveUrl ? <Button asChild variant="outline"><a href={liveUrl} target="_blank" rel="noreferrer"><ExternalLink />Open live dashboard in Dash0</a></Button> : <Button variant="outline" disabled><ExternalLink />Not imported yet</Button>}</div>
       </div>
       <div className="mt-5 grid grid-cols-[minmax(0,62fr)_minmax(0,38fr)] gap-6">

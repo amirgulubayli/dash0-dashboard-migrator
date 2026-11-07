@@ -38,10 +38,11 @@ function Overview() {
     { label: "Import", value: imports.length ? `${imports.filter((i) => i.verification?.imported).length} imported` : null },
   ];
   const current = stages.reduce((last, s, index) => s.value !== null ? index : last, -1);
-  const footer = [["Source file", report.run.source], ["Commit", report.run.source_commit], ["Mapping version", report.run.mapping_version], ["Tool version", report.run.tool_version], ["Schema version", report.schema_version], ["Loaded file", sourceName], ["Report SHA256", sha], ...Object.entries(report.summary.verification).map(([k, v]) => [k.replace(/_/g, " "), v === null ? "not run" : String(v)])];
+  const notRecorded = (v: string | undefined) => v ?? "not recorded";
+  const footer = [["Source file", notRecorded(report.run.source)], ["Commit", notRecorded(report.run.source_commit)], ["Mapping version", notRecorded(report.run.mapping_version)], ["Tool version", notRecorded(report.run.tool_version)], ["Schema version", notRecorded(report.schema_version)], ["Loaded file", sourceName], ["Report SHA256", sha], ...Object.entries(report.summary.verification).map(([k, v]) => [k.replace(/_/g, " "), v === null ? "not run" : String(v)])];
   return <div className="overview-page">
     <section className="px-8 pt-7 pb-6">
-      <div className="section-label mb-3">Migration report · {report.run.source ?? "n/a"}</div>
+      <div className="section-label mb-3">Migration report · {report.run.source ?? "source not recorded"}</div>
       <h2 className="text-4xl font-semibold leading-tight">{widgets} widgets assessed. Every translation accounted for.</h2>
       <p className="mt-2 text-sm text-body">{report.items.filter((i) => i.kind === "group").length} layout groups, reported separately. {counts.checkRules} monitor, translated as a Dash0 check rule.</p>
       <div className="mt-5 flex flex-wrap gap-2">{["Deterministic rules", "No AI in translation", "Every item accounted for", "Report fingerprinted"].map((label) => <span className="console-chip" key={label}>✓ {label}</span>)}</div>
