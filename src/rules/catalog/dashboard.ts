@@ -18,9 +18,18 @@ export const DASHBOARD_RULES: RuleDef[] = [
     assumptions: ["A.align", "A.boundary"],
     requires: ["probe:statchart-calculation"],
   }),
+  w("widget.query_value.default-agg", 21, "exact-under", "query_value with no aggregator, or one StatChart has no calculation for", "StatChart with calculation mean (Datadog's default avg)", {
+    assumptions: ["A.agg-default"],
+    note: "T5 panels.ts. With an explicit aggregator that has no StatChart calculation the finding message names it.",
+  }),
+  w("widget.query_value.multi", 22, "exact-under", "query_value with more than one query", "StatChart; Dash0 shows the first query", { assumptions: ["A.stat-first"] }),
   w("widget.toplist", 30, "exact-under", "toplist", "TimeSeriesTable sorted by value, limited to N (uses fn.top.window for the ranking)", {
     assumptions: ["A.top-uniform"],
     requires: ["probe:at-modifier"],
+  }),
+  w("widget.toplist.unranked", 31, "exact-under", "toplist while fn.top.window is not shipped", "TimeSeriesTable of every series, without the top-N limit and ranking", {
+    assumptions: ["A.top-unlimited"],
+    note: "T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.",
   }),
   w("widget.query_table", 40, "exact-under", "query_table", "TimeSeriesTable", { assumptions: ["A.table-single-query"] }),
   w("widget.query_table.complex", 45, "manual", "query_table with several queries, custom sort or conditional formats", PLACEHOLDER, { findingCode: "widget.unsupported" }),
@@ -43,6 +52,7 @@ export const DASHBOARD_RULES: RuleDef[] = [
   w("widget.unsupported", 180, "manual", "hostmap, service_map, manage_status, check_status, slo, trace_service, geomap, funnel, iframe, event_stream, event_timeline, split_graph", PLACEHOLDER, {
     findingCode: "widget.unsupported",
   }),
+  w("query.empty", 190, "manual", "widget with no query to translate", PLACEHOLDER, { note: "Emitted by T5 queries.ts; the id is also the finding code." }),
   w("widget.unknown", 999, "manual", "any other widget type", PLACEHOLDER, { fallback: true, findingCode: "widget.unsupported" }),
 
   // ---------- layout ----------
@@ -52,6 +62,9 @@ export const DASHBOARD_RULES: RuleDef[] = [
   lay("layout.group", 40, "exact", "group widget", "its own Grid layout with display.title; children recurse"),
   lay("layout.group.collapsed", 50, "exact", "group collapsed / expanded", "display.collapse.open", { requires: ["probe:collapse"] }),
   lay("layout.powerpack", 60, "exact-under", "powerpack", "inlined like a group, title kept", { assumptions: ["A.style"] }),
+  lay("layout.clamped", 70, "bounded", "panel whose doubled x + width passes column 24", "x = min(x, 23), width = 24 − x", {
+    epsilon: "geometry only: the panel loses at most x + width − 24 of its columns; its queries and data are unchanged",
+  }),
 
   // ---------- variable ----------
   v("variable.list", 10, "exact-under", "template variable with a tag prefix", "ListVariable + PrometheusLabelValuesVariable on the mapped label", {
