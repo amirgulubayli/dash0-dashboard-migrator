@@ -61,7 +61,9 @@ describe("apply (dry-run)", () => {
     if (o.kind !== "done") return;
     expect(o.imported).toEqual({ dashboards: 4, rules: 1 });
     expect(o.placeholders).toEqual([flagged]);
-    expect(o.skippedAlerts).toEqual(["dd-monitor-postgres__percent_usage_connections"]);
+    // Since #34 (Postgres mappings) percent_usage_connections is manual (metric.derived), so high_mem is the only
+    // check rule in the fixtures and no approved-able alert is left out.
+    expect(o.skippedAlerts).toEqual([]);
     const dash = readFileSync(join(planDir, "apply", "dash0", "dashboards", "dd-nginx-nginx-overview-dashboard.json"), "utf8");
     expect(dash).toContain("flagged in review");
     expect(dash).toContain("check by hand");

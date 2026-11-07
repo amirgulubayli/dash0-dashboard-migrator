@@ -8,11 +8,13 @@
     "node": ">=22"
   },
   "bin": {
-    "dd2dash0": "dist/cli.js"
+    "dd2dash0": "dist/bin.js"
   },
   "scripts": {
     "build": "tsc -p .",
     "dev": "tsx src/cli.ts",
+    "app": "tsx src/bin.ts",
+    "build:app": "bash scripts/build-app.sh",
     "test": "vitest run",
     "typecheck": "tsc -p . --noEmit"
   },

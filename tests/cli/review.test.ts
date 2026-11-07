@@ -104,7 +104,7 @@ describe("review server", () => {
 
     const applied = await runApply({ planDir, reviewFile: join(planDir, "review.json"), dryRun: true, cwd: work });
     expect(applied.kind).toBe("done");
-    if (applied.kind === "done") expect(applied.imported.rules).toBe(2);
+    if (applied.kind === "done") expect(applied.imported.rules).toBe(1); // high_mem; postgres connections is manual since #34
     expect(existsSync(join(planDir, "apply", "report.json"))).toBe(true);
   });
 

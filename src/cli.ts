@@ -14,6 +14,7 @@ import { terminalReview } from "./pipeline/review-terminal.js";
 import { findConsoleDir, startReviewServer } from "./serve/review.js";
 import { createInterface } from "node:readline/promises";
 import { datadogEnv, durationMs, findDatadogMonitor, plannedAlerts, runWatch, type WatchedAlert } from "./pipeline/watch.js";
+import { defaultMappingsDir, homeDir } from "./home.js";
 import { writeProof } from "./pipeline/proof.js";
 
 export const VERSION = "0.2.0";
@@ -97,7 +98,7 @@ interface Flags {
 }
 
 export function parseFlags(args: string[]): Flags | string {
-  const f: Flags = { api: false, dryRun: false, noImport: false, out: "out", enableRules: false, mappings: join(import.meta.dirname, "..", "mappings") };
+  const f: Flags = { api: false, dryRun: false, noImport: false, out: "out", enableRules: false, mappings: defaultMappingsDir() };
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     const val = () => {
@@ -238,7 +239,7 @@ async function runPlanCmd(args: string[]): Promise<number> {
     const p = await runPlan({
       config,
       outDir: out,
-      defaultMappingsDir: join(import.meta.dirname, "..", "mappings"),
+      defaultMappingsDir: defaultMappingsDir(),
       ...(config.source.kind === "folder" ? { resolvedInput: resolve(config.source.path) } : {}),
       ...(only ? { only: only as "dashboards" | "monitors" } : {}),
       version: VERSION,
@@ -288,7 +289,7 @@ async function runReviewCmd(args: string[]): Promise<number> {
     console.error("--port must be a port number");
     return EXIT.usage;
   }
-  const consoleDir = r.v["--console"] ? resolve(r.v["--console"]) : findConsoleDir(import.meta.dirname);
+  const consoleDir = r.v["--console"] ? resolve(r.v["--console"]) : findConsoleDir(join(homeDir(), "src"));
   try {
     const { url } = await startReviewServer({ planDir, port, ...(consoleDir ? { consoleDir } : {}), reviewer });
     console.log(`dd2dash0 review: ${url}  (plan ${planDir}; ${consoleDir ? "console" : "console not built: notice page, or use --terminal"}; Ctrl+C to stop)`);
