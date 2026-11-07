@@ -44,20 +44,26 @@ export class Dash0Client {
     this.sleep = cfg.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
 
-  importDashboard(d: DashboardDefinition): Promise<DashboardDefinition> {
-    return this.call("POST", "/api/import/dashboard", d);
-  }
+  // Idempotent re-runs, as probed live on Dash0 (2026-11-07, dash0-team docs/research/dash0.md):
+  // - Check rules: the Import Check Rule API (named by the brief) upserts by `id` when the id is a UUID. T6 sets a
+  //   deterministic UUIDv5 of the Datadog monitor id. A non-UUID id ("dd-…") is rejected with 400.
+  // - Dashboards: the Import Dashboard API ignores an origin (two imports = two dashboards), so dashboards are
+  //   upserted with PUT /api/dashboards/{origin}, which keeps exactly one per origin.
+  // Read-back is by the same key (rule id / dashboard origin).
   importCheckRule(r: PrometheusAlertRule): Promise<PrometheusAlertRule> {
     return this.call("POST", "/api/import/check-rule", r);
   }
-  getDashboard(id: string): Promise<DashboardDefinition | null> {
-    return this.call<DashboardDefinition>("GET", `/api/dashboards/${encodeURIComponent(id)}`).catch(notFoundAsNull);
+  putDashboard(origin: string, d: DashboardDefinition): Promise<DashboardDefinition> {
+    return this.call("PUT", `/api/dashboards/${encodeURIComponent(origin)}`, d);
+  }
+  getDashboard(origin: string): Promise<DashboardDefinition | null> {
+    return this.call<DashboardDefinition>("GET", `/api/dashboards/${encodeURIComponent(origin)}`).catch(notFoundAsNull);
   }
   getCheckRule(id: string): Promise<PrometheusAlertRule | null> {
     return this.call<PrometheusAlertRule>("GET", `/api/alerting/check-rules/${encodeURIComponent(id)}`).catch(notFoundAsNull);
   }
 
-  private async call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  private async call<T>(method: "GET" | "PUT" | "POST", path: string, body?: unknown): Promise<T> {
     const url = new URL(path, this.cfg.apiUrl);
     if (this.cfg.dataset) url.searchParams.set("dataset", this.cfg.dataset);
     const max = this.cfg.maxRetries ?? 3;

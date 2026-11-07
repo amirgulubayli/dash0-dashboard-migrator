@@ -59,7 +59,7 @@ const dashboard: DashboardDefinition = {
 // The exact form of fixtures/datadog/monitors/redisdb__high_mem.json, proven by the reference evaluator (PR #2, maths.md §5):
 // avg(last_5m):100 * avg:redis.mem.used{*} / avg:redis.mem.maxmemory{*} > 90, warning 70.
 const rule: PrometheusAlertRule = {
-  id: "dd-smoke-high-mem",
+  id: "7c0b5f2e-6a7d-5c1e-9b1a-0d2d5e0a51f0", // fixed UUID for the smoke rule (Import Check Rule upserts by UUID id)
   name: "[smoke] [Redis] High memory consumption",
   expression: `avg_over_time((100 * avg(avg_over_time(${used}[1m])) / avg(avg_over_time(${max}[1m])))[5m:1m]) > $__threshold`,
   thresholds: { failed: 90, degraded: 70 },
