@@ -154,6 +154,9 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       return result("StatChart", spec);
     }
     case "toplist": {
+      // Same rule as a stat: a window-form log query next to a per-interval metric query would mix two windows.
+      if (q.rules.includes("log.scalar.window") && !p.requests.every((r) => r.queries.every((x) => x.dataSource === "logs")))
+        return placeholder("arith.scalar-log-mixed", "This toplist mixes a whole-timeframe log count with a metric query; one table can't show both as Datadog does.");
       const limits = p.requests.flatMap((r) => r.formulas.map((f) => f.limit).filter((x) => x !== undefined));
       under("widget.toplist.unranked", ["A.top-unlimited"], `toplist shown as a TimeSeriesTable of every series${limits.length ? `, without the top-${limits[0]!.count} limit and ranking` : ""}`);
       return result("TimeSeriesTable", {});
