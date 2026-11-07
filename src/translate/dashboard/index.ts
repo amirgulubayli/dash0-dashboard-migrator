@@ -8,13 +8,35 @@
 import { worst, isGroup, type Dashboard, type Finding, type Layout, type Panel, type Status } from "../../ir/index.js";
 import { dash0Id, type DashboardDefinition, type GridItem, type GridLayout, type PersesPanel } from "../../targets/dash0/index.js";
 import { toPersesPanel, type PanelResult } from "./panels.js";
-import { translateRequests, type TranslateExpr, type TranslateOptions } from "./queries.js";
+import { translateRequests, type TranslateExpr, type TranslateLog, type TranslateOptions } from "./queries.js";
 
 export { translateRequests } from "./queries.js";
-export type { TranslateExpr, TranslateOptions, ExprTranslation, PanelQuery, RequestTranslation } from "./queries.js";
+export type { TranslateExpr, TranslateLog, TranslateOptions, ExprTranslation, PanelQuery, RequestTranslation } from "./queries.js";
 export type { PanelResult } from "./panels.js";
 
 export const ROW_SCALE = 3;
+
+const SCALAR_KINDS = new Set<string>(["stat", "toplist", "table"]);
+
+/** A log query in a scalar widget: manual, with the reason, until T12's window form (log.scalar.window) is merged. */
+const scalarLogPending: TranslateLog = (q, t) => ({
+  status: "manual",
+  promql: null,
+  rules: [],
+  assumptions: [],
+  findings: [
+    {
+      status: "manual",
+      code: "query.datasource",
+      message: "log query in a scalar widget: Datadog evaluates it over the whole timeframe, and the per-interval form would show a per-bucket value; it needs the window form (log.scalar.window)",
+      itemKind: "query",
+      itemId: t.where,
+      ...(q.search?.query !== undefined && { original: q.search.query }),
+    },
+  ],
+  node: null,
+  groups: null,
+});
 const AUTO = { w: 12, h: 6 };
 
 export interface DashboardTranslation {
@@ -25,7 +47,8 @@ export interface DashboardTranslation {
   findings: Finding[];
 }
 
-export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTranslation {
+/** `translateLog` (T12) is optional: without it, log queries fail closed as before. */
+export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: TranslateLog): DashboardTranslation {
   const dashItem = `dd-dash-${d.source.id}`;
   const findings: Finding[] = [];
 
@@ -60,7 +83,11 @@ export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTrans
     return k;
   };
   const convert = (p: Panel, itemId: string): { key: string; layout: Layout | null } => {
-    const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId);
+    // Scalar widgets (stat, toplist, table) evaluate a log query over the whole timeframe in Datadog; T12's
+    // per-interval increase(...[$__interval]) would show a per-bucket value. Until the window form lands
+    // (log.scalar.window, PR #26), their log queries fail closed (Ali's review of #19).
+    const logFor = translateLog && SCALAR_KINDS.has(p.kind) ? scalarLogPending : translateLog;
+    const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId, logFor);
     const r = toPersesPanel(p, itemId, q);
     const k = key(p.id);
     panels[k] = r.panel;
