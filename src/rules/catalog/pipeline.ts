@@ -73,7 +73,11 @@ export const PIPELINE_RULES: RuleDef[] = [
   log("log.monitor.formula", 175, "bounded", 'formula("...").last(W) over log queries', "the formula over windowed counts", { assumptions: ["A.log-count"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
   // Still planned: not in T12 yet.
   logs("logs.rate", 200, "bounded", "log count shown as a rate", 'sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m]))', { epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["proof:T3"] }),
-  logs("logs.measure", 220, "manual", "avg / sum / percentile over @attr", "no output: dash0.logs only counts", { findingCode: "query.datasource" }),
+  log("log.or.cross-key", 185, "manual", "OR across different keys (or with free text) beyond what inclusion-exclusion covers: more than 3 branches, or outside a count", "no output: not a matcher set"),
+  log("log.measure", 190, "manual", "avg / sum / min / max / percentile of a log measure (@attr)", "no output: dash0.logs only counts log records", {
+    note: "Ali is checking whether Dash0's signal-to-metrics can derive such a metric without guessing (hub #285).",
+  }),
+  log("log.monitor.shape", 195, "manual", "log monitor or log formula monitor whose query shape has no rule", "no output; the original monitor query is kept"),
   logs("logs.stream", 230, "manual", "log_stream / list_stream widget", "placeholder until the LogTable schema comes from T0"),
   logs("logs.unparsed", 999, "manual", "log search the log-search parser does not accept", "no output; original kept", { fallback: true, findingCode: "query.parse_error" }),
 

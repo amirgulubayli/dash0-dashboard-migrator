@@ -7,7 +7,7 @@ import { resolveCode, rule } from "../../src/rules/index.js";
 import { translateQuery } from "../../src/translate/query/index.js";
 
 describe("finding codes resolve to catalog rules", () => {
-  it("the 14 codes the corpus report could not resolve now resolve", () => {
+  it("the codes the corpus report could not resolve (hub #531, #554) now resolve", () => {
     for (const code of [
       "layout.clamped",
       "widget.toplist.unranked",
@@ -23,6 +23,9 @@ describe("finding codes resolve to catalog rules", () => {
       "fn.calendar_shift",
       "fn.sum",
       "source.unreadable",
+      "log.measure",
+      "log.or.cross-key",
+      "log.monitor.shape",
     ])
       expect(resolveCode(code), code).toBeDefined();
   });
