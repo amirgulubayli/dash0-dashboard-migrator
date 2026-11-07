@@ -1,0 +1,290 @@
+[
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-0",
+    "kind": "panel",
+    "title": "Rows fetched / returned / inserted / updated (per sec)",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg (avg_over_time({otel_metric_name=\"postgresql.rows_fetched\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"postgresql.rows_returned\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"postgresql.rows_inserted\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"postgresql.rows_updated\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-1",
+    "kind": "panel",
+    "title": "Connections",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.connections\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-2",
+    "kind": "panel",
+    "title": "Inserts / updates / deletes (per sec)",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg (avg_over_time({otel_metric_name=\"postgresql.rows_inserted\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"postgresql.rows_deleted\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"postgresql.rows_updated\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.default-avg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-3",
+    "kind": "panel",
+    "title": "Disk utilization (%)",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg (avg_over_time({otel_metric_name=\"system.io.util\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.unmapped",
+      "time.rollup.default",
+      "space.agg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-gauge",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-4",
+    "kind": "panel",
+    "title": "System load",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg (avg_over_time({otel_metric_name=\"system.load.1\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.load.5\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.load.15\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.unmapped",
+      "time.rollup.default",
+      "space.default-avg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-gauge",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-5",
+    "kind": "panel",
+    "title": "CPU usage (%)",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.idle\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.system\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.iowait\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.user\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.stolen\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.guest\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.unmapped",
+      "time.rollup.default",
+      "space.default-avg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-gauge",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-6",
+    "kind": "panel",
+    "title": "I/O wait (%)",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "max (avg_over_time({otel_metric_name=\"system.cpu.iowait\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.unmapped",
+      "time.rollup.default",
+      "space.agg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-gauge",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-7",
+    "kind": "panel",
+    "title": "System memory",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "sum (avg_over_time({otel_metric_name=\"system.mem.usable\"}[$__interval]))",
+      "sum (avg_over_time({otel_metric_name=\"system.mem.total\"}[$__interval])) - sum (avg_over_time({otel_metric_name=\"system.mem.usable\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.unmapped",
+      "time.rollup.default",
+      "space.agg",
+      "arith.same-groups",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-gauge",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_dashboard/w-8",
+    "kind": "panel",
+    "title": "Network traffic (per sec)",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "sum (avg_over_time({otel_metric_name=\"system.net.bytes_rcvd\"}[$__interval]))",
+      "sum (avg_over_time({otel_metric_name=\"system.net.bytes_sent\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  }
+]
