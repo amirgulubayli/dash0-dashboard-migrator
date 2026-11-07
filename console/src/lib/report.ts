@@ -68,7 +68,7 @@ export interface Report {
 
 export type ParseResult = { ok: true; report: Report } | { ok: false; error: string };
 
-type Obj = { [K in "claim" | "condition" | "id" | "status" | "kind" | "title" | "widget_type" | "group" | "layout" | "target_layout" | "source_path" | "source_queries" | "source_formula" | "promql" | "target_panel" | "reason_codes" | "notes" | "thresholds" | "verification" | "dash0" | "x" | "y" | "w" | "h" | "schema_valid" | "promql_valid" | "imported" | "returns_data" | "numeric_check" | "asset_id" | "url" | "import_status" | "degraded" | "failed" | "summary" | "metrics" | "numerical" | "passed" | "mapped" | "total" | "no_equivalent" | "run" | "tool_version" | "source" | "source_commit" | "source_sha256" | "mapping_version" | "rule_version" | "items" | "diagnostics" | "schema_version" | "SAMPLE" | "exact" | "approximate" | "unsupported" | "no_data" | "widgets" | "monitors"]?: unknown };
+type Obj = { [K in "claim" | "condition" | "id" | "status" | "kind" | "title" | "widget_type" | "group" | "layout" | "target_layout" | "source_path" | "source_queries" | "source_formula" | "promql" | "target_panel" | "reason_codes" | "notes" | "thresholds" | "verification" | "dash0" | "x" | "y" | "w" | "h" | "schema_valid" | "promql_valid" | "imported" | "returns_data" | "numeric_check" | "asset_id" | "url" | "import_status" | "degraded" | "failed" | "summary" | "metrics" | "numerical" | "passed" | "mapped" | "total" | "no_equivalent" | "run" | "tool_version" | "source" | "source_commit" | "source_sha256" | "mapping_version" | "rule_version" | "items" | "diagnostics" | "schema_version" | "SAMPLE" | "exact" | "approximate" | "unsupported" | "no_data" | "widgets" | "monitors" | "certificate" | "checks" | "parses" | "importedReadBack" | "target" | "dash0Id" | "action" | "byKind" | "panel" | "alert" | "version" | "tool" | "inputHash" | "mappingFiles" | "schema" | "assumptions" | "findings" | "exact-under" | "bounded" | "manual"]?: unknown };
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string | undefined =>
   typeof v === "string" ? v : typeof v === "number" ? String(v) : undefined;
@@ -86,6 +86,8 @@ function box(v: unknown): GridBox | null {
 
 function inferKind(id: string, v: unknown): Kind {
   if (v === "group" || v === "widget" || v === "monitor") return v;
+  if (v === "panel") return "widget"; // CLI item kind
+  if (v === "alert") return "monitor"; // CLI item kind
   if (id.startsWith("group")) return "group";
   if (id.startsWith("monitor")) return "monitor";
   return "widget";
@@ -105,15 +107,44 @@ function statusFromClaim(claim: ReportItem["claim"]): Status | undefined {
   return undefined;
 }
 
+// The CLI writes its claim vocabulary in `status`. "exact" is also a status, so it is not a claim here.
+const CLI_CLAIMS = ["exact-under", "bounded", "manual"] as const;
+function claimInStatus(status: string | undefined): ReportItem["claim"] {
+  return (CLI_CLAIMS as readonly string[]).includes(status ?? "") ? (status as ReportItem["claim"]) : undefined;
+}
+
+// Human text for an exact-under claim, from the assumption sentences the CLI attached to the item's findings.
+function conditionFromFindings(v: Obj): string | undefined {
+  if (!Array.isArray(v.findings)) return undefined;
+  const texts: string[] = [];
+  for (const f of v.findings) {
+    if (!isObj(f) || !Array.isArray(f.assumptions)) continue;
+    for (const a of f.assumptions) {
+      const t = str(a);
+      if (t && !/^A\./.test(t) && !texts.includes(t)) texts.push(t);
+    }
+  }
+  // First assumption plus a count: the full list is on the item's findings and would swamp the verdict box.
+  return texts.length ? (texts.length > 1 ? `${texts[0]} (+${texts.length - 1} more assumptions)` : texts[0]) : undefined;
+}
+
 function parseItem(v: Obj, id: string, status: string): ReportItem {
+  const claim = claimInStatus(str(v.status)) ?? parseClaim(v.claim);
+  const promql = strArr(v.promql);
+  const cert = isObj(v.certificate) && isObj(v.certificate.checks) ? v.certificate.checks : undefined;
   const ver = isObj(v.verification) ? v.verification : undefined;
+  // certificate.checks.parses is "every PromQL parses"; it is vacuously true with no PromQL, so only report it when there is some.
+  const certVer: Verification | undefined = cert
+    ? { promql_valid: promql.length ? boolOrNull(cert.parses) : null, imported: boolOrNull(cert.importedReadBack) }
+    : undefined;
+  const tg = isObj(v.target) ? v.target : undefined;
   const d0 = isObj(v.dash0) ? v.dash0 : undefined;
   const th = isObj(v.thresholds) ? v.thresholds : undefined;
   return {
     id,
     status,
-    claim: parseClaim(v.claim),
-    condition: str(v.condition),
+    claim,
+    condition: str(v.condition) ?? (claim === "exact-under" ? conditionFromFindings(v) : undefined),
     kind: inferKind(id, v.kind),
     title: str(v.title),
     widget_type: str(v.widget_type),
@@ -123,7 +154,7 @@ function parseItem(v: Obj, id: string, status: string): ReportItem {
     source_path: str(v.source_path),
     source_queries: strArr(v.source_queries),
     source_formula: strArr(v.source_formula),
-    promql: strArr(v.promql),
+    promql,
     target_panel: str(v.target_panel),
     reason_codes: strArr(v.reason_codes),
     notes: str(v.notes) || undefined,
@@ -136,8 +167,8 @@ function parseItem(v: Obj, id: string, status: string): ReportItem {
           returns_data: boolOrNull(ver.returns_data),
           numeric_check: ver.numeric_check,
         }
-      : undefined,
-    dash0: d0 ? { asset_id: str(d0.asset_id) ?? null, url: str(d0.url) ?? null, import_status: str(d0.import_status) ?? null } : undefined,
+      : certVer,
+    dash0: !d0 && tg ? { asset_id: str(tg.dash0Id) ?? null, url: null, import_status: str(tg.action) ?? null } : d0 ? { asset_id: str(d0.asset_id) ?? null, url: str(d0.url) ?? null, import_status: str(d0.import_status) ?? null } : undefined,
     raw: v,
   };
 }
@@ -161,6 +192,24 @@ function countsFrom(v: unknown, fallback: Counts): Counts {
   return c;
 }
 
+// The CLI counts per kind in summary.byKind.{panel,alert}, keyed by its claim words. Fold them into the console's statuses.
+const CLI_COUNT_KEYS: Record<string, Status> = {
+  exact: "exact", "exact-under": "exact", bounded: "approximate", manual: "unsupported",
+  unsupported: "unsupported", approximate: "approximate", no_data: "no_data", failed: "failed",
+};
+function countsFromByKind(v: unknown, fallback: Counts): Counts {
+  if (!isObj(v)) return fallback;
+  const c = emptyCounts();
+  for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+    const count = num(n);
+    if (count === undefined) continue;
+    c.total += count;
+    const st = CLI_COUNT_KEYS[k];
+    if (st) c[st] += count;
+  }
+  return c;
+}
+
 function countVer(items: ReportItem[], key: "imported" | "returns_data"): number | null {
   const vals = items.map((i) => i.verification?.[key]).filter((x) => typeof x === "boolean");
   return vals.length ? vals.filter(Boolean).length : null;
@@ -180,7 +229,8 @@ export function parseReport(text: string): ParseResult {
   const items: ReportItem[] = [];
   raw.items.forEach((v, idx) => {
     const id = isObj(v) ? str(v.id) : undefined;
-    const status = isObj(v) ? str(v.status) || statusFromClaim(parseClaim(v.claim)) : undefined;
+    const rawStatus = isObj(v) ? str(v.status) : undefined;
+    const status = isObj(v) ? statusFromClaim(claimInStatus(rawStatus)) || rawStatus || statusFromClaim(parseClaim(v.claim)) : undefined;
     if (!isObj(v) || !id || !status) {
       warnings.push(`Item ${idx + 1} skipped: missing id or status.`);
       return;
@@ -199,24 +249,27 @@ export function parseReport(text: string): ParseResult {
     : null;
 
   const run = isObj(raw.run) ? raw.run : {};
+  const byKind = s && isObj(s.byKind) ? s.byKind : undefined;
+  const mappingFiles = Array.isArray(run.mappingFiles) ? strArr(run.mappingFiles).join(", ") : undefined;
+  const toolVersion = str(run.tool_version) ?? (str(run.version) ? `${str(run.tool) ?? "tool"} ${str(run.version)}` : undefined);
   return {
     ok: true,
     report: {
-      schema_version: str(raw.schema_version),
+      schema_version: str(raw.schema_version) ?? str(raw.schema),
       run: {
-        tool_version: str(run.tool_version),
+        tool_version: toolVersion,
         source: str(run.source),
         source_commit: str(run.source_commit),
-        source_sha256: str(run.source_sha256),
-        mapping_version: str(run.mapping_version),
+        source_sha256: str(run.source_sha256) ?? str(run.inputHash),
+        mapping_version: str(run.mapping_version) ?? (mappingFiles || undefined),
         rule_version: str(run.rule_version),
       },
       sampleNotice: str(raw.SAMPLE),
       items,
       summary: {
-        widgets: countsFrom(s?.widgets, countItems(widgets)),
+        widgets: s?.widgets ? countsFrom(s.widgets, countItems(widgets)) : countsFromByKind(byKind?.panel, countItems(widgets)),
         groups: countItems(groups),
-        monitors: countsFrom(s?.monitors, countItems(monitors)),
+        monitors: s?.monitors ? countsFrom(s.monitors, countItems(monitors)) : countsFromByKind(byKind?.alert, countItems(monitors)),
         metrics: metrics
           ? { mapped: num(metrics.mapped), total: num(metrics.total), no_equivalent: num(metrics.no_equivalent) }
           : undefined,
