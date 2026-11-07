@@ -7,7 +7,7 @@ import { PlanSummary, ExportButton, ReviewerInput } from "@/components/ImportPla
 import { useReport } from "@/lib/report-store";
 import { metaFor } from "@/lib/status";
 import { Button } from "@/components/ui/button";
-import { STATUSES, widgetBreakdown } from "@/lib/report";
+import { STATUSES, safeHttpsUrl, widgetBreakdown } from "@/lib/report";
 import { importPlan } from "@/lib/review";
 import { metricWidgetsLine, textAndLogsLine } from "@/lib/presentation";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ function MapPage() {
   const { report, selectedId } = useReport();
   const counts = widgetBreakdown(report.items);
   const pending = importPlan(report, useReport().review).pending;
-  const liveUrl = report.items.find((i) => i.dash0?.url)?.dash0?.url;
+  const liveUrl = report.items.map((i) => safeHttpsUrl(i.dash0?.url)).find(Boolean);
   const selected =
     report.items.find((i) => i.id === selectedId) ??
     report.items.find((i) => i.kind === "monitor") ??

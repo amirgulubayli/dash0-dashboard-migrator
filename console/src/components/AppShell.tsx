@@ -50,7 +50,7 @@ function ThemeToggle() {
 }
 
 function ReportLoader() {
-  const { loadText, resetToSample, isSample, sourceName, sha, loadError } = useReport();
+  const { loadText, resetToSample, isSample, sourceName, sha, loadError, report } = useReport();
   const input = useRef<HTMLInputElement>(null);
   return (
     <div className="space-y-1">
@@ -93,6 +93,13 @@ function ReportLoader() {
         </div>
       </div>
       {loadError && <p className="px-3 pt-1 text-xs text-destructive">{loadError}</p>}
+      {report.warnings.length > 0 && (
+        <div role="status" className="px-3 pt-1 text-xs text-amber-700 dark:text-amber-400">
+          {report.warnings.map((w) => (
+            <p key={w}>{w}</p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
