@@ -28,6 +28,7 @@ Choices worth knowing:
 - **Regexes are anchored** (`^…$`), because Dash0 matches them unanchored. That includes template variables: `host_name=~"^($host)$"`.
 - **`rate()`/`increase()` use `$__rate_interval`** on dashboards, so a short `$__interval` can't leave them with fewer than two samples.
 - **Monitors use the subquery form** that the reference evaluator showed is exact (maths.md §5): `fn_over_time((Q on 1m buckets)[W:1m]) > $__threshold`.
+- **`per_second`/`per_minute`/`per_hour`** have a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total: `60 * sum(rate(x[$__rate_interval]))` (bounded). **`diff(q)`** becomes `q - (q offset interval)`, the structural form of "each point minus the previous one" (exact-under alignment and no gaps).
 - **`<` and `<=` monitors are negated** (maths.md T7). Thresholds are negated too, and `negated: true` is set.
 
 ## Fails closed

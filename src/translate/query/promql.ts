@@ -11,7 +11,7 @@ export interface PMatcher {
 }
 
 export type PNode =
-  | { k: "selector"; matchers: PMatcher[]; range?: Duration; offset?: number }
+  | { k: "selector"; matchers: PMatcher[]; range?: Duration; offset?: Duration }
   | { k: "call"; fn: string; args: PNode[] }
   | { k: "agg"; op: "avg" | "sum" | "min" | "max" | "count"; by: string[]; expr: PNode }
   | { k: "binary"; op: "+" | "-" | "*" | "/" | ">" | ">=" | "<" | "<="; lhs: PNode; rhs: PNode }
@@ -73,7 +73,7 @@ export function render(n: PNode): string {
         .join(", ");
       let s = `{${m}}`;
       if (n.range !== undefined) s += `[${formatDuration(n.range)}]`;
-      if (n.offset) s += ` offset ${formatDuration(n.offset)}`;
+      if (n.offset !== undefined && n.offset !== 0) s += ` offset ${formatDuration(n.offset)}`;
       return s;
     }
     case "call":

@@ -17,7 +17,14 @@ interface Lowered {
   node: PNode;
   /** Output labels after space aggregation (sorted), or null for a scalar/number. */
   groups: string[] | null;
+  /**
+   * The same query with its time aggregation replaced by rate() over the OTel counter. Only set for a sum/avg over a
+   * Datadog gauge that holds a running total (ddKind gauge, OTel counter), which is what per_second() and friends need.
+   */
+  rateForm?: PNode;
 }
+
+const PER_UNIT: Record<string, number> = { per_second: 1, per_minute: 60, per_hour: 3600 };
 
 class Lowerer {
   rules: RuleId[] = [];
@@ -155,6 +162,33 @@ class Lowerer {
       const x = this.expr(exprArg(0), env);
       return { node: { k: "call", fn: e.name, args: [x.node, { k: "num", value: numArg(1) }] }, groups: x.groups };
     }
+    // per_second/per_minute/per_hour: the change per unit of a running total, i.e. k * rate() over the counter.
+    if (PER_UNIT[e.name] !== undefined && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      if (!x.rateForm)
+        this.manual(
+          "fn.per_unit.kind",
+          `${e.name}() has a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total`,
+        );
+      this.use("fn.per_unit.counter");
+      const k = PER_UNIT[e.name]!;
+      const node: PNode = k === 1 ? x.rateForm : { k: "binary", op: "*", lhs: { k: "num", value: k }, rhs: x.rateForm };
+      return { node, groups: x.groups };
+    }
+
+    // diff: each point minus the previous one, one rollup interval earlier.
+    if (e.name === "diff" && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      const step = this.interval;
+      const shifted = mapSelectors(x.node, (sel) => {
+        if (sel.offset === undefined || sel.offset === 0) return { ...sel, offset: step };
+        if (typeof sel.offset === "number" && typeof step === "number") return { ...sel, offset: sel.offset + step };
+        this.manual("fn.diff.offset", "diff() over a query that already has a variable offset");
+      });
+      this.use("fn.diff");
+      return { node: { k: "binary", op: "-", lhs: x.node, rhs: shifted }, groups: x.groups };
+    }
+
     let shift: number | undefined;
     if (e.name === "timeshift" && e.args.length === 2) shift = -numArg(1);
     else if (TIMESHIFT_FNS[e.name] && e.args.length === 1) shift = TIMESHIFT_FNS[e.name];
@@ -162,7 +196,10 @@ class Lowerer {
       if (!(shift > 0) || !Number.isInteger(shift)) this.manual("fn.timeshift.future", `${e.name}(): only whole-second shifts into the past are supported`);
       this.use("map.timeshift");
       const x = this.expr(exprArg(0), env);
-      const node = mapSelectors(x.node, (s) => ({ ...s, offset: (s.offset ?? 0) + shift! }));
+      const node = mapSelectors(x.node, (s) => {
+        if (typeof s.offset === "string") this.manual("fn.timeshift.offset", `${e.name}() over a query that already has a variable offset`);
+        return { ...s, offset: (s.offset ?? 0) + shift! };
+      });
       return { node, groups: x.groups };
     }
     this.manual(`fn.${e.name}`, `no exact rule for Datadog function ${e.name}()`);
@@ -282,7 +319,15 @@ class Lowerer {
     } else if (!SPACE_AGGS.has(agg)) this.manual("space.agg", `space aggregator ${agg}: needs a histogram mapping`);
     else this.use("space.agg");
     const by = [...new Set(m.groupBy.map((t) => this.label(t)))].sort();
-    return { node: { k: "agg", op: agg as "avg", by, expr: inner }, groups: by };
+    const node: PNode = { k: "agg", op: agg as "avg", by, expr: inner };
+    // For per_second() and friends: the derivative of a sum/avg of running totals is the sum/avg of their rates.
+    const runningTotal = mapping.ddKind === "gauge" && mapping.kind === "counter" && !counterMode && !explicitRollup;
+    if (runningTotal && (agg === "sum" || agg === "avg")) {
+      const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
+      const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
+      return { node, groups: by, rateForm };
+    }
+    return { node, groups: by };
   }
 
   // ---------- scope -> matchers ----------

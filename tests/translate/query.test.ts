@@ -19,6 +19,9 @@ const METRICS: Record<string, MetricMapping> = {
   "redis.dd.gauge_on_counter": { otel: "redis.connections.received", kind: "counter", ddKind: "gauge", status: "exact" },
   "redis.dd.approx": { otel: "redis.memory.rss", kind: "gauge", ddKind: "gauge", status: "approximate", note: "RSS vs used" },
   "redis.dd.count": { otel: "redis.keys.evicted", kind: "counter", ddKind: "count", status: "exact" },
+  // Datadog stores these running totals as gauges; the OTel receiver emits counters (as in redisdb.yaml).
+  "redis.keys.evicted": { otel: "redis.keys.evicted", kind: "counter", ddKind: "gauge", status: "exact" },
+  "redis.net.rejected": { otel: "redis.connections.rejected", kind: "counter", ddKind: "gauge", status: "exact" },
 };
 /** Mirrors T1's metricAvailability(): known to the table but not usable. */
 const AVAILABILITY: Record<string, MetricAvailability> = {
@@ -83,6 +86,10 @@ const CASES: [string, string, string, string][] = [
   ["arith.same-groups", "avg:redis.mem.used{*} by {host} - avg:redis.mem.maxmemory{*} by {host}", `avg by (host_name) (avg_over_time(${SEL("redis.memory.used")}[$__interval])) - avg by (host_name) (avg_over_time(${SEL("redis.maxmemory")}[$__interval]))`, "exact-under"],
   ["arith.div", "avg:redis.mem.used{*} / avg:redis.mem.maxmemory{*}", `avg (avg_over_time(${SEL("redis.memory.used")}[$__interval])) / avg (avg_over_time(${SEL("redis.maxmemory")}[$__interval]))`, "exact-under"],
   ["label.default", "avg:system.cpu.user{region:eu-1}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', region="eu-1"')}[$__interval]))`, "exact-under"],
+  ["fn.per_unit.counter", "per_minute(sum:redis.keys.evicted{*} by {host})", `60 * sum by (host_name) (rate(${SEL("redis.keys.evicted")}[$__rate_interval]))`, "bounded"],
+  ["fn.per_unit.counter", "per_second(avg:redis.keys.evicted{*})", `avg (rate(${SEL("redis.keys.evicted")}[$__rate_interval]))`, "bounded"],
+  ["fn.per_unit.counter", "per_hour(sum:redis.keys.evicted{*})", `3600 * sum (rate(${SEL("redis.keys.evicted")}[$__rate_interval]))`, "bounded"],
+  ["fn.diff", "diff(sum:redis.net.rejected{*})", `sum (avg_over_time(${SEL("redis.connections.rejected")}[$__interval])) - sum (avg_over_time(${SEL("redis.connections.rejected")}[$__interval] offset $__interval))`, "exact-under"],
   ["arith.neg", "-avg:system.cpu.user{*}", `-avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   // T1 mapping fields (ddKind, labels, status)
   ["select.metric.mapped", "avg:redis.net.clients{*}", `avg (avg_over_time(${SEL("redis.clients.connected")}[$__interval]))`, "exact-under"],
@@ -206,7 +213,8 @@ describe("fail closed: manual, no PromQL, original kept", () => {
   for (const [code, src] of [
     ["fn.anomalies", "anomalies(avg:system.cpu.user{*}, 'basic', 2)"],
     ["fn.top", "top(avg:system.cpu.user{*} by {host}, 10, 'mean', 'desc')"],
-    ["fn.per_second", "per_second(sum:nginx.requests{*})"],
+    ["time.kind", "per_second(sum:nginx.requests{*})"],
+    ["fn.diff.offset", "diff(timeshift(avg:system.cpu.user{*}, -3600))"],
     ["time.fill", "avg:system.cpu.user{*}.fill(zero)"],
     ["time.kind", "sum:nginx.requests{*}"],
     ["time.kind", "avg:http.duration{*}"],
@@ -223,6 +231,10 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["metric.derived", "avg:redis.dd.derived{*}"],
     ["metric.needs_transform", "avg:redis.dd.scaled{*}"],
     ["arith.div-zero", "avg:system.cpu.user{*} / 0"],
+    ["fn.per_unit.kind", "per_minute(avg:system.cpu.user{*})"],
+    ["fn.per_unit.kind", "per_minute(max:redis.keys.evicted{*})"],
+    ["fn.per_unit.kind", "per_minute(sum:redis.keys.evicted{*}.rollup(sum, 60))"],
+    ["fn.per_unit.kind", "per_second(sum:nginx.requests{*}.as_count())"],
   ] as const) {
     it(`${code}: ${src}`, () => {
       const r = q(src);
@@ -293,5 +305,13 @@ describe("coverage of the rule table", () => {
   it("every non-manual rule is exercised by a test above", () => {
     const missing = Object.keys(RULES).filter((r) => !used.has(r));
     expect(missing).toEqual([]);
+  });
+});
+
+describe("diff with a fixed interval", () => {
+  it("adds the step to an existing fixed offset (monitors, fixed-interval dashboards)", () => {
+    expect(q("diff(timeshift(avg:system.cpu.user{*}, -3600))", { ...CTX, interval: 60 }).promql).toBe(
+      `avg (avg_over_time(${SEL("system.cpu.utilization")}[1m] offset 1h)) - avg (avg_over_time(${SEL("system.cpu.utilization")}[1m] offset 61m))`,
+    );
   });
 });
