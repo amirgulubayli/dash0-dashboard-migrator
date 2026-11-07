@@ -1,5 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { mkdtempSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate } from "../../src/pipeline/migrate.js";
@@ -76,8 +77,20 @@ describe("serve", async () => {
     expect(data.at(-1)).toMatchObject({ type: "run.done", say: expect.stringMatching(/^Finished\./) });
     expect(text).toContain("event: end");
   });
-  it("serves the pinned ElevenLabs browser SDK locally", async () => {
+  // @elevenlabs/client is an optional dependency (voice narrator only): skipped when it isn't installed.
+  const hasVoice = (() => {
+    try {
+      createRequire(import.meta.url).resolve("@elevenlabs/client");
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  it.skipIf(!hasVoice)("serves the pinned ElevenLabs browser SDK locally", async () => {
     const js = await (await get("/vendor/elevenlabs.js")).text();
     expect(js.startsWith("var ElevenLabsClient")).toBe(true);
+  });
+  it.skipIf(hasVoice)("without the optional voice SDK, /vendor/elevenlabs.js is a 404, not a crash", async () => {
+    expect((await get("/vendor/elevenlabs.js")).status).toBe(404);
   });
 });
