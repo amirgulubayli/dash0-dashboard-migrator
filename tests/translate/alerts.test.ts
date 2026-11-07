@@ -55,10 +55,11 @@ describe("T6: classify and parse", () => {
 describe("T6: the check rule", () => {
   const base = monitor({ query: "avg(last_5m):avg:redis.mem.used{*} > 90", thresholds: { critical: 90, warning: 70 }, name: "[Redis] High memory" });
 
-  it("has the canonical shape: id, $__threshold, {failed, degraded}, defaults, disabled", () => {
+  it("has the canonical shape: no id, $__threshold, {failed, degraded}, defaults, disabled; origin dd-monitor-<id>", () => {
     const r = translateAlert(base, { translateMonitor: T() });
+    expect(r.origin).toBe("dd-monitor-12345");
+    expect(r.rule).not.toHaveProperty("id");
     expect(r.rule).toEqual({
-      id: "dd-monitor-12345",
       name: "[Redis] High memory",
       expression: "avg_over_time(x[5m:1m]) > $__threshold",
       thresholds: { degraded: 70, failed: 90 },
@@ -69,7 +70,7 @@ describe("T6: the check rule", () => {
       annotations: { description: "", summary: "[Redis] High memory" },
       enabled: false,
     });
-    expect(Object.keys(r.rule!)).toEqual(["id", "name", "expression", "thresholds", "interval", "for", "keep_firing_for", "labels", "annotations", "enabled"]);
+    expect(Object.keys(r.rule!)).toEqual(["name", "expression", "thresholds", "interval", "for", "keep_firing_for", "labels", "annotations", "enabled"]);
     expect(r.rules).toEqual(expect.arrayContaining(["classify.monitor.metric", "monitor.window", "monitor.cmp.gt", "alert.threshold.both", "alert.id", "alert.defaults", "emit.rules-disabled"]));
     expect(r.status).toBe("exact-under");
     expect(r.assumptions).toEqual(["A.boundary", "A.eval-1m", "A.monitor-rollup-60s"]);
@@ -239,7 +240,8 @@ describe("T6 as T8's AlertConverter", () => {
     const out = convert(monitor({ query: "avg(last_5m):avg:foo{*} > 1", thresholds: { critical: 1 }, message: "on {{host.name}}" }), ctx);
     expect(seenCtx).toEqual([ctx]);
     expect(out.promql).toBe(out.rule!.expression);
-    expect(Object.keys(out).sort()).toEqual(["assumptions", "channels", "epsilon", "findings", "promql", "rule", "rules", "status"]);
+    expect(Object.keys(out).sort()).toEqual(["assumptions", "channels", "epsilon", "findings", "origin", "promql", "rule", "rules", "status"]);
+    expect(out.origin).toBe("dd-monitor-12345");
     expect(out.rule!.annotations!.description).toBe("on {{ $labels.host_name }}");
   });
 });

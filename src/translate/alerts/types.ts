@@ -3,11 +3,11 @@ import type { Finding, Status } from "../../ir/index.js";
 import type { MonitorQuery } from "../../parse/index.js";
 
 /**
- * Body of POST /api/import/check-rule. Structurally identical to T7's PrometheusAlertRule
- * (src/targets/dash0/schema.ts, PR #5); switch to that import once PR #5 merges.
+ * Body of a Dash0 check rule. Structurally a subset of T7's PrometheusAlertRule (src/targets/dash0/schema.ts, PR #5).
+ * It has no `id`: Dash0 rejects a body that carries one (400, docs/research/dash0.md "Idempotent imports").
+ * The rule is addressed by its origin instead (AlertTranslation.origin): PUT /api/alerting/check-rules/{origin} upserts.
  */
 export interface CheckRule {
-  id?: string;
   name: string;
   expression: string;
   thresholds?: { degraded?: number; failed?: number };
@@ -52,8 +52,10 @@ export interface AlertDeps {
 }
 
 export interface AlertTranslation {
-  /** "dd-monitor-<id>": the check rule id and the report item id. */
+  /** "dd-monitor-<id>": the report item id. */
   itemId: string;
+  /** Dash0 origin of the check rule ("dd-monitor-<id>", same as itemId). T7 imports with PUT /api/alerting/check-rules/{origin}, so re-runs overwrite. */
+  origin: string;
   status: Status;
   /** null when the monitor is manual (unless keepManual). Canonical key order, labels sorted. */
   rule: CheckRule | null;

@@ -23,7 +23,8 @@ describe.skipIf(!ready)("T6 + T4 end to end", async () => {
     const { alert } = fixtureMonitors().find((f) => f.name === "redisdb__high_mem.json")!;
     const r = translateAlert(alert, deps);
     expect(r.rule).not.toBeNull();
-    expect(r.rule!.id).toBe("dd-monitor-redisdb-high-mem");
+    expect(r.origin).toBe("dd-monitor-redisdb-high-mem");
+    expect(r.rule).not.toHaveProperty("id");
     expect(r.rule!.thresholds).toEqual({ degraded: 70, failed: 90 });
     expect(r.rule!.expression).toMatch(/^avg_over_time\(.*\[5m:1m\]\) > \$__threshold$/);
     expect(r.rule!.expression).toContain('otel_metric_name="redis.memory.used"');

@@ -15,6 +15,8 @@ export interface ConverterContext {
 /** T8's AlertConversion, plus what T6 adds (epsilon, channels). */
 export interface AlertConversion {
   rule: CheckRule | null;
+  /** Dash0 origin for PUT /api/alerting/check-rules/{origin} (the body has no id; Dash0 rejects one). */
+  origin: string;
   status: Status;
   promql: string | null;
   rules: string[];
@@ -35,6 +37,7 @@ export function makeAlertConverter<C extends ConverterContext>(translateMonitor:
     });
     return {
       rule: r.rule,
+      origin: r.origin,
       status: r.status,
       promql: r.rule?.expression ?? null,
       rules: r.rules,

@@ -24,7 +24,7 @@ export const ALERT_RULES: RuleDef[] = [
   }),
 
   // ---------- alert: identity and thresholds ----------
-  alert("alert.id", 10, "exact", "monitor id", 'id "dd-monitor-<id>" (lowercased, [^a-z0-9-] → "-", T7 id rule), label dd_monitor_id="<id>" (re-runs overwrite, D-31)'),
+  alert("alert.id", 10, "exact", "monitor id", 'origin "dd-monitor-<id>" (lowercased, [^a-z0-9-] → "-"), imported with PUT /api/alerting/check-rules/{origin} so re-runs overwrite; no id in the body (Dash0 rejects it, live 2026-11-07); label dd_monitor_id="<id>"'),
   alert("alert.name", 20, "exact", "monitor name", "name as is (template tokens in names are not expanded)"),
   alert("alert.threshold.both", 30, "exact", "critical (from the query) and warning thresholds", "thresholds {failed: critical, degraded: warning}"),
   alert("alert.threshold.critical", 40, "exact", "critical threshold only", "thresholds {failed: critical}"),

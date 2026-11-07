@@ -111,7 +111,7 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
     const c = compose(applied, extra);
     const status: Status = forcedManual ? "manual" : c.status;
     const emit = ruleOut && (status !== "manual" || deps.keepManual) ? ruleOut : null;
-    return { itemId, status, rule: emit, rules: c.rules, assumptions: c.assumptions, epsilon: c.epsilon, findings, channels };
+    return { itemId, origin: itemId, status, rule: emit, rules: c.rules, assumptions: c.assumptions, epsilon: c.epsilon, findings, channels };
   };
 
   // ---------- classify ----------
@@ -230,7 +230,6 @@ export function translateAlert(alert: Alert, deps: AlertDeps): AlertTranslation 
   apply("emit.rules-disabled");
 
   const ruleOut: CheckRule = {
-    id: itemId,
     name: alert.name,
     expression: mt.promql,
     thresholds: { ...(mt.thresholds.degraded !== undefined && { degraded: mt.thresholds.degraded }), ...(mt.thresholds.failed !== undefined && { failed: mt.thresholds.failed }) },
