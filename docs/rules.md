@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 68 | 42 | 17 | 37 | 164 |
-| planned | 18 | 22 | 2 | 14 | 56 |
+| implemented | 69 | 42 | 17 | 37 | 165 |
+| planned | 17 | 22 | 2 | 14 | 55 |
 
 ## Pipeline order
 
@@ -49,10 +49,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
 | 10 | `classify.monitor.metric` | monitor type "metric alert" or "query alert" | goes through the query stages and the monitor stage | exact | unit | — | T6 | implemented |
-| 20 | `classify.monitor.log` | monitor type "log alert" | goes through the logs stage (log.monitor.count) | exact | — | — | T6 | planned |
-| 999 (fallback) | `classify.monitor.other` | composite, service check, event, synthetics, SLO, process, log (until T12) and any other monitor | no rule; original kept | manual | unit | — | T6 | implemented |
+| 20 | `classify.monitor.log` | monitor type "log alert", with the log-attribute table loaded | goes through the logs stage (T12 translateLogMonitor: log.monitor.count, log.monitor.formula), then the shared alert and message stages | exact | unit | — | T6 | implemented |
+| 999 (fallback) | `classify.monitor.other` | composite, service check, event, synthetics, SLO, process, log alert without a log-attribute table, and any other monitor | no rule; original kept | manual | unit | — | T6 | implemented |
 
-- `classify.monitor.log`: Until T12 lands, log alerts take classify.monitor.other.
+- `classify.monitor.log`: Without mappings/log-attributes.yaml, log alerts take classify.monitor.other.
 
 ## Parse (`parse`)
 
@@ -266,7 +266,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 135 | `alert.opt.no_data` | notify_no_data + no_data_timeframe T, ungrouped monitor | companion rule absent_over_time(<selector>[T]), id "dd-monitor-<id>-nodata", behind a CLI flag | exact-under(A.boundary) | — | — | T6 | planned |
 | 140 | `alert.opt.no_data.report` | notify_no_data: true (with no_data_timeframe, timeout_h) or on_missing_data: show_no_data | main rule unchanged; the no-data alert is listed in the report | exact-under(A.no-data-manual) | unit | — | T6 | implemented |
 | 150 | `alert.opt.on_missing_data.resolve` | on_missing_data: resolve | expression unchanged: with no samples a PromQL comparison returns nothing, so the alert resolves | exact | unit | — | T6 | implemented |
-| 200 | `alert.opt.notification` | renotify_*, escalation_message, notify_audit, include_tags, notification_preset_name, notify_by, locked, restricted_roles, silenced | not emitted; listed in the report as manual setup | exact-under(A.notify-manual) | unit | — | T6 | implemented |
+| 200 | `alert.opt.notification` | renotify_*, escalation_message, notify_audit, include_tags, enable_logs_sample, groupby_simple_monitor, notification_preset_name, notify_by, locked, restricted_roles, silenced | not emitted; listed in the report as manual setup | exact-under(A.notify-manual) | unit | — | T6 | implemented |
 | 210 | `alert.priority` | priority n (1-5) | label priority="P<n>" | exact | unit | — | T6 | implemented |
 | 220 | `alert.tags` | tags k:v with valid label keys | labels {k: v}; a tag without ':' becomes {tag: "true"} | exact | unit | — | T6 | implemented |
 | 230 | `alert.tags.rename` | tags whose keys are not valid label names, clash with our labels, or repeat with several values | key sanitised to [a-zA-Z_][a-zA-Z0-9_]* (dd_tag_ prefix on a clash), repeated values joined with ',' | exact-under(A.label-rename) | unit | — | T6 | implemented |

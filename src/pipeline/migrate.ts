@@ -6,18 +6,23 @@ import { ingestDatadog, type IngestOptions } from "../sources/datadog/index.js";
 import { loadMappings, metricAvailability, metricLookup, tagLookup } from "../ir/index.js";
 import { translateQuery, type TranslateContext } from "../translate/query/index.js";
 import { toPerses, type DashboardTranslation, type TranslateExpr, type TranslateLog } from "../translate/dashboard/index.js";
-import { loadLogAttributes, translateLogQuery } from "../translate/logs/index.js";
+import { loadLogAttributes, translateLogMonitor, translateLogQuery, type LogAttributes } from "../translate/logs/index.js";
 import { existsSync } from "node:fs";
 import { canonicalJson, importAll, sha256, type Dash0Config, type DashboardDefinition, type Manifest, type PrometheusAlertRule } from "../targets/dash0/index.js";
 import { makeAlertConverter, type AlertConversion, type ConverterContext } from "../translate/alerts/index.js";
 import { translateMonitor } from "../translate/query/index.js";
 import type { Alert } from "../ir/index.js";
 
-/** Monitor -> check rule. Default: T6 (src/translate/alerts) over T4's translateMonitor. */
+/** Monitor -> check rule. Default: T6 (src/translate/alerts) over T4's translateMonitor, and T12's
+ *  translateLogMonitor for "log alert" monitors when the log-attribute table is loaded. */
 export type AlertConverter = (a: Alert, ctx: TranslateContext) => AlertConversion;
 type T6Context = TranslateContext & ConverterContext;
-const t6 = makeAlertConverter((mq, t, ctx: T6Context) => translateMonitor(mq, t, ctx));
-const defaultAlertConverter: AlertConverter = (a, ctx) => t6(a, ctx as T6Context);
+function defaultAlertConverter(attributes: LogAttributes | null): AlertConverter {
+  const t6 = makeAlertConverter((mq, t, ctx: T6Context) => translateMonitor(mq, t, ctx), {
+    ...(attributes && { translateLogMonitor: (q: string, t: { critical?: number; warning?: number; variables?: unknown[] }) => translateLogMonitor(q, t, { attributes }) }),
+  });
+  return (a, ctx) => t6(a, ctx as T6Context);
+}
 import { buildReport } from "../report/build.js";
 import type { Report } from "../report/types.js";
 
@@ -57,7 +62,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   const translateLog: TranslateLog | undefined = attributes ? (q, t) => translateLogQuery(q, { attributes, variables: t.variables, where: t.where }) : undefined;
 
   const dashboards = ingested.dashboards.map((d) => ({ source: d, out: toPerses(d, translate, translateLog) }));
-  const convert = o.alertConverter ?? defaultAlertConverter;
+  const convert = o.alertConverter ?? defaultAlertConverter(attributes);
   const alerts = ingested.alerts.map((alert) => ({ alert, conversion: convert(alert, base) }));
 
   let manifest: Manifest | null = null;

@@ -44,9 +44,18 @@ export interface MonitorTranslationLike {
 
 export type MonitorTranslator = (mq: MonitorQuery, thresholds: { critical?: number; warning?: number }) => MonitorTranslationLike;
 
+/** T12's translateLogMonitor result, as T6 uses it: the monitor shape plus the group-by labels. */
+export interface LogMonitorTranslationLike extends MonitorTranslationLike {
+  groups: string[] | null;
+}
+/** T12's translateLogMonitor with its context bound: (query, {critical, warning, variables}) => translation. */
+export type LogMonitorTranslator = (query: string, opts: { critical?: number; warning?: number; variables?: unknown[] }) => LogMonitorTranslationLike;
+
 export interface AlertDeps {
   /** T4's translateMonitor with the translate context already bound: (mq, t) => translateMonitor(mq, t, ctx). */
   translateMonitor: MonitorTranslator;
+  /** T12's log-monitor translator. Without it, "log alert" monitors stay manual (classify.monitor.other). */
+  translateLogMonitor?: LogMonitorTranslator;
   /** Datadog tag key -> PromQL label (T1's tagLookup). Unmapped keys are sanitised. */
   tag?: (ddTag: string) => string | undefined;
   /** Datadog notification handle ("@slack-ops") -> existing Dash0 notification channel id (parseChannelMap). */

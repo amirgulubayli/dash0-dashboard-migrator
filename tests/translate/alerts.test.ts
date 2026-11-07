@@ -4,6 +4,8 @@ import type { MonitorQuery } from "../../src/parse/index.js";
 import { CATALOG } from "../../src/rules/index.js";
 import { CHANNEL_ANNOTATION, checkRuleId, checkRuleUuid, fitTemplate, labelName, NAMESPACE_DD2DASH0, parseChannelMap, rewriteMessage, translateAlert, uuidv5, type MonitorTranslationLike } from "../../src/translate/alerts/index.js";
 import { fixtureMonitors, monitor } from "./alerts.helpers.js";
+import { join } from "node:path";
+import { loadLogAttributes, translateLogMonitor } from "../../src/translate/logs/index.js";
 
 /** Stands in for T4's translateMonitor: records what it was given and answers like T4 does for > and <. */
 function stubT4(over: Partial<MonitorTranslationLike> = {}) {
@@ -224,6 +226,9 @@ describe("T6: fixtures and the catalog", () => {
     for (const a of all) for (const id of translateAlert(a, { translateMonitor: s.fn, keepManual: true }).rules) used.add(id);
     const withChannels = monitor({ query: "avg(last_5m):avg:foo{*} > 1", thresholds: { critical: 1, warning: 0.5 }, message: "@slack-x {{#is_alert}}@pagerduty-db{{/is_alert}}{{#is_warning}}@slack-warn{{/is_warning}} " + "x".repeat(3000), name: "n".repeat(300) });
     for (const id of translateAlert(withChannels, { translateMonitor: s.fn, channels }).rules) used.add(id);
+    const attributes = loadLogAttributes(join(import.meta.dirname, "..", "..", "mappings", "log-attributes.yaml"));
+    const logAlert = monitor({ type: "log alert", query: 'logs("service:web").index("*").rollup("count").by("host").last("5m") > 1', thresholds: { critical: 1 } });
+    for (const id of translateAlert(logAlert, { translateMonitor: s.fn, translateLogMonitor: (q, t) => translateLogMonitor(q, t, { attributes }) }).rules) used.add(id);
     const ids = new Set(CATALOG.map((r) => r.id));
     for (const id of used) expect(ids.has(id), id).toBe(true);
     const t6 = CATALOG.filter((r) => r.owner === "T6" && r.state === "implemented").map((r) => r.id);
