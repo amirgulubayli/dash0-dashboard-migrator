@@ -71,13 +71,19 @@ describe("Redis overview -> Dash0", () => {
     expect(stats.length).toBeGreaterThan(0);
     for (const s of stats) expect(["mean", "sum", "min", "max", "last-number"]).toContain(s.panel.spec.plugin.spec.calculation);
   });
-  it("doubles x and width, scales height, and keeps everything on the 24-column grid", () => {
+  it("scales group children by 24 / group width, scales height, and keeps everything on the 24-column grid", () => {
     const d = dash("redisdb__overview");
-    const firstGroup = d.items.find((x) => "panels" in x) as { panels: { layout: { x: number; w: number; h: number } | null }[] };
+    const firstGroup = d.items.find((x) => "panels" in x) as { layout: { w: number }; panels: { layout: { x: number; w: number; h: number } | null }[] };
     const src = firstGroup.panels[0]!.layout!;
+    const f = 24 / firstGroup.layout.w; // "About Redis" is 8 of 12 columns wide: children scale by 3, not 2
     const out = r.dashboard.spec.layouts.find((l) => l.spec.display?.title)!.spec.items[0]!;
-    expect([out.x, out.width, out.height]).toEqual([src.x * 2, src.w * 2, src.h * ROW_SCALE]);
+    expect([out.x, out.width, out.height]).toEqual([src.x * f, src.w * f, src.h * ROW_SCALE]);
     for (const l of r.dashboard.spec.layouts) for (const i of l.spec.items) expect(i.x + i.width).toBeLessThanOrEqual(24);
+  });
+  it("every group section reaches column 24 (Datadog's side-by-side groups become full-width sections)", () => {
+    for (const l of r.dashboard.spec.layouts.filter((l) => l.spec.display?.title)) {
+      expect(Math.max(...l.spec.items.map((i) => i.x + i.width)), l.spec.display!.title).toBe(24);
+    }
   });
   it("pins every template variable with an exact-under finding (D-21)", () => {
     const pinned = r.findings.filter((f) => f.code === "variable.pinned");

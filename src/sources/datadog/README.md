@@ -7,7 +7,7 @@ Task **T2** · scope `src/sources/datadog/**` · Datadog → IR (CONTRACT-001/00
 | File | What |
 |---|---|
 | `normalize.ts` | Pure. `dashboardFromDatadog` and `alertFromDatadog`, one per JSON document |
-| `ingest.ts` | I/O. `ingestFolder(dir)` reads JSON at any depth in sorted order. `ingestApi()` calls `GET /api/v1/dashboard`, `/api/v1/dashboard/{id}` and `/api/v1/monitor` (paged) on `api.<DD_SITE>`, default `datadoghq.eu`, with `DD-API-KEY` and `DD-APPLICATION-KEY` |
+| `ingest.ts` | I/O. `ingestFolder(dir)` reads `.json`, `.yaml` and `.yml` exports at any depth in sorted order. YAML is parsed with the YAML 1.2 core schema; a duplicate key or several documents in one file is a `source.unreadable` finding. `ingestApi()` calls `GET /api/v1/dashboard`, `/api/v1/dashboard/{id}` and `/api/v1/monitor` (paged) on `api.<DD_SITE>`, default `datadoghq.eu`, with `DD-API-KEY` and `DD-APPLICATION-KEY` |
 
 Normalisation:
 - **Widget → panel kind:**
