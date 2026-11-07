@@ -38,6 +38,20 @@ export function rule(id: string): RuleDef {
   return r;
 }
 
+/**
+ * The catalog rule behind a finding or reason code: the rule with that id, else the implemented rule whose findingCode
+ * it is, else, for T4's generic `fn.<name>` codes, the function stage's fallback rule (fn.unknown). undefined means the
+ * code has no catalog entry (a bug: tests/rules/codes.test.ts keeps every emitted code resolvable).
+ */
+export function resolveCode(code: string): RuleDef | undefined {
+  const byId = BY_ID.get(code);
+  if (byId) return byId;
+  const byFinding = CATALOG.find((r) => r.findingCode === code && r.state === "implemented") ?? CATALOG.find((r) => r.findingCode === code);
+  if (byFinding) return byFinding;
+  if (/^fn\.[a-z0-9_]+$/.test(code)) return BY_ID.get("fn.unknown");
+  return undefined;
+}
+
 /** Rules of one stage in the order they are tried. */
 export function stageRules(stage: StageId): RuleDef[] {
   return CATALOG.filter((r) => r.stage === stage);

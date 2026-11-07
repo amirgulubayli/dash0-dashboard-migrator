@@ -7,14 +7,14 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 68 | 42 | 17 | 37 | 164 |
-| planned | 18 | 25 | 3 | 15 | 61 |
+| implemented | 68 | 42 | 17 | 50 | 177 |
+| planned | 18 | 25 | 3 | 12 | 58 |
 
 ## Pipeline order
 
 | # | Stage | Unit of matching | Total | Rules | Summary |
 |---|---|---|---|---|---|
-| 1 | `ingest` Ingest and normalise | source item | no | 3 | Read the source JSON, unwrap containers, coerce types, keep the raw original. |
+| 1 | `ingest` Ingest and normalise | source item | no | 4 | Read the source JSON, unwrap containers, coerce types, keep the raw original. |
 | 2 | `classify` Classify the item | monitor | yes | 3 | Decide which pipeline a monitor goes through; anything unknown stops here as manual. |
 | 3 | `parse` Parse | query string | yes | 4 | Datadog query / formula / monitor strings → AST (T3). Unparseable text is manual with the original kept. |
 | 4 | `select` Select the metric | metric reference | yes | 12 | Datadog metric → OTel metric through the mapping table. |
@@ -22,7 +22,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
 | 7 | `time` Time aggregation | postfix or rollup call | no | 26 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
-| 9 | `function` Functions | function call | yes | 32 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
+| 9 | `function` Functions | function call | yes | 41 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 8 | Formulas over named queries, constants, division. |
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
@@ -43,6 +43,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 10 | `ingest.monitor.unwrap` | integrations-core monitor file {version, definition: {...}} | the definition object | exact | — | — | T2 | planned |
 | 20 | `ingest.numbers` | numbers stored as strings ("90", "0") | numbers | exact | — | — | T2 | planned |
 | 30 | `ingest.keep-raw` | every source item | raw JSON kept next to its IR node (rule 4), sha256 → certificate.sourceHash | exact | — | — | T2 | planned |
+| 40 | `source.unreadable` | a source file that can't be read or parsed (broken JSON/YAML, empty file, several YAML documents) | nothing from that file is migrated; the file and the parser's message are reported | manual | unit | — | T2 | implemented |
 
 ## Classify the item (`classify`)
 
@@ -202,9 +203,18 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 145 | `fn.top` | top(q, N, method, order) / topN / bottomN | topk(N, q) / bottomk(N, q) | exact-under(A.top-stable) | unit | — | T4 | implemented |
 | 150 | `fn.histogram.quantile` | pXX:metric on a distribution | histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w]))) | bounded(ε) | — | — | T4 | planned |
 | 160 | `fn.per_unit.kind` | per_second / per_minute / per_hour / derivative on a metric that is neither a counter nor a growing gauge | no output; deriv() is a least-squares slope, not Datadog's point difference | manual | unit | — | T4 | implemented |
-| 180 | `fn.cumsum` | cumsum(q) / integral(q) | no output: accumulates over the visible window | manual | — | — | T4 | planned |
-| 190 | `fn.anomalies` | anomalies() / forecast() / outliers() | no output: no PromQL counterpart (maths.md §9.5) | manual | — | — | T4 | planned |
-| 200 | `fn.calendar-shift` | month_before() and other calendar shifts | no output: months are not fixed seconds | manual | — | — | T4 | planned |
+| 180 | `fn.cumsum` | cumsum(q) | no output: a running total over the visible window has no fixed PromQL window | manual | unit | — | T4 | implemented |
+| 181 | `fn.integral` | integral(q) | no output: accumulates over the visible window | manual | unit | — | T4 | implemented |
+| 190 | `fn.anomalies` | anomalies(q, …) | no output: Datadog's anomaly model has no PromQL counterpart (maths.md §9.5) | manual | unit | — | T4 | implemented |
+| 191 | `fn.forecast` | forecast(q, …) | no output: Datadog's forecast model has no PromQL counterpart (predict_linear is a different model) | manual | unit | — | T4 | implemented |
+| 192 | `fn.outliers` | outliers(q, …) | no output: Datadog's outlier algorithms (DBSCAN/MAD) have no PromQL counterpart | manual | unit | — | T4 | implemented |
+| 193 | `fn.autosmooth` | autosmooth(q) | no output: Datadog picks the smoothing window from the data on each render; PromQL has no data-dependent smoothing | manual | unit | — | T4 | implemented |
+| 194 | `fn.ewma_3` | ewma_3(q) | no output: an exponentially weighted moving average over 3 points; PromQL has no EWMA (double_exponential_smoothing is a different model) | manual | unit | — | T4 | implemented |
+| 195 | `fn.ewma_10` | ewma_10(q) | no output: an exponentially weighted moving average over 10 points; PromQL has no EWMA | manual | unit | — | T4 | implemented |
+| 200 | `fn.calendar_shift` | calendar_shift(q, …) and month_before() | no output: calendar units (months, weeks in a timezone) are not fixed seconds | manual | unit | — | T4 | implemented |
+| 205 | `fn.throughput` | throughput(q) | no output: no translation rule yet (its Datadog semantics are not verified) | manual | unit | — | T4 | implemented |
+| 206 | `fn.rate` | rate(q) used as a Datadog function | no output: no translation rule yet (its Datadog semantics are not verified; per_second/as_rate have rules) | manual | unit | — | T4 | implemented |
+| 207 | `fn.sum` | sum(q, …) used as a function, not as the aggregator prefix | no output: no translation rule yet | manual | unit | — | T4 | implemented |
 | 999 (fallback) | `fn.unknown` | any other Datadog function (T4 emits fn.<name>) | no output; original kept | manual | unit | — | T4 | implemented |
 
 - `fn.per_unit.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).

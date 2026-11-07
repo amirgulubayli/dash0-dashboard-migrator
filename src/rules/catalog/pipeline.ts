@@ -3,6 +3,7 @@ import type { RuleDef } from "../types.js";
 import { EPS_RATE, section } from "./build.js";
 
 const ingest = section("ingest", "T2", "planned", "plan 00; dash0-migrator skill (key facts)");
+const ingestImpl = section("ingest", "T2", "implemented", "T2 src/sources/datadog (PR #7, merged)");
 const logs = section("logs", "T12", "planned", "plan 01 §1; maths.md §8");
 const log = section("logs", "T12", "implemented", "T12 src/translate/logs (PR #13); docs/research/dash0.md (dash0.logs labels, LIVE)");
 const validate = section("validate", "T4", "implemented", "dash0-migrator rule 3");
@@ -39,6 +40,7 @@ export const PIPELINE_RULES: RuleDef[] = [
   // ---------- ingest ----------
   ingest("ingest.monitor.unwrap", 10, "exact", "integrations-core monitor file {version, definition: {...}}", "the definition object"),
   ingest("ingest.numbers", 20, "exact", 'numbers stored as strings ("90", "0")', "numbers"),
+  ingestImpl("source.unreadable", 40, "manual", "a source file that can't be read or parsed (broken JSON/YAML, empty file, several YAML documents)", "nothing from that file is migrated; the file and the parser's message are reported"),
   ingest("ingest.keep-raw", 30, "exact", "every source item", "raw JSON kept next to its IR node (rule 4), sha256 → certificate.sourceHash"),
 
   // ---------- logs ----------
