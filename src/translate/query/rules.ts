@@ -69,6 +69,11 @@ export const RULES = {
     assumptions: ["A.kind-metadata", "A.otel-counter", "A.dd-count-default"],
     description: "Datadog COUNT metric (metadata.csv) queried without a modifier -> increase(x[w]), the same as .as_count()",
   },
+  "time.count.counter": {
+    status: "bounded",
+    assumptions: ["A.dd-count-default"],
+    description: "curated mapping row: Datadog COUNT on an OTel cumulative counter, queried without a modifier -> increase(x[w]) (maths.md T4c)",
+  },
   "time.rollup.counter": {
     status: "bounded",
     assumptions: [],

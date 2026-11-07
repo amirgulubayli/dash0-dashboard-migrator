@@ -46,11 +46,12 @@ describe("postgresql mapping table", () => {
     expect(get("postgresql.rows_hot_updated")).toMatchObject({ otel: "postgresql.operations", labels: { operation: "hot_upd" } });
   });
 
-  it("no equivalent, derived and count rows fail closed instead of guessing", () => {
+  it("no equivalent and derived rows fail closed; count rows take increase() (T4c)", () => {
     for (const k of ["postgresql.replication_delay", "postgresql.replication_delay_bytes"]) expect(metricAvailability(m, k)).toBe("no_equivalent");
     expect(get("postgresql.percent_usage_connections")).toMatchObject({ otel: null, derived: "postgresql.backends / postgresql.connection.max" });
     expect(kindTransform(get("postgresql.percent_usage_connections")).status).toBe("manual");
-    expect(kindTransform(get("postgresql.bgwriter.checkpoints_timed")).status).toBe("manual");
+    // count -> counter: increase() over the bucket, bounded (maths.md T4c); no longer fails closed.
+    expect(kindTransform(get("postgresql.bgwriter.checkpoints_timed"))).toMatchObject({ transform: "increase", status: "bounded" });
     expect(m.metrics.has("postgresql.deadlocks.count")).toBe(false);
   });
 });

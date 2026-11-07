@@ -101,6 +101,7 @@ export const QUERY_RULES: RuleDef[] = [
   time("time.unmapped.counter", 92, "bounded", "Datadog count/rate (metadata.csv) without a mapping entry, with .as_count() / .as_rate() or plain", "increase(x[w]) / rate(x[w])", { assumptions: ["A.kind-metadata", "A.otel-counter"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
   time("time.unmapped.suffix-counter", 93, "bounded", "no metadata.csv entry, name ends in .count/.total, with .as_count()/.as_rate()", "treated as a Datadog count: increase / rate", { assumptions: ["A.kind-suffix", "A.otel-counter"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
   time("time.count.default", 94, "bounded", "Datadog COUNT metric (metadata.csv) without a modifier", "increase(x[w]), like .as_count()", { assumptions: ["A.kind-metadata", "A.otel-counter", "A.dd-count-default"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
+  time("time.count.counter", 96, "bounded", "Datadog COUNT metric on an OTel counter, from a curated mapping row, without a modifier", "increase(x[w]), like .as_count()", { assumptions: ["A.dd-count-default"], epsilon: EPS_RATE, evidence: ["unit", "proof:T4c"] }),
   timePlan("time.as_count.counter.anchored", 75, "exact-under", ".as_count() on a cumulative counter (or a Datadog RATE metric on an OTel counter)", "increase(x[w] anchored)", {
     assumptions: ["A.same-samples", "A.align", "A.boundary"],
     requires: ["probe:anchored"],
@@ -226,6 +227,7 @@ export const T4_TABLE_IDS = [
   "time.unmapped.counter",
   "time.unmapped.suffix-counter",
   "time.count.default",
+  "time.count.counter",
   "time.rollup.counter",
   "time.fill.zero.single",
   "select.metric.approximate",

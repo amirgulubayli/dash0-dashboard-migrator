@@ -175,12 +175,12 @@ export function loadMappings(dir: string): Mappings {
  * - same kind (or a Datadog gauge reading a running total, D-19): use the value as it is.
  * - anything else: manual until someone writes and tests a rule for it.
  */
-export function kindTransform(m: MetricMapping): { transform: "none" | "rate"; status: Status; reason?: string } {
+export function kindTransform(m: MetricMapping): { transform: "none" | "rate" | "increase"; status: Status; reason?: string } {
   if (m.otel === null || m.otelKind === null) return { transform: "none", status: "manual", reason: m.derived ? `derived: ${m.derived}` : "no equivalent metric" };
   const base: Status = m.status === "exact" ? "exact" : "bounded";
   if (m.ddKind === "rate" && m.otelKind === "counter") return { transform: "rate", status: "bounded", reason: "Datadog stores a per-second rate; OTel a cumulative counter" };
   if (m.ddKind === "gauge" && (m.otelKind === "gauge" || m.otelKind === "counter" || m.otelKind === "updowncounter")) return { transform: "none", status: base };
-  if (m.ddKind === "count" && m.otelKind === "counter") return { transform: "none", status: "manual", reason: "Datadog count (per-interval) vs OTel cumulative counter: needs increase(); no tested rule yet" };
+  if (m.ddKind === "count" && m.otelKind === "counter") return { transform: "increase", status: "bounded", reason: "Datadog count (per-interval deltas) on an OTel cumulative counter: increase() over the bucket (maths.md T4c)" };
   return { transform: "none", status: "manual", reason: `no rule for ${m.ddKind} -> ${m.otelKind}` };
 }
 

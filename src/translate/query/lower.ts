@@ -435,10 +435,13 @@ class Lowerer {
     let kind = mapping.kind;
     let ddRate = false;
     const unmappedCounter = !mapped && hint !== undefined && hint !== "gauge";
+    // A curated row saying Datadog COUNT on an OTel counter (kinds checked against the sources by the mapping logic
+    // gates): the per-interval deltas telescope to increase() over the bucket (maths.md T4c), like time.count.default.
+    const curatedCount = mapped && mapping.ddKind === "count" && kind === "counter";
     if (mapping.ddKind !== undefined) {
       if (mapping.ddKind === "gauge" && kind !== "histogram") kind = "gauge";
       else if (mapping.ddKind === "rate" && kind === "counter") ddRate = true;
-      else if (!(unmappedCounter && mapping.ddKind === "count"))
+      else if (!(unmappedCounter && mapping.ddKind === "count") && !curatedCount)
         this.manual("time.kind", `Datadog ${mapping.ddKind} stored as an OTel ${kind}: no tested rule yet`);
     }
     if (unmappedCounter) this.use("time.unmapped.counter");
@@ -490,10 +493,10 @@ class Lowerer {
       this.use("time.ddrate.plain");
       counterMode = "rate";
     }
-    if (unmappedCounter && hint === "count" && !counterMode) {
+    if (((unmappedCounter && hint === "count") || curatedCount) && !counterMode) {
       if (explicitRollup && fn !== "sum") this.manual("time.rollup.counter", `.rollup(${fn}) on a COUNT metric has no rule`);
       if (explicitRollup) this.use("time.rollup.counter");
-      this.use("time.count.default");
+      this.use(curatedCount ? "time.count.counter" : "time.count.default");
       counterMode = "increase";
     }
     if ((kind === "counter" && !counterMode) || kind === "histogram" || (kind === "delta" && fn !== "sum"))

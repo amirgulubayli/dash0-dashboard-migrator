@@ -855,23 +855,30 @@
     "kind": "panel",
     "title": "Scheduled vs requested checkpoints",
     "widget_type": "timeseries",
-    "status": "manual",
-    "promql": [],
+    "status": "bounded",
+    "promql": [
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"scheduled\"}[$__rate_interval]))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__rate_interval]))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__rate_interval]))"
+    ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
       "select.labels",
-      "widget.unknown",
+      "time.as_count.counter",
+      "space.agg",
+      "widget.timeseries",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "A.var-default"
+    ],
     "findings": [
       "bounded metric.approximate",
-      "exact-under scope.var.free-form",
-      "manual time.kind"
+      "exact-under scope.var.free-form"
     ]
   },
   {
