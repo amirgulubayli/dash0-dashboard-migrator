@@ -98,10 +98,13 @@ describe("log widgets through T5 with T4 + T12", () => {
     expect(e.rules).toContain("arith.scalar-log-mixed");
   });
 
-  it("a multi-column table stays manual: a TimeSeriesTable cannot join columns per group", () => {
+  it("a multi-column log table whose columns group by the same facet is one TimeSeriesTable (a probed join per group)", () => {
     const e = p("Errors and total (two columns)");
-    expect(e).toMatchObject({ placeholder: true, status: "manual" });
-    expect(e.rules).toContain("widget.query_table.complex");
+    expect(e.placeholder).toBe(false);
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
+    expect(e.promql).toHaveLength(2);
+    expect(e.promql.every((x) => x.includes("[$__range]"))).toBe(true);
+    expect(e.rules).toEqual(expect.arrayContaining(["widget.query_table.columns", "log.scalar.window"]));
   });
 
   it("a stat panel mixing a window log count with a metric query fails closed (arith.scalar-log-mixed)", () => {

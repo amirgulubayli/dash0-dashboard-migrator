@@ -2,6 +2,7 @@
 // Accepts the API shape (GET /api/v1/dashboard/{id}, GET /api/v1/monitor) and the integrations-core asset shape
 // (monitors wrapped in {version, definition}). Nothing is dropped: an unknown widget becomes an "unsupported" Panel
 // with a finding, and every unconverted field stays in `original`.
+import { groupTags } from "../../ir/grouping.js";
 import type { Alert, Dashboard, Finding, Group, Layout, Panel, PanelKind, QuerySet, SourceQuery, SourceRef, Variable } from "../../ir/index.js";
 
 type Json = Record<string, unknown>;
@@ -128,17 +129,10 @@ function group(w: Json, path: string, find: (f: Omit<Finding, "itemId" | "itemKi
 
 const isHttpUrl = (u: string | undefined): u is string => u !== undefined && /^https?:\/\/\S+$/i.test(u);
 
-/** Levels of grouping of one query: logs: the group_by facets; metrics: the tags in `by {...}`. -1 = not a metric or log query. */
+/** Levels of grouping of one query: see groupTags. -1 = not a metric or log query. */
 function groupLevels(q: SourceQuery): number {
-  if (q.dataSource === "logs") {
-    const gb = isObj(q.raw) ? q.raw.group_by : undefined;
-    return Array.isArray(gb) ? gb.length : isObj(gb) && Array.isArray(gb.fields) ? gb.fields.length : 0;
-  }
-  if (q.dataSource === "metrics") {
-    const m = /\bby\s*\{([^}]*)\}/i.exec(q.expr);
-    return m ? m[1]!.split(",").map((t) => t.trim()).filter(Boolean).length : 0;
-  }
-  return -1;
+  const g = groupTags(q);
+  return g === null ? -1 : g.length;
 }
 
 /** A sunburst with exactly one level on every (visible) query is a plain breakdown, which a pie chart shows faithfully. */

@@ -1,6 +1,7 @@
 // IR Panel -> Perses panel in Dash0's dialect (only kinds Dash0 renders: docs/research/dash0.md).
 // Anything that can't be a faithful panel becomes a Markdown placeholder that shows the original and the reason,
 // the same pattern Dash0's own Grafana importer uses.
+import { sameGrouping } from "../../ir/grouping.js";
 import { worst, type Finding, type Panel, type Status } from "../../ir/index.js";
 import type { PersesPanel } from "../../targets/dash0/index.js";
 import type { RequestTranslation } from "./queries.js";
@@ -176,9 +177,17 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
     }
     case "table": {
       const queries = p.requests.reduce((n, r) => n + Math.max(r.formulas.length, r.queries.length), 0);
-      if (queries > 1 || p.options.conditionalFormats) {
-        // Several columns: Datadog joins them per group, a TimeSeriesTable lists series. Catalog: manual.
-        return placeholder("widget.query_table.complex", `This query_table has ${queries} columns; Dash0's TimeSeriesTable can't join them per group.`);
+      if (p.options.conditionalFormats) return placeholder("widget.query_table.complex", "This query_table has conditional formats, which a Dash0 TimeSeriesTable does not apply.");
+      if (queries > 1) {
+        // Several columns. Probed on a rendered dashboard: a TimeSeriesTable with several queries that group by the SAME
+        // labels shows one row per group with one value column per query. Datadog's join is by group too, so that is the
+        // same table. Different groupings (or another data source) would not join per group: manual.
+        const source = p.requests.flatMap((r) => r.queries).filter((x) => !x.hidden);
+        if (!sameGrouping(source)) return placeholder("widget.query_table.complex", `This query_table has ${queries} columns that do not all group by the same labels (or read a data source other than metrics and logs); Dash0's TimeSeriesTable can't join them per group.`);
+        if (q.rules.includes("log.scalar.window") && !source.every((x) => x.dataSource === "logs"))
+          return placeholder("arith.scalar-log-mixed", "This table mixes a whole-timeframe log count with a metric column; one table can't show both as Datadog does.");
+        under("widget.query_table.columns", ["A.table-columns"], `${queries}-column table shown as a TimeSeriesTable with one query per column; column headers are Dash0's defaults, sorting is not migrated`);
+        return result("TimeSeriesTable", {});
       }
       under("widget.query_table", ["A.table-single-query"], "single-query table shown as a TimeSeriesTable");
       return result("TimeSeriesTable", {});
@@ -202,6 +211,7 @@ const ASSUMPTION_TEXT: Record<string, string> = {
   "A.align": "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
   "A.boundary": "no sample lies exactly on a bucket boundary (maths.md T8, A3)",
   "A.table-single-query": "the table has one query, default sorting and no conditional formats",
+  "A.table-columns": "every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats",
   "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
   "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",
   "A.stat-first": "only the first query of a multi-query stat panel matters",
@@ -209,7 +219,10 @@ const ASSUMPTION_TEXT: Record<string, string> = {
 
 function describe(p: Panel, itemId: string): string {
   const qs = p.requests.flatMap((r) => [...r.formulas.map((f) => f.expr), ...r.queries.map((q) => `${q.refId}: ${q.expr}`)]).filter(Boolean);
-  return `Migrated from Datadog ${p.sourceType} (${itemId}).${qs.length ? ` Original: ${qs.join("; ").slice(0, 900)}` : ""}`;
+  // A multi-column table: Dash0 labels the value columns by position, so list Datadog's column names in order.
+  const cols = p.kind === "table" ? p.requests.flatMap((r) => r.formulas.map((f) => f.alias ?? f.expr)) : [];
+  const columns = cols.length > 1 ? ` Columns, in order: ${cols.join(" | ")}.` : "";
+  return `Migrated from Datadog ${p.sourceType} (${itemId}).${columns}${qs.length ? ` Original: ${qs.join("; ").slice(0, 900)}` : ""}`;
 }
 
 function placeholderText(p: Panel, itemId: string, reason: string): string {

@@ -8,7 +8,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
 | implemented | 69 | 42 | 18 | 55 | 184 |
-| planned | 17 | 27 | 3 | 11 | 58 |
+| planned | 17 | 28 | 3 | 11 | 59 |
 
 ## Pipeline order
 
@@ -27,7 +27,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
-| 14 | `widget` Widget → panel | widget | yes | 20 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
+| 14 | `widget` Widget → panel | widget | yes | 21 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
 | 15 | `panel` Panel options | panel attribute | no | 5 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 8 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
@@ -318,6 +318,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 30 | `widget.toplist` | toplist | TimeSeriesTable sorted by value, limited to N (uses fn.top.window for the ranking) | exact-under(A.top-uniform) | — | probe:at-modifier | T5 | planned |
 | 31 | `widget.toplist.unranked` | toplist while fn.top.window is not shipped | TimeSeriesTable of every series, without the top-N limit and ranking | exact-under(A.top-unlimited) | — | — | T5 | planned |
 | 40 | `widget.query_table` | query_table | TimeSeriesTable | exact-under(A.table-single-query) | — | — | T5 | planned |
+| 41 | `widget.query_table.columns` | query_table with several metric or log columns that all group by the same labels, no conditional formats | TimeSeriesTable with one query per column | exact-under(A.table-columns) | — | — | T5 | planned |
 | 45 | `widget.query_table.complex` | query_table with several queries, custom sort or conditional formats | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 50 | `widget.note` | note / free_text | Markdown with the same text | exact-under(A.style) | — | — | T5 | planned |
 | 60 | `widget.image` | image | Markdown ![](url) | exact-under(A.style) | — | — | T5 | planned |
@@ -334,6 +335,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 - `widget.query_value.default-agg`: T5 panels.ts. With an explicit aggregator that has no StatChart calculation the finding message names it.
 - `widget.toplist.unranked`: T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.
+- `widget.query_table.columns`: Probed on a rendered table: several queries with the same group-by show as one row per group with one value column each. Column headers are Dash0 defaults.
 - `widget.alert_graph`: Reuses the monitor's query translation; status = worst(this, that query).
 - `query.empty`: Emitted by T5 queries.ts; the id is also the finding code.
 
@@ -490,6 +492,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.row-height` | one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export) | 1 |
 | `A.var-values` | a label's values in Dash0 are the same set as the matching tag's values in Datadog | 1 |
 | `A.table-single-query` | the table has one query, default sorting and no conditional formats | 1 |
+| `A.table-columns` | every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats | 1 |
 | `A.top-uniform` | every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie | 2 |
 | `A.top-unlimited` | showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships | 1 |
 | `A.agg-default` | a query_value request without an aggregator uses Datadog's default, avg | 1 |
@@ -556,6 +559,7 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `widget.toplist` (exact-under(A.top-uniform), planned, T5)
 - `widget.toplist.unranked` (exact-under(A.top-unlimited), planned, T5)
 - `widget.query_table` (exact-under(A.table-single-query), planned, T5)
+- `widget.query_table.columns` (exact-under(A.table-columns), planned, T5)
 - `widget.note` (exact-under(A.style), planned, T5)
 - `widget.image` (exact-under(A.style), planned, T5)
 - `widget.alert_graph` (exact-under(A.style), planned, T5)
