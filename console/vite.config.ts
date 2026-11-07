@@ -14,5 +14,7 @@ export default defineConfig({
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+    // A static single-page build (index.html shell) so `dd2dash0 review` can serve the console from disk.
+    spa: { enabled: true, prerender: { outputPath: "/index.html" } },
   },
 });
