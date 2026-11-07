@@ -153,3 +153,4 @@ export const RULES_T12: Readonly<Record<T12RuleId, { status: Status; assumptions
     }),
   ) as Record<T12RuleId, { status: Status; assumptions: T12AssumptionId[] }>,
 );
+export { explain, explainPlain, explainTechnical, PLAIN_ASSUMPTIONS, type ExplainInput, type ExplainStatus } from "./plain.js";
