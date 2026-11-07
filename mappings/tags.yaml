@@ -1,0 +1,40 @@
+# Datadog tag -> Dash0 PromQL label (the OTel attribute with dots replaced by underscores).
+# Schema: src/ir/mappings.ts (CONTRACT-001). Unlisted tags are kept as they are, with a "tag.unmapped" finding.
+version: 1
+tags:
+  service:
+    label: service_name
+    status: exact
+    note: "Datadog unified service tagging -> OTel service.name (docs.datadoghq.com/opentelemetry/schema_semantics/semantic_mapping/)"
+  env:
+    label: deployment_environment_name
+    status: approximate
+    note: "OTel deployment.environment.name; older SDKs emit deployment.environment instead"
+  version:
+    label: service_version
+    status: exact
+    note: "OTel service.version"
+  host:
+    label: host_name
+    status: approximate
+    note: "Datadog resolves host from several attributes (host, datadog.host.name, cloud ids, k8s.node.name); OTel host.name is the common case"
+  redis_host:
+    label: server_address
+    status: approximate
+    note: "redisreceiver resource attribute server.address; disabled by default, enable it in the Collector (knowledge base D-22). Value format UNVERIFIED"
+  redis_port:
+    label: server_port
+    status: approximate
+    note: "redisreceiver resource attribute server.port; disabled by default. UNVERIFIED"
+  redis_role:
+    label: role
+    status: approximate
+    note: "redisreceiver attribute role (replica | primary); Datadog uses master | slave or role values. Value mapping UNVERIFIED"
+  command:
+    label: cmd
+    status: approximate
+    note: "redis.cmd.* attribute cmd; Datadog tags the same Redis command name. UNVERIFIED on live data"
+  redis_db:
+    label: db
+    status: approximate
+    note: "redis.db.* attribute db; Datadog values look like db0, OTel values like 0. Value mapping UNVERIFIED"
