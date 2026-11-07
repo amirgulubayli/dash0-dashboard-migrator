@@ -8,7 +8,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
 | implemented | 68 | 42 | 17 | 37 | 164 |
-| planned | 18 | 22 | 2 | 14 | 56 |
+| planned | 18 | 24 | 2 | 14 | 58 |
 
 ## Pipeline order
 
@@ -28,8 +28,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
 | 14 | `widget` Widget → panel | widget | yes | 16 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
-| 15 | `panel` Panel options | panel attribute | no | 4 | Units, markers and visual options on a panel a widget rule produced. |
-| 16 | `layout` Layout and groups | widget position or group | no | 6 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
+| 15 | `panel` Panel options | panel attribute | no | 5 | Units, markers and visual options on a panel a widget rule produced. |
+| 16 | `layout` Layout and groups | widget position or group | no | 7 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
 | 18 | `logs` Log queries | log query or search term | yes | 24 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
 | 19 | `validate` Validate | emitted artefact | no | 3 | Every output parses and passes preflight before it may be emitted. |
@@ -325,6 +325,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 100 | `panel.unit` | Datadog unit with a Perses format entry (bytes, percent, seconds, …) | format.unit | exact | — | — | T5 | planned |
 | 110 | `panel.unit.unmapped` | unit without a format entry | format.unit decimal; original unit in the panel description | exact-under(A.style) | — | — | T5 | planned |
 | 120 | `panel.markers` | markers / y-axis lines | TimeSeriesChart thresholds | exact-under(A.style) | — | — | T5 | planned |
+| 125 | `panel.conditional-format` | query_value conditional formats (first matching rule wins; > >= < <=; red/yellow/green/blue/gray or custom hex) | StatChart thresholds: one step wherever the colour changes; pieces Perses can't colour the same way are named in the finding | exact-under(A.style) | — | — | T5 | planned |
 | 130 | `panel.style` | palette, legend, display type, title alignment | closest Perses visual option | exact-under(A.style) | — | — | T5 | planned |
 
 ## Layout and groups (`layout`)
@@ -335,6 +336,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 20 | `layout.ordered.height` | ordered layout y, height | y and height unchanged | exact-under(A.row-height) | — | probe:row-height | T5 | planned |
 | 30 | `layout.free` | free layout | deterministic repack into the 24-column grid (row-major by y, then x) | exact-under(A.style) | — | — | T5 | planned |
 | 40 | `layout.group` | group widget | its own Grid layout with display.title; children recurse | exact | — | — | T5 | planned |
+| 45 | `layout.group.scale` | children of a group w columns wide (Datadog lays them out inside the group, groups sit side by side) | x and width scale by 24 / w with rounded edges, so each group fills its full-width Grid section | exact-under(A.style) | — | — | T5 | planned |
 | 50 | `layout.group.collapsed` | group collapsed / expanded | display.collapse.open | exact | — | probe:collapse | T5 | planned |
 | 60 | `layout.powerpack` | powerpack | inlined like a group, title kept | exact-under(A.style) | — | — | T5 | planned |
 
@@ -455,7 +457,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.notify-wider` | the channel may also receive notifications Datadog did not send to it (Dash0 has no degraded-only or recovery-only channel binding) | 1 |
 | `A.msg-length` | text beyond Dash0's annotation limits (description 2048, summary 255 characters) is not needed in the notification; the full original stays in the report | 1 |
 | `A.msg-verbatim` | showing an unknown Datadog template token as literal text is acceptable in the notification | 1 |
-| `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 10 |
+| `A.style` | fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning | 12 |
 | `A.row-height` | one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export) | 1 |
 | `A.var-values` | a label's values in Dash0 are the same set as the matching tag's values in Datadog | 1 |
 | `A.table-single-query` | the table has one query, default sorting and no conditional formats | 1 |
@@ -525,9 +527,11 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `widget.pie` (exact-under(A.style), planned, T5)
 - `panel.unit.unmapped` (exact-under(A.style), planned, T5)
 - `panel.markers` (exact-under(A.style), planned, T5)
+- `panel.conditional-format` (exact-under(A.style), planned, T5)
 - `panel.style` (exact-under(A.style), planned, T5)
 - `layout.ordered.height` (exact-under(A.row-height), planned, T5)
 - `layout.free` (exact-under(A.style), planned, T5)
+- `layout.group.scale` (exact-under(A.style), planned, T5)
 - `layout.powerpack` (exact-under(A.style), planned, T5)
 - `variable.list` (exact-under(A.var-values), planned, T5)
 - `variable.pinned` (exact-under(A.var-default), planned, T5)

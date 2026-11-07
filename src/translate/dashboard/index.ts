@@ -1,5 +1,8 @@
 // T5: IR Dashboard -> Dash0 DashboardDefinition (Perses), plus a per-panel result list for the report (T8).
 // Layout (knowledge base D-24): Datadog's ordered grid is 12 columns, Dash0's 24, so x and width double.
+// A group's children are laid out inside the group's own width (a 6-wide group has children spanning 0..6), and
+// Datadog puts groups side by side. A Perses Grid section is always full width, so children scale by 24 / group
+// width to fill it (catalog layout.group.scale).
 // Height has no documented ratio; ROW_SCALE is a heuristic until it's tuned against a Dash0 golden export.
 // Groups become titled Grid sections; runs of top-level widgets become untitled sections, in source order.
 import { worst, isGroup, type Dashboard, type Finding, type Layout, type Panel, type Status } from "../../ir/index.js";
@@ -74,7 +77,7 @@ export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTrans
     if (isGroup(item)) {
       flush();
       const children = item.panels.map((p) => convert(p, `${dashItem}/${item.id}/${p.id}`));
-      if (children.length) layouts.push(grid(children, item.title ?? null, findings, dashItem));
+      if (children.length) layouts.push(grid(children, item.title ?? null, findings, dashItem, groupColumns(item.layout?.w, item.panels)));
     } else run.push(convert(item, `${dashItem}/${item.id}`));
   }
   flush();
@@ -98,8 +101,22 @@ export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTrans
   };
 }
 
-/** One Grid section. Datadog x/width double (12 -> 24); y/height scale by ROW_SCALE; missing layouts auto-flow. */
-function grid(items: { key: string; layout: Layout | null }[], title: string | null, findings: Finding[], dashItem: string): GridLayout {
+/**
+ * The width the children of a group are laid out in: the group's own width. A group with no layout, or children
+ * reaching past it (old exports), uses the widest child edge instead, never less than 1 and never more than 12.
+ */
+export function groupColumns(groupWidth: number | undefined, children: Panel[]): number {
+  const edge = Math.max(0, ...children.map((c) => (c.layout ? c.layout.x + c.layout.w : 0)));
+  const w = groupWidth && groupWidth > 0 ? Math.max(groupWidth, edge) : edge || 12;
+  return Math.min(12, Math.max(1, w));
+}
+
+/**
+ * One Grid section. `cols` is the width of the Datadog grid the items are laid out in (12 at top level, the group's
+ * width inside a group); x and width scale by 24 / cols. Edges are rounded, not widths, so neighbours stay adjacent
+ * when 24 / cols isn't a whole number. y/height scale by ROW_SCALE; missing layouts auto-flow.
+ */
+function grid(items: { key: string; layout: Layout | null }[], title: string | null, findings: Finding[], dashItem: string, cols = 12): GridLayout {
   const placed = items.filter((i) => i.layout);
   const y0 = placed.length ? Math.min(...placed.map((i) => i.layout!.y)) : 0;
   const out: GridItem[] = [];
@@ -107,8 +124,9 @@ function grid(items: { key: string; layout: Layout | null }[], title: string | n
   let flowX = 0;
   for (const i of items) {
     if (i.layout) {
-      let x = i.layout.x * 2;
-      let width = Math.max(1, i.layout.w * 2);
+      const f = 24 / cols;
+      let x = Math.round(i.layout.x * f);
+      let width = Math.max(1, Math.round((i.layout.x + i.layout.w) * f) - x);
       if (x + width > 24) {
         findings.push({ status: "bounded", code: "layout.clamped", message: `panel ${i.key} overflowed the 24-column grid and was clamped`, itemKind: "panel", itemId: dashItem });
         x = Math.min(x, 23);

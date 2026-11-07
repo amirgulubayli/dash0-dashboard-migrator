@@ -35,6 +35,9 @@ export const DASHBOARD_RULES: RuleDef[] = [
   panel("panel.unit", 100, "exact", "Datadog unit with a Perses format entry (bytes, percent, seconds, …)", "format.unit"),
   panel("panel.unit.unmapped", 110, "exact-under", "unit without a format entry", "format.unit decimal; original unit in the panel description", { assumptions: ["A.style"] }),
   panel("panel.markers", 120, "exact-under", "markers / y-axis lines", "TimeSeriesChart thresholds", { assumptions: ["A.style"] }),
+  panel("panel.conditional-format", 125, "exact-under", "query_value conditional formats (first matching rule wins; > >= < <=; red/yellow/green/blue/gray or custom hex)", "StatChart thresholds: one step wherever the colour changes; pieces Perses can't colour the same way are named in the finding", {
+    assumptions: ["A.style"],
+  }),
   panel("panel.style", 130, "exact-under", "palette, legend, display type, title alignment", "closest Perses visual option", { assumptions: ["A.style"] }),
   w("widget.logs", 140, "manual", "log_stream / list_stream", `${PLACEHOLDER} (LogTable comes with logs.stream)`, { findingCode: "query.datasource" }),
   w("widget.heatmap", 150, "manual", "heatmap / distribution / histogram", PLACEHOLDER, { findingCode: "widget.unsupported" }),
@@ -50,6 +53,9 @@ export const DASHBOARD_RULES: RuleDef[] = [
   lay("layout.ordered.height", 20, "exact-under", "ordered layout y, height", "y and height unchanged", { assumptions: ["A.row-height"], requires: ["probe:row-height"] }),
   lay("layout.free", 30, "exact-under", "free layout", "deterministic repack into the 24-column grid (row-major by y, then x)", { assumptions: ["A.style"] }),
   lay("layout.group", 40, "exact", "group widget", "its own Grid layout with display.title; children recurse"),
+  lay("layout.group.scale", 45, "exact-under", "children of a group w columns wide (Datadog lays them out inside the group, groups sit side by side)", "x and width scale by 24 / w with rounded edges, so each group fills its full-width Grid section", {
+    assumptions: ["A.style"],
+  }),
   lay("layout.group.collapsed", 50, "exact", "group collapsed / expanded", "display.collapse.open", { requires: ["probe:collapse"] }),
   lay("layout.powerpack", 60, "exact-under", "powerpack", "inlined like a group, title kept", { assumptions: ["A.style"] }),
 

@@ -203,6 +203,7 @@ function optionsOf(type: string, def: Json): Record<string, unknown> {
   copy("show_legend", "showLegend");
   copy("legend_layout", "legendLayout");
   copy("yaxis");
+  if (Array.isArray(def.markers) && def.markers.length) o.markers = def.markers;
   copy("time");
   const reqs = Array.isArray(def.requests) ? def.requests.filter(isObj) : [];
   const displayTypes = reqs.map((r) => str(r.display_type)).filter((x): x is string => !!x);
