@@ -24,6 +24,9 @@ export const ASSUMPTIONS = {
     "a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming)",
   "A.mono-diff": "Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
+  "A.same-key-and": "Datadog applies a literal tag filter and a template variable on the same key together (AND)",
+  "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
+  "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
 } as const;
 
@@ -129,6 +132,17 @@ export const RULES = {
   "fn.cutoff": exact("cutoff_min(q, n) -> q >= n, cutoff_max(q, n) -> q <= n (values beyond the cutoff are removed)"),
   "fn.count_not_null": exact("count_not_null(q) -> count(q): the number of series with a value at each step"),
   "fn.count_nonzero": exact("count_nonzero(q) -> count(q != 0)"),
+  "fn.default_zero.grouped.monitor": under(
+    ["A.monitor-rollup-60s"],
+    "default_zero(q) on a grouped monitor query -> q or 0 * q over the evaluation window (the series Datadog sees in the window)",
+  ),
+  "fn.default_zero.grouped": under(["A.at-range"], "default_zero(q) on a grouped dashboard query -> q or 0 * q[$__range] @ end()"),
+  "fn.per_unit.gauge": {
+    status: "bounded",
+    assumptions: ["A.dd-per-unit", "A.monotonic"],
+    description: "per_second/per_minute/per_hour/derivative(q) where q sums or averages a plain gauge -> k * agg(rate(x[w]))",
+  },
+  "scope.same-key.var": under(["A.same-key-and", "A.var-regex"], "a literal filter and a template variable on the same key -> both matchers"),
   "fn.default_zero.single": exact("default_zero(q) on a single-series query -> q or vector(0)"),
   "fn.exclude_null": exact("exclude_null(q) -> label!=\"\" on every selector for each group-by label (drops the N/A group)"),
   "fn.monotonic_diff": under(["A.align", "A.no-gaps", "A.mono-diff"], "monotonic_diff(q) -> (q - (q offset interval)) >= 0"),

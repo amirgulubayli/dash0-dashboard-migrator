@@ -22,6 +22,8 @@ interface Lowered {
    * Datadog gauge that holds a running total (ddKind gauge, OTel counter), which is what per_second() and friends need.
    */
   rateForm?: PNode;
+  /** rateForm comes from a plain gauge (needs the A.monotonic assumption). */
+  rateFormGauge?: boolean;
   /** The query already aggregates over the whole monitor window (sum(last_W) with .as_count()): no subquery. */
   windowed?: boolean;
 }
@@ -40,6 +42,8 @@ class Lowerer {
 
   /** Set by translateMonitor for sum(last_W): the window in seconds, so .as_count() can become increase(x[W]). */
   monitorSumWindow?: number;
+  /** Set by translateMonitor: the evaluation window W in seconds. */
+  monitorWindow?: number;
 
   constructor(
     readonly ctx: TranslateContext,
@@ -258,8 +262,20 @@ class Lowerer {
 
     if (e.name === "default_zero" && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
-      if (x.groups === null || x.groups.length > 0)
-        this.manual("fn.default_zero.grouped", "default_zero() over a grouped query: PromQL can't fill gaps per series");
+      if (x.groups === null) this.manual("fn.default_zero.scalar", "default_zero() of a constant");
+      if (x.groups.length > 0) {
+        // Zero for every series seen in the dashboard's range: the same query over [$__range] @ end(), times 0.
+        // Dashboards: series seen in the visible range ($__range @ end()). Monitors: series seen in the evaluation window.
+        if (!this.monitor && this.interval !== "$__interval")
+          this.manual("fn.default_zero.grouped", "default_zero() over a grouped query with a fixed interval has no series set to fill");
+        if (this.monitor && this.monitorWindow === undefined) this.manual("fn.default_zero.grouped", "default_zero() in a monitor without a window");
+        const ranged = this.monitor
+          ? mapSelectors(x.node, (sel) => ({ ...sel, range: this.monitorWindow! }))
+          : mapSelectors(x.node, (sel) => ({ ...sel, range: "$__range", at: "end()" }));
+        this.use(this.monitor ? "fn.default_zero.grouped.monitor" : "fn.default_zero.grouped");
+        const zeros: PNode = { k: "binary", op: "*", lhs: { k: "num", value: 0 }, rhs: ranged };
+        return { node: { k: "binary", op: "or", lhs: x.node, rhs: zeros }, groups: x.groups };
+      }
       this.use("fn.default_zero.single");
       return { node: { k: "binary", op: "or", lhs: x.node, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: x.groups };
     }
@@ -267,7 +283,7 @@ class Lowerer {
     if (e.name === "derivative" && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
       if (!x.rateForm) this.manual("fn.derivative.kind", "derivative() has a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total");
-      this.use("fn.derivative.counter");
+      this.use(x.rateFormGauge ? "fn.per_unit.gauge" : "fn.derivative.counter");
       return { node: x.rateForm, groups: x.groups };
     }
 
@@ -279,7 +295,7 @@ class Lowerer {
           "fn.per_unit.kind",
           `${e.name}() has a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total`,
         );
-      this.use("fn.per_unit.counter");
+      this.use(x.rateFormGauge ? "fn.per_unit.gauge" : "fn.per_unit.counter");
       const k = PER_UNIT[e.name]!;
       const node: PNode = k === 1 ? x.rateForm : { k: "binary", op: "*", lhs: { k: "num", value: k }, rhs: x.rateForm };
       return { node, groups: x.groups };
@@ -484,6 +500,11 @@ class Lowerer {
       return { node: { k: "binary", op: "or", lhs: node, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: by };
     }
     if (windowed) return { node, groups: by, windowed: true };
+    if (kind === "gauge" && !counterMode && !explicitRollup && !runningTotal && (agg === "sum" || agg === "avg")) {
+      const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
+      const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
+      return { node, groups: by, rateForm, rateFormGauge: true };
+    }
     if ((runningTotal || (kind === "counter" && counterMode !== null && !explicitRollup)) && (agg === "sum" || agg === "avg")) {
       const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
       const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
@@ -501,9 +522,13 @@ class Lowerer {
     }
     if (s.type === "and") {
       const out = s.items.flatMap((i) => this.scope(i));
-      const eqLabels = out.filter((m) => m.op === "=" || m.op === "=~").map((m) => m.label);
-      if (new Set(eqLabels).size !== eqLabels.length)
+      const isVar = (m: PMatcher) => /^\^\(\$[^)]+\)\$$/.test(m.value);
+      const positives = out.filter((m) => m.op === "=" || m.op === "=~");
+      const literals = positives.filter((m) => !isVar(m)).map((m) => m.label);
+      if (new Set(literals).size !== literals.length)
         this.manual("scope.same-key", "the same tag key appears twice in one scope; Datadog's meaning is ambiguous here", s);
+      const labels = positives.map((m) => m.label);
+      if (new Set(labels).size !== labels.length) this.use("scope.same-key.var");
       return out;
     }
     if (s.type === "var") return this.variable(s.name, s.negated);
@@ -560,7 +585,9 @@ class Lowerer {
   }
 
   variable(name: string, negated: boolean): PMatcher[] {
-    const def = this.ctx.variables?.[name];
+    const raw = this.ctx.variables?.[name];
+    // A variable with an empty prefix ("") is free-form, the same as no prefix.
+    const def = raw && raw.tag !== null && raw.tag.trim() === "" ? { tag: null } : raw;
     if (negated && (!def || def.tag === null))
       this.manual("scope.var.negated", `negated free-form template variable $${name}: its value is a whole tag, which no matcher can exclude`);
     if (!def || def.tag === null) {
@@ -661,6 +688,7 @@ export function translateMonitor(
     if (mq.windowSeconds % 60 !== 0) l.manual("monitor.window.width", "monitor window must be whole minutes");
     // sum(last_W):q.as_count(): the window total is increase over the whole window (no 1m subquery).
     if (mq.timeAgg === "sum" && !mq.change) l.monitorSumWindow = mq.windowSeconds;
+    l.monitorWindow = mq.windowSeconds;
     const lowered = l.expr(mq.query);
     let expr: PNode;
     if (lowered.windowed) {

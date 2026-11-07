@@ -56,6 +56,8 @@ const CASES: [string, string, Partial<DatadogLogQuery>, string, string][] = [
   ["log.group_by.exclude-missing", "", { group_by: { fields: ["@policy_name"], limit: 10, sort: { order: "desc" }, should_exclude_missing: true } }, `topk(10, sum by (policy_name) (increase(${L(', policy_name!=""')})))`, "bounded"],
   ["log.cardinality", "service:a", { compute: { aggregation: "cardinality", metric: "@usr.id" }, group_by: [{ facet: "host" }] }, `count by (host_name) (sum by (host_name, usr_id) (increase(${L(', service_name="a"')})) > 0)`, "bounded"],
   ["log.indexes", "", { indexes: ["main", "security"] }, `sum (increase(${L()}))`, "bounded"],
+  ["log.range.integer", "@http.status_code:>=500", {}, `sum (increase(${L(', http_status_code=~"^([5-9]\\\\d{2}|[1-9]\\\\d{3,})$"')}))`, "bounded"],
+  ["log.or.inclusion-exclusion", "service:a OR host:b", {}, `sum (increase(${L(', service_name="a"')})) + sum (increase(${L(', host_name="b"')})) - sum (increase(${L(', host_name="b", service_name="a"')}))`, "bounded"],
 ];
 
 describe("log queries: one exact PromQL string per rule", () => {
@@ -74,8 +76,9 @@ describe("log queries: one exact PromQL string per rule", () => {
 describe("log queries: fail closed", () => {
   for (const [code, search, extra] of [
     ["log.measure", "service:a", { compute: { aggregation: "avg", metric: "@duration" } }],
-    ["log.or.cross-key", "service:a OR host:b", {}],
-    ["log.range", "@duration:>1000", {}],
+    ["log.or.cross-key", "service:a OR host:b", { compute: { aggregation: "cardinality", metric: "@usr.id" } }],
+    ["log.or.cross-key", "service:a OR host:b OR env:c OR @x:d", {}],
+    ["log.range", "@duration:>1.5", {}],
     ["log.not.complex", "NOT (service:a host:b)", {}],
     ["log.status.unknown", "status:verbose", {}],
     ["log.search.parse", "source:x (unclosed", {}],
@@ -98,11 +101,26 @@ describe("log monitors", () => {
     );
     expect(r).toMatchObject({ status: "bounded", thresholds: { failed: 10, degraded: 5 }, negated: false });
   });
+  it("formula monitors combine their log queries over the window", () => {
+    const vars = [
+      { data_source: "logs", name: "query", compute: { aggregation: "count" }, search: { query: "service:api status:error" } },
+      { data_source: "logs", name: "query1", compute: { aggregation: "count" }, search: { query: "service:api" } },
+    ];
+    const r = translateLogMonitor('formula("(query / query1) * 100").last("1h") > 10', { critical: 10, variables: vars }, CTX);
+    r.rules.forEach((x) => used.add(x));
+    expect(r.promql).toBe(
+      'sum (increase({otel_metric_name="dash0.logs", otel_log_severity_range="ERROR", service_name="api"}[1h])) / sum (increase({otel_metric_name="dash0.logs", service_name="api"}[1h])) * 100 > $__threshold',
+    );
+    expect(r).toMatchObject({ status: "bounded", thresholds: { failed: 10 } });
+    expect(r.rules).toContain("log.monitor.formula");
+  });
+
   it("< is negated, and unknown shapes are manual", () => {
     const lt = translateLogMonitor('logs("service:api").index("*").rollup("count").last("15m") < 1', {}, CTX);
     expect(lt.promql).toBe('-sum (increase({otel_metric_name="dash0.logs", service_name="api"}[15m])) > $__threshold');
     expect(lt).toMatchObject({ thresholds: { failed: -1 }, negated: true });
     expect(translateLogMonitor('formula("query1 / query").last("1d") > 10', {}, CTX).status).toBe("manual");
+    expect(translateLogMonitor('logs("x").rollup("avg", "@d").last("5m") > 1', {}, CTX).status).toBe("manual");
   });
 });
 
@@ -123,7 +141,7 @@ describe("formulas mixing log and metric queries", () => {
     expect(r.assumptions).toEqual(expect.arrayContaining(["A.log-count", "A.otel-counter"]));
   });
   it("a manual log query makes the formula manual", () => {
-    const bad = translateLogQuery({ search: { query: "@x:>1" }, compute: { aggregation: "count" } }, CTX);
+    const bad = translateLogQuery({ search: { query: "@x:>1.5" }, compute: { aggregation: "count" } }, CTX);
     const f = parseFormula("query1 * 2");
     if (!f.ok) throw new Error();
     expect(translateQuery(f.value, {}, new Map([["query1", logRef(bad)]]))).toMatchObject({ status: "manual", promql: null });

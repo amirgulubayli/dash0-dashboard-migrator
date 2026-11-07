@@ -9,6 +9,8 @@ import { parseLogSearch, type LogNode, type LogValue } from "../../parse/logsear
 import { render, type Duration, type PMatcher, type PNode } from "../query/promql.js";
 import { ASSUMPTIONS } from "../query/rules.js";
 import { validatePromQL } from "../../validate/promql.js";
+import { parseFormula } from "../../parse/index.js";
+import { translateQuery, type FormulaEnv } from "../query/index.js";
 
 // ---------------- rules (data) ----------------
 
@@ -50,6 +52,9 @@ export const LOG_RULES = {
   "log.group_by.limit": r("exact-under", ["A.top-stable"], "one facet with a limit N -> topk(N, ...) (bottomk for asc)"),
   "log.group_by.multi-limit": r("exact-under", ["A.group-limit"], "several facets with limits -> by (labels), limits not applied"),
   "log.group_by.exclude-missing": r("exact", [], "should_exclude_missing: true -> label!=\"\" for each group-by label"),
+  "log.range.integer": r("exact", [], "@a:>=500 / @a:[200 TO 299] on integers -> a=~ an exact regex over the decimal digits"),
+  "log.or.inclusion-exclusion": r("bounded", ["A.log-count"], "count(A OR B ...) across keys -> sum of counts by inclusion-exclusion (up to 3 branches)"),
+  "log.monitor.formula": r("bounded", ["A.log-count"], "formula(\"...\").last(W) over log queries -> the formula over windowed counts"),
   "log.indexes": r("exact-under", ["A.all-indexes"], "indexes other than '*' -> all logs (Dash0 has no indexes)"),
   "log.monitor.count": r("bounded", ["A.log-count"], "logs(Q).rollup(count).by(g).last(W) op T -> sum by (g) (increase(...[W])) op $__threshold"),
 } as const satisfies Record<string, LogRule>;
@@ -158,8 +163,12 @@ class LogLowerer {
         return this.orSameKey(n);
       case "not":
         this.manual("log.not.complex", "NOT over a compound log search has no matcher form");
-      case "range":
-        this.manual("log.range", `numeric range on ${n.key} (${n.raw}): labels can't be compared as numbers`);
+      case "range": {
+        const re = intRangeRegex(n.raw);
+        if (!re) this.manual("log.range", `numeric range on ${n.key} (${n.raw}): only integer ranges have a matcher form`);
+        this.use("log.range.integer");
+        return [{ label: this.label(n.key), op: "=~", value: re }];
+      }
       case "var":
         return this.variable(n.name, n.negated);
       case "text":
@@ -167,6 +176,26 @@ class LogLowerer {
       case "term":
         return [this.term(n.key, n.values, n.negated)];
     }
+  }
+
+  /** DNF of a log search: a list of matcher sets (OR of ANDs). Same-key ORs stay one regex matcher. */
+  alternatives(n: LogNode | null): PMatcher[][] {
+    if (n === null) return [[]];
+    if (n.type === "or") {
+      const sameKey = n.items.every((i) => i.type === "term" && !i.negated) && new Set(n.items.map((i) => (i as { key: string }).key)).size === 1;
+      if (sameKey) return [this.orSameKey(n)];
+      return n.items.flatMap((i) => this.alternatives(i));
+    }
+    if (n.type === "and") {
+      let acc: PMatcher[][] = [[]];
+      for (const item of n.items) {
+        const alts = this.alternatives(item);
+        acc = acc.flatMap((a) => alts.map((b) => [...a, ...b]));
+        if (acc.length > 3) this.manual("log.or.cross-key", "OR across keys expands to more than 3 alternatives");
+      }
+      return acc;
+    }
+    return [this.matchers(n)];
   }
 
   orSameKey(n: Extract<LogNode, { type: "or" }>): PMatcher[] {
@@ -207,7 +236,8 @@ class LogLowerer {
   }
 
   variable(name: string, negated: boolean): PMatcher[] {
-    const def = this.ctx.variables?.[name];
+    const raw = this.ctx.variables?.[name];
+    const def = raw && raw.tag !== null && raw.tag.trim() === "" ? { tag: null } : raw;
     if (!def || def.tag === null) {
       if (negated) this.manual("log.var.negated", `negated free-form template variable $${name}`);
       this.use("log.match.var.dropped");
@@ -241,7 +271,10 @@ class LogLowerer {
     }
     const parsed = parseLogSearch(q.search?.query ?? "");
     if (!parsed.ok) this.manual("log.search.parse", `log search does not parse: ${parsed.error.message} at ${parsed.error.pos}`, q.search?.query);
-    const matchers: PMatcher[] = [{ label: "otel_metric_name", op: "=", value: "dash0.logs" }, ...this.matchers(parsed.value)];
+    // Disjunctive normal form: each alternative is one matcher set. One alternative is the usual case.
+    const alts = this.alternatives(parsed.value);
+    const name: PMatcher = { label: "otel_metric_name", op: "=", value: "dash0.logs" };
+    const matchers: PMatcher[] = [name, ...alts[0]!];
 
     const by: string[] = [];
     const facets = (gb ?? []) as { facet?: string; limit?: number; sort?: { order?: string } }[];
@@ -262,7 +295,26 @@ class LogLowerer {
 
     const agg = q.compute?.aggregation ?? "count";
     let node: PNode;
-    if (agg === "count") {
+    if (agg === "count" && alts.length > 1) {
+      // |A ∪ B ∪ C| by inclusion-exclusion; every intersection is again a matcher set (maths.md §8).
+      if (alts.length > 3) this.manual("log.or.cross-key", "OR across keys with more than 3 branches");
+      this.use("log.count");
+      this.use("log.or.inclusion-exclusion");
+      const extra = matchers.slice(1 + alts[0]!.length); // group-by exclusions added below apply to every term
+      const term = (ms: PMatcher[]): PNode => ({ k: "agg", op: "sum", by: groups, expr: { k: "call", fn: "increase", args: [{ k: "selector", matchers: [name, ...ms, ...extra], range: width }] } });
+      const idx = alts.map((_, i) => i);
+      const subsets: number[][] = [];
+      for (let mask = 1; mask < 1 << alts.length; mask++) subsets.push(idx.filter((i) => mask & (1 << i)));
+      let acc: PNode | null = null;
+      for (const sub of subsets) {
+        const t = term(sub.flatMap((i) => alts[i]!));
+        if (acc === null) acc = t;
+        else acc = { k: "binary", op: sub.length % 2 === 1 ? "+" : "-", lhs: acc, rhs: t };
+      }
+      node = acc!;
+    } else if (alts.length > 1) {
+      this.manual("log.or.cross-key", "OR across different keys is only translated for counts");
+    } else if (agg === "count") {
       this.use("log.count");
       node = { k: "agg", op: "sum", by: groups, expr: inc };
     } else if (agg === "cardinality") {
@@ -325,8 +377,8 @@ export function logRef(t: LogTranslation): import("../query/types.js").LoweredRe
 }
 
 /** A dashboard query with `data_source: "logs"`. */
-export function translateLogQuery(q: DatadogLogQuery, ctx: LogTranslateContext): LogTranslation {
-  return run(ctx, "query", (l) => l.query(q));
+export function translateLogQuery(q: DatadogLogQuery, ctx: LogTranslateContext, window?: number): LogTranslation {
+  return run(ctx, window === undefined ? "query" : "alert", (l) => l.query(q, window));
 }
 
 // ---------------- log monitors ----------------
@@ -341,9 +393,15 @@ const LOG_MONITOR =
 const UNIT: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
 
 /** A `log alert` monitor query: logs("Q").index("*").rollup("count").by("host").last("5m") > 10. */
-export function translateLogMonitor(query: string, opts: { critical?: number; warning?: number }, ctx: LogTranslateContext): LogMonitorTranslation {
+export function translateLogMonitor(
+  query: string,
+  /** `variables`: the monitor's options.variables, needed for formula(...) monitors. */
+  opts: { critical?: number; warning?: number; variables?: unknown[] },
+  ctx: LogTranslateContext,
+): LogMonitorTranslation {
   let thresholds: LogMonitorTranslation["thresholds"] = null;
   let negated = false;
+  if (/^\s*formula\(/.test(query)) return translateLogFormulaMonitor(query, opts, ctx);
   const t = run(ctx, "alert", (l) => {
     const m = LOG_MONITOR.exec(query);
     if (!m) return l.manual("log.monitor.shape", "log monitor query has a shape with no rule", query);
@@ -385,4 +443,110 @@ function pattern(v: string): string {
     .split("*")
     .map((p) => p.split("?").map((q) => q.replace(/[.+^${}()|[\]\\]/g, "\\$&")).join("."))
     .join(".*");
+}
+
+// ---------------- formula log monitors ----------------
+
+const FORMULA_MONITOR = /^\s*formula\("((?:[^"\\]|\\.)*)"\)\.last\("(\d+)([smhd])"\)\s*(>=|>|<=|<)\s*(-?\d+(?:\.\d+)?)\s*$/;
+
+/** formula("(query / query1) * 100").last("1d") > 10, with the log queries in options.variables. */
+function translateLogFormulaMonitor(
+  query: string,
+  opts: { critical?: number; warning?: number; variables?: unknown[] },
+  ctx: LogTranslateContext,
+): LogMonitorTranslation {
+  const fail = (code: string, message: string): LogMonitorTranslation => ({
+    status: "manual", promql: null, rules: [], assumptions: [], node: null, groups: null, thresholds: null, negated: false,
+    findings: [{ status: "manual", code, message, itemKind: "alert", itemId: ctx.where ?? "", original: query }],
+  });
+  const m = FORMULA_MONITOR.exec(query);
+  if (!m) return fail("log.monitor.shape", "log formula monitor has a shape with no rule");
+  const [, formula, n, unit, op, th] = m;
+  const vars = (opts as { variables?: { name?: string; data_source?: string }[] }).variables ?? [];
+  if (!vars.length) return fail("log.monitor.variables", "formula monitor without query variables");
+  const window = Number(n) * UNIT[unit!]!;
+  const env: FormulaEnv = new Map();
+  for (const v of vars) {
+    if (v.data_source !== "logs" || !v.name) return fail("log.monitor.variables", "formula monitor variable is not a named log query");
+    env.set(v.name, logRef(translateLogQuery(v as DatadogLogQuery, ctx, window)));
+  }
+  const f = parseFormula(formula!.replace(/\\"/g, '"'));
+  if (!f.ok) return fail("log.monitor.formula", `formula does not parse: ${f.error.message}`);
+  const t = translateQuery(f.value, {}, env);
+  if (!t.promql) return { ...t, node: null, groups: null, thresholds: null, negated: false, findings: t.findings };
+  const crit = Number(th);
+  const lt = op === "<" || op === "<=";
+  const cmp = op === ">=" || op === "<=" ? ">=" : ">";
+  const promql = `${lt ? `-(${t.promql})` : t.promql} ${cmp} $__threshold`;
+  const v = validatePromQL(promql);
+  if (!v.ok) return fail("promql.invalid", "emitted PromQL does not parse");
+  const rules = [...t.rules, "log.monitor.formula"];
+  const thresholds = lt
+    ? { failed: -crit, ...(opts.warning !== undefined && { degraded: -opts.warning }) }
+    : { failed: crit, ...(opts.warning !== undefined && { degraded: opts.warning }) };
+  return { status: worst(t.status, LOG_RULES["log.monitor.formula"].status), promql, rules, assumptions: t.assumptions, findings: t.findings, node: null, groups: null, thresholds, negated: lt };
+}
+
+// ---------------- integer ranges -> regex ----------------
+
+/** `>=500`, `>499`, `<100`, `<=99`, `[200 TO 299]` on non-negative integers -> an anchored regex, or null. */
+export function intRangeRegex(raw: string): string | null {
+  let lo: number, hi: number;
+  const cmp = /^(>=|>|<=|<)(\d+)$/.exec(raw);
+  const br = /^\[(\d+) TO (\d+)\]$/.exec(raw);
+  if (cmp) {
+    const v = Number(cmp[2]);
+    if (cmp[1] === ">=") [lo, hi] = [v, Infinity];
+    else if (cmp[1] === ">") [lo, hi] = [v + 1, Infinity];
+    else if (cmp[1] === "<=") [lo, hi] = [0, v];
+    else [lo, hi] = [0, v - 1];
+  } else if (br) [lo, hi] = [Number(br[1]), Number(br[2])];
+  else return null;
+  if (!Number.isSafeInteger(lo) || (hi !== Infinity && !Number.isSafeInteger(hi)) || lo > hi) return null;
+  const parts = rangeParts(lo, hi === Infinity ? null : hi);
+  return parts ? `^(${parts.join("|")})$` : null;
+}
+
+/** Regex alternatives for integers in [lo, hi] (hi null = unbounded), without leading zeros. */
+function rangeParts(lo: number, hi: number | null): string[] | null {
+  const out: string[] = [];
+  const loLen = String(lo).length;
+  if (hi === null) {
+    // Same digit count as lo, from lo up; then every number with more digits.
+    out.push(...digitRanges(String(lo), "9".repeat(loLen)));
+    out.push(`[1-9]\\d{${loLen},}`);
+    return out;
+  }
+  for (let len = loLen; len <= String(hi).length; len++) {
+    const a = len === loLen ? String(lo) : "1" + "0".repeat(len - 1);
+    const b = len === String(hi).length ? String(hi) : "9".repeat(len);
+    out.push(...digitRanges(a, b));
+    if (out.length > 40) return null;
+  }
+  return out;
+}
+
+/** Same-length decimal strings a <= b -> regex pieces covering exactly [a, b]. */
+function digitRanges(a: string, b: string): string[] {
+  if (a === b) return [a];
+  let i = 0;
+  while (a[i] === b[i]) i++;
+  const prefix = a.slice(0, i);
+  const restLen = a.length - i - 1;
+  const d = (x: string) => (restLen === 0 ? "" : `\\d{${restLen}}`);
+  const aTail = a.slice(i + 1), bTail = b.slice(i + 1);
+  const allZero = /^0*$/.test(aTail), allNine = /^9*$/.test(bTail);
+  const ai = Number(a[i]), bi = Number(b[i]);
+  const out: string[] = [];
+  if (allZero && allNine) return [`${prefix}${cls(ai, bi)}${d("")}`];
+  if (allZero) out.push(`${prefix}${cls(ai, bi - 1)}${d("")}`);
+  else out.push(...digitRanges(a.slice(i), String(ai) + "9".repeat(restLen)).map((x) => prefix + x));
+  if (!allZero && bi - ai > 1) out.push(`${prefix}${cls(ai + 1, bi - 1)}${d("")}`);
+  if (allNine && !allZero) out.push(`${prefix}${cls(bi, bi)}${d("")}`);
+  else if (!allNine) out.push(...digitRanges(String(bi) + "0".repeat(restLen), b.slice(i)).map((x) => prefix + x));
+  return out.filter((x, k, arr) => arr.indexOf(x) === k);
+}
+
+function cls(a: number, b: number): string {
+  return a === b ? String(a) : `[${a}-${b}]`;
 }
