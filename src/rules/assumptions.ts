@@ -1,5 +1,5 @@
 // Assumptions behind exact-under claims (plan 03 §2). Each is phrased so it can be checked on live data.
-// The first nine are T4's (src/translate/query/rules.ts, PR #3), copied verbatim; tests/rules keeps them in sync.
+// T4's assumptions come first (src/translate/query/rules.ts, PR #3), copied verbatim; tests/rules keeps them in sync.
 
 export const ASSUMPTIONS = {
   // T4
@@ -12,6 +12,14 @@ export const ASSUMPTIONS = {
   "A.var-regex": "the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a|b) for several)",
   "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
+  "A.dd-per-unit": "Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog)",
+  "A.no-gaps": "every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier",
+  "A.kind-metadata": "the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry)",
+  "A.otel-counter": "the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry)",
+  "A.top-stable": "the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same series as PromQL's per-step topk",
+  "A.static-tags": "each series keeps its tags for the whole window, so .weighted() has nothing to re-weight",
+  "A.dd-count-default": "Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog)",
+  "A.kind-suffix": "a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming)",
   // T17 additions
   "A.same-samples": "Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s)",
   "A.full-window": "every evaluated series has samples across the whole monitor window (Datadog require_full_window)",
@@ -40,5 +48,13 @@ export const T4_ASSUMPTION_IDS = [
   "A.var-default",
   "A.var-regex",
   "A.tag-default",
+  "A.dd-per-unit",
+  "A.no-gaps",
+  "A.kind-metadata",
+  "A.otel-counter",
+  "A.top-stable",
+  "A.static-tags",
+  "A.dd-count-default",
+  "A.kind-suffix",
   "A.query-threshold",
 ] as const satisfies readonly AssumptionId[];

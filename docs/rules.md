@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 34 | 11 | 4 | 36 | 85 |
-| planned | 36 | 30 | 9 | 21 | 96 |
+| implemented | 42 | 16 | 11 | 33 | 102 |
+| planned | 36 | 30 | 4 | 19 | 89 |
 
 ## Pipeline order
 
@@ -17,14 +17,14 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 1 | `ingest` Ingest and normalise | source item | no | 3 | Read the source JSON, unwrap containers, coerce types, keep the raw original. |
 | 2 | `classify` Classify the item | monitor | yes | 3 | Decide which pipeline a monitor goes through; anything unknown stops here as manual. |
 | 3 | `parse` Parse | query string | yes | 4 | Datadog query / formula / monitor strings → AST (T3). Unparseable text is manual with the original kept. |
-| 4 | `select` Select the metric | metric reference | yes | 11 | Datadog metric → OTel metric through the mapping table. |
-| 5 | `scope` Scope filters | filter term | no | 15 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
+| 4 | `select` Select the metric | metric reference | yes | 12 | Datadog metric → OTel metric through the mapping table. |
+| 5 | `scope` Scope filters | filter term | no | 16 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
-| 7 | `time` Time aggregation | postfix or rollup call | no | 21 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
+| 7 | `time` Time aggregation | postfix or rollup call | no | 26 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
-| 9 | `function` Functions | function call | yes | 22 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
+| 9 | `function` Functions | function call | yes | 24 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 8 | Formulas over named queries, constants, division. |
-| 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 11 | The monitor's window, time aggregation and comparator around the translated inner query. |
+| 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 18 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 7 | Deterministic Mustache token rewrite into Go-template annotations. |
 | 14 | `widget` Widget → panel | widget | yes | 16 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
@@ -75,6 +75,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 64 | `metric.derived` | mapping entry that is an expression over several OTel metrics | no output until select.metric.derived ships | manual | unit | — | T4 | implemented |
 | 66 | `select.metric.transform` | mapping entry with scale k and/or sumBy labels | k * x, sum without(<sumBy>) (x): both exact rewrites | exact | — | — | T4 | planned |
 | 68 | `select.metric.derived` | mapping entry with a derived expression over several OTel metrics | the entry's PromQL expression, status from the entry's own claim | exact-under(A.align) | — | — | T4 | planned |
+| 90 | `select.metric.kind-metadata` | Datadog metric with no mapping entry but a kind in its integration's metadata.csv | keep the Datadog name; kind from metadata.csv | exact-under(A.kind-metadata) | unit | — | T4 | implemented |
 | 999 (fallback) | `select.metric.unmapped` | Datadog metric with no mapping entry | keep the Datadog name, assume gauge | exact-under(A.kind-gauge) | unit | — | T4 | implemented |
 
 - `select.metric.approximate`: ε: per mapping entry: the difference stated in the entry's note (e.g. RSS vs used memory). Tried before select.metric.mapped: an entry marked approximate never counts as exact.
@@ -94,14 +95,15 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 50 | `scope.in` | key IN (a,b) | key=~"^(a\|b)$" | exact | unit | — | T4 | implemented |
 | 60 | `scope.or.same-key` | key:a OR key:b | key=~"^(a\|b)$" | exact | unit | — | T4 | implemented |
 | 70 | `scope.not` | NOT key:a | key!="a" | exact | unit | — | T4 | implemented |
+| 75 | `scope.not.set` | NOT (key:a OR key:b) / NOT key IN (a,b) / NOT key:a* | key!~"^(a\|b)$" | exact | unit | — | T4 | implemented |
 | 80 | `scope.var` | $var bound to a tag key | label=~"^($var)$" (anchored: Dash0 regex is unanchored) | exact-under(A.var-regex) | unit | — | T4 | implemented |
+| 82 | `scope.var.negated` | !$var / -$var | label!~"^($var)$" | exact-under(A.var-regex) | unit | — | T4 | implemented |
 | 85 | `label.default` | tag without a tag-table entry | label with dots replaced by underscores | exact-under(A.tag-default) | unit | — | T4 | implemented |
 | 90 | `scope.var.free-form` | $var with no tag key ($scope) | dropped; filters nothing at its default | exact-under(A.var-default) | unit | — | T4 | implemented |
 | 100 | `scope.same-key` | the same tag key twice in one scope | no output: Datadog's meaning is ambiguous | manual | unit | — | T4 | implemented |
 | 110 | `scope.or.cross-key` | key1:a OR key2:b | no output: not a matcher set | manual | unit | — | T4 | implemented |
 | 120 | `scope.not.complex` | NOT over a compound filter | no output | manual | unit | — | T4 | implemented |
 | 130 | `scope.bare-tag` | bare tag without a key | no output: no label to map to | manual | unit | — | T4 | implemented |
-| 140 | `scope.var.negated` | negated template variable | no output | manual | unit | — | T4 | implemented |
 
 - `scope.or.cross-key`: Candidate: union of two selectors with `or`, exact when the series sets are disjoint. Needs a claim and a property test first.
 
@@ -130,8 +132,13 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 75 | `time.as_count.counter.anchored` | .as_count() on a cumulative counter (or a Datadog RATE metric on an OTel counter) | increase(x[w] anchored) | exact-under(A.same-samples, A.align, A.boundary) | proof:T4, exhaustive:E1 | probe:anchored | T4 | planned |
 | 80 | `time.as_count.counter` | .as_count() on a cumulative counter | increase(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
 | 90 | `time.as_rate.counter` | .as_rate() on a cumulative counter | rate(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 92 | `time.unmapped.counter` | Datadog count/rate (metadata.csv) without a mapping entry, with .as_count() / .as_rate() or plain | increase(x[w]) / rate(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 93 | `time.unmapped.suffix-counter` | no metadata.csv entry, name ends in .count/.total, with .as_count()/.as_rate() | treated as a Datadog count: increase / rate | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 94 | `time.count.default` | Datadog COUNT metric (metadata.csv) without a modifier | increase(x[w]), like .as_count() | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
 | 95 | `time.as_rate.delta.sum` | .as_rate() on a delta sum | sum_over_time(x[w]) / w | exact-under(A.align, A.boundary) | — | — | T4 | planned |
 | 100 | `time.fill.null` | .fill(null) | nothing: Datadog's default, PromQL does not fill | exact | unit | — | T4 | implemented |
+| 102 | `time.fill.zero.single` | .fill(zero) on a single-series query | q or vector(0) | exact | unit | — | T4 | implemented |
+| 104 | `time.weighted` | .weighted() | no-op | exact-under(A.static-tags) | unit | — | T4 | implemented |
 | 110 | `time.as_rate.delta` | .as_rate() on a delta sum (until the planned rule ships) | no output | manual | unit | — | T4 | implemented |
 | 120 | `time.as_count.histogram` | .as_count() on a histogram | no output | manual | unit | — | T4 | implemented |
 | 130 | `time.as_rate.histogram` | .as_rate() on a histogram | no output | manual | unit | — | T4 | implemented |
@@ -139,14 +146,18 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 150 | `time.rollup.width` | .rollup() width that is not whole seconds | no output | manual | unit | — | T4 | implemented |
 | 160 | `time.rollup.monitor-width` | monitor query with a rollup other than 60 s | no output | manual | unit | — | T4 | implemented |
 | 170 | `time.rollup.args` | .rollup() with too many arguments | no output | manual | unit | — | T4 | implemented |
-| 180 | `time.rollup.counter` | .rollup() combined with a counter rate | no output | manual | unit | — | T4 | implemented |
+| 180 | `time.rollup.counter` | .as_count().rollup(sum, s) / .as_rate().rollup(avg, s) | increase(x[s]) / rate(x[s]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
 | 190 | `time.fill` | .fill() other than null (zero, last, linear) | no output: PromQL does not fill gaps | manual | unit | — | T4 | implemented |
 
 - `time.ddrate.plain`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.as_count.counter.anchored`: Replaces time.as_count.counter (bounded) once Dash0 accepts `anchored`. Priority 75 so it wins when enabled.
 - `time.as_count.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.as_rate.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `time.unmapped.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `time.unmapped.suffix-counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `time.count.default`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.as_rate.delta.sum`: Today T4 fails closed (time.as_rate.delta). Follows from T8 divided by a constant.
+- `time.rollup.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.fill`: fill(zero): `or vector(0)` loses label sets; fill(last): last_over_time changes staleness. No claim yet.
 
 ## Space aggregation (`space`)
@@ -169,25 +180,26 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 70 | `fn.timeshift.future` | timeshift into the future or by a fraction of a second | no output | manual | unit | — | T4 | implemented |
 | 80 | `fn.args` | function argument of the wrong type | no output | manual | unit | — | T4 | implemented |
 | 90 | `query.postfix.non-metric` | postfix function on a non-metric expression | no output | manual | unit | — | T4 | implemented |
-| 100 | `fn.per_second.counter` | per_second(q) on a counter | rate(x[w]) | bounded(ε) | proof:T3 | — | T4 | planned |
-| 110 | `fn.per_minute.counter` | per_minute(q) on a counter | 60 * rate(x[w]) | bounded(ε) | proof:T3 | — | T4 | planned |
-| 120 | `fn.per_hour.counter` | per_hour(q) on a counter | 3600 * rate(x[w]) | bounded(ε) | proof:T3 | — | T4 | planned |
-| 130 | `fn.diff.counter` | diff(q) on a counter | increase(x[step]) | bounded(ε) | proof:T3 | — | T4 | planned |
+| 100 | `fn.per_unit.counter` | per_second/per_minute/per_hour(q) over a running total or a counter | k * agg(rate(x[w])) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 105 | `fn.derivative.counter` | derivative(q) over a gauge holding an OTel counter's running total | agg(rate(x[w])) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 110 | `fn.diff` | diff(q) | q - (q offset interval) | exact-under(A.align, A.no-gaps) | unit | — | T4 | implemented |
+| 115 | `fn.cutoff` | cutoff_min(q, n) / cutoff_max(q, n) | q >= n / q <= n | exact | unit | — | T4 | implemented |
+| 120 | `fn.count_not_null` | count_not_null(q) | count(q) | exact | unit | — | T4 | implemented |
+| 125 | `fn.count_nonzero` | count_nonzero(q) | count(q != 0) | exact | unit | — | T4 | implemented |
+| 130 | `fn.default_zero.single` | default_zero(q) on a single-series query | q or vector(0) | exact | unit | — | T4 | implemented |
 | 140 | `fn.top.window` | top(q, N, 'mean'\|'max'\|'min'\|'sum', 'desc'\|'asc') | x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc) | exact-under(A.top-uniform) | — | probe:at-modifier | T4 | planned |
+| 145 | `fn.top` | top(q, N, method, order) / topN / bottomN | topk(N, q) / bottomk(N, q) | exact-under(A.top-stable) | unit | — | T4 | implemented |
 | 150 | `fn.histogram.quantile` | pXX:metric on a distribution | histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w]))) | bounded(ε) | — | — | T4 | planned |
-| 160 | `fn.per_second.gauge` | per_second / derivative on a gauge | no output; candidate deriv() is a least-squares slope, not Datadog's point difference | manual | — | — | T4 | planned |
-| 170 | `fn.diff.gauge` | diff(q) on a gauge | no output; candidate delta() extrapolates | manual | — | — | T4 | planned |
+| 160 | `fn.per_unit.kind` | per_second / per_minute / per_hour / derivative on a plain gauge (47 corpus cases) | no output; candidate deriv() is a least-squares slope, not Datadog's point difference | manual | — | — | T4 | planned |
 | 180 | `fn.cumsum` | cumsum(q) / integral(q) | no output: accumulates over the visible window | manual | — | — | T4 | planned |
 | 190 | `fn.anomalies` | anomalies() / forecast() / outliers() | no output: no PromQL counterpart (maths.md §9.5) | manual | — | — | T4 | planned |
 | 200 | `fn.calendar-shift` | month_before() and other calendar shifts | no output: months are not fixed seconds | manual | — | — | T4 | planned |
-| 210 | `fn.weighted` | weighted() (52 corpus cases) | no output: needs per-sample weights PromQL does not carry | manual | — | — | T4 | planned |
 | 999 (fallback) | `fn.unknown` | any other Datadog function (T4 emits fn.<name>) | no output; original kept | manual | unit | — | T4 | implemented |
 
-- `fn.per_second.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
-- `fn.per_minute.counter`: ε: 60 × (|r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b)).
-- `fn.per_hour.counter`: ε: 3600 × (|r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b)).
-- `fn.diff.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). Becomes exact-under with probe:anchored, like time.as_count.counter.anchored.
+- `fn.per_unit.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `fn.derivative.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `fn.top.window`: Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105).
+- `fn.top`: fn.top.window (planned, priority 140) drops A.top-stable by ranking once over the window.
 - `fn.histogram.quantile`: ε: width of the histogram bucket containing the quantile, plus DDSketch's 1% relative error on the Datadog side. Depends on how the metric is ingested (explicit buckets vs exponential histogram).
 
 ## Arithmetic and formulas (`arith`)
@@ -212,16 +224,17 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 10 | `monitor.window` | fn(last_W):Q with fn in avg\|sum\|min\|max | fn_over_time((Q on 1m buckets)[W:1m]), the subquery form (maths.md §5, D-28 corrected) | exact-under(A.monitor-rollup-60s, A.boundary) | unit, proof:T5, property:T16 | — | T4 | implemented |
 | 20 | `monitor.cmp.gt` | > / >= | expr > $__threshold (>= for >=), critical → failed, warning → degraded | exact | unit | — | T4 | implemented |
 | 30 | `monitor.cmp.lt` | < / <= | -(expr) > $__threshold with negated thresholds | exact | unit, proof:T7, exhaustive:E4 | probe:lt-threshold | T4 | implemented |
-| 40 | `alert.window.sum.count` | sum(last_W) on a count or .as_count() query | increase(x[W]) (anchored once probe:anchored is yes, then exact-under) | bounded(ε) | proof:T3, proof:T4 | — | T6 | planned |
+| 35 | `monitor.cmp.eq` | == T / != T | -abs(expr - T) >= $__threshold / abs(expr - T) > $__threshold, failed 0 | exact | unit | — | T4 | implemented |
+| 40 | `monitor.sum.as_count` | sum(last_W):q.as_count() on a counter | agg(increase(x[W])) | bounded(ε) | unit, proof:T3, proof:T4 | — | T4 | implemented |
 | 50 | `monitor.threshold.mismatch` | query threshold differs from options.thresholds.critical | the query's threshold is used; warn finding | exact-under(A.query-threshold) | unit | — | T4 | implemented |
 | 55 | `monitor.as_count` | .as_count() inside a monitor query | no output (Datadog's monitor evaluation order for counts differs, kb 06 §7.1); alert.window.sum.count is the planned rule | manual | unit | — | T4 | implemented |
-| 60 | `monitor.change` | change() / pct_change() monitors | no output until a claim is derived | manual | unit | — | T4 | implemented |
+| 60 | `monitor.change` | change(fn(last_W), last_C) / pct_change(...) | X - X offset C; 100 * (X - X offset C) / X offset C | exact | unit | — | T4 | implemented |
 | 70 | `monitor.window.kind` | window other than last_* (e.g. a cumulative window) | no output | manual | unit | — | T4 | implemented |
 | 80 | `monitor.window.width` | window that is not whole minutes | no output | manual | unit | — | T4 | implemented |
 | 90 | `monitor.time-agg` | monitor time aggregation other than avg/sum/min/max | no output | manual | unit | — | T4 | implemented |
 | 999 (fallback) | `monitor.cmp` | any other comparator | no output | manual | unit | — | T4 | implemented |
 
-- `alert.window.sum.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `monitor.sum.as_count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 
 ## Check-rule assembly (`alert`)
 
@@ -364,15 +377,23 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Id | Statement | Used by |
 |---|---|---|
-| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 7 |
+| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 8 |
 | `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 9 |
 | `A.kind-gauge` | the metric is a gauge; there is no mapping-table entry to confirm its kind | 1 |
 | `A.monitor-rollup-60s` | Datadog evaluates the monitor's inner query on 60 s buckets | 1 |
 | `A.nonzero-denominator` | the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN) | 2 |
 | `A.var-default` | a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing | 2 |
-| `A.var-regex` | the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a\|b) for several) | 1 |
+| `A.var-regex` | the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a\|b) for several) | 2 |
 | `A.tag-default` | the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry) | 1 |
 | `A.query-threshold` | Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical | 1 |
+| `A.dd-per-unit` | Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog) | 2 |
+| `A.no-gaps` | every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier | 1 |
+| `A.kind-metadata` | the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry) | 3 |
+| `A.otel-counter` | the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry) | 3 |
+| `A.top-stable` | the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same series as PromQL's per-step topk | 1 |
+| `A.static-tags` | each series keeps its tags for the whole window, so .weighted() has nothing to re-weight | 1 |
+| `A.dd-count-default` | Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog) | 1 |
+| `A.kind-suffix` | a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming) | 1 |
 | `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
@@ -409,12 +430,17 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 
 - `select.metric.approximate` (bounded(ε), implemented, T4)
 - `select.metric.derived` (exact-under(A.align), planned, T4)
+- `select.metric.kind-metadata` (exact-under(A.kind-metadata), implemented, T4)
 - `select.metric.unmapped` (exact-under(A.kind-gauge), implemented, T4)
 - `scope.var` (exact-under(A.var-regex), implemented, T4)
+- `scope.var.negated` (exact-under(A.var-regex), implemented, T4)
 - `label.default` (exact-under(A.tag-default), implemented, T4)
 - `scope.var.free-form` (exact-under(A.var-default), implemented, T4)
 - `time.as_rate.delta.sum` (exact-under(A.align, A.boundary), planned, T4)
+- `time.weighted` (exact-under(A.static-tags), implemented, T4)
+- `fn.diff` (exact-under(A.align, A.no-gaps), implemented, T4)
 - `fn.top.window` (exact-under(A.top-uniform), planned, T4)
+- `fn.top` (exact-under(A.top-stable), implemented, T4)
 - `fn.histogram.quantile` (bounded(ε), planned, T4)
 - `arith.group-subset` (exact-under(A.nonzero-denominator), planned, T4)
 - `monitor.threshold.mismatch` (exact-under(A.query-threshold), implemented, T4)
