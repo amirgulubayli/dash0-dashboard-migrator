@@ -11,6 +11,7 @@ import type { Report, ReportItem } from "../report/types.js";
 import { inputHashOf } from "./migrate.js";
 import { verifyPlan } from "./plan-lock.js";
 import { checkReview, parseReview, ReviewError, type ReviewCheck, type ReviewDecision, type ReviewItem } from "./review.js";
+import { toReviewItem } from "./review-session.js";
 
 export interface ApplyOptions {
   planDir: string;
@@ -33,10 +34,6 @@ export type ApplyOutcome =
 const sha = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
 const lastSegment = (id: string) => id.slice(id.lastIndexOf("/") + 1);
 
-function toReviewItem(i: ReportItem): ReviewItem | null {
-  if (i.kind !== "panel" && i.kind !== "alert") return null;
-  return { id: i.id, kind: i.kind, status: i.status, title: i.title };
-}
 
 /** Markdown placeholder for a panel the reviewer flagged; same shape as T5's placeholders, plus the reviewer's note. */
 export function flaggedPlaceholder(item: ReportItem, note: string): string {

@@ -10,6 +10,9 @@ import { loadReport, startServer } from "./serve/server.js";
 import { ConfigError, loadConfig, resolveConfig, type Dd2dash0Config } from "./pipeline/config.js";
 import { runPlan } from "./pipeline/plan.js";
 import { runApply } from "./pipeline/apply.js";
+import { terminalReview } from "./pipeline/review-terminal.js";
+import { findConsoleDir, startReviewServer } from "./serve/review.js";
+import { createInterface } from "node:readline/promises";
 
 export const VERSION = "0.2.0";
 
@@ -17,6 +20,7 @@ const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards + monitors to Das
 
 Usage:
   dd2dash0 plan  (--input <dir> | --api) [--config dd2dash0.yaml] [--out plan] [options]   translate, import nothing
+  dd2dash0 review <plan dir> [--terminal] [--port 4318] [--reviewer <name>]                 decide what gets imported
   dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run]
   dd2dash0 migrate --from datadog (--input <dir> | --api) [options]                        one-shot: translate + import all
   dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
@@ -57,6 +61,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
     return 0;
   }
   if (cmd === "plan") return runPlanCmd(rest);
+  if (cmd === "review") return runReviewCmd(rest);
   if (cmd === "apply") return runApplyCmd(rest);
   if (cmd === "migrate") return runMigrate(rest);
   if (cmd === "serve") return runServe(rest);
@@ -229,6 +234,54 @@ async function runPlanCmd(args: string[]): Promise<number> {
   } catch (e) {
     console.error(`dd2dash0 plan: ${(e as Error).message}`);
     return EXIT.failed;
+  }
+}
+
+async function runReviewCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--port", "--reviewer", "--console"], ["--terminal", "--all"]);
+  if (typeof r === "string" || r._.length !== 1) {
+    console.error(`${typeof r === "string" ? r : "usage: dd2dash0 review <plan dir> [--terminal]"}\n\n${USAGE}`);
+    return EXIT.usage;
+  }
+  const planDir = resolve(r._[0]!);
+  const reviewer = r.v["--reviewer"] ?? process.env.USER ?? "";
+  if (r.b.has("--terminal")) {
+    // Read lines through the async iterator: it buffers input, so piped keystrokes aren't lost between prompts
+    // (readline's question() drops lines that arrive while no question is pending).
+    const rl = createInterface({ input: process.stdin, terminal: false });
+    const lines = rl[Symbol.asyncIterator]();
+    try {
+      const out = await terminalReview(planDir, reviewer, {
+        ask: async (prompt) => {
+          process.stdout.write(prompt);
+          const n = await lines.next();
+          if (!process.stdin.isTTY && !n.done) process.stdout.write(`${n.value}\n`); // echo piped input
+          return n.done ? null : n.value;
+        },
+        print: (line) => console.log(line),
+      }, { all: r.b.has("--all") });
+      return EXIT.ok;
+    } catch (e) {
+      console.error(`dd2dash0 review: ${(e as Error).message}`);
+      return EXIT.refused;
+    } finally {
+      rl.close();
+    }
+  }
+  const port = Number(r.v["--port"] ?? 4318);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    console.error("--port must be a port number");
+    return EXIT.usage;
+  }
+  const consoleDir = r.v["--console"] ? resolve(r.v["--console"]) : findConsoleDir(import.meta.dirname);
+  try {
+    const { url } = await startReviewServer({ planDir, port, ...(consoleDir ? { consoleDir } : {}), reviewer });
+    console.log(`dd2dash0 review: ${url}  (plan ${planDir}; ${consoleDir ? "console" : "console not built: notice page, or use --terminal"}; Ctrl+C to stop)`);
+    console.log(`  decisions are saved to ${join(planDir, "review.json")}; then: dd2dash0 apply ${r._[0]} --approved ${join(r._[0]!, "review.json")}`);
+    return new Promise<number>(() => {}); // keep serving
+  } catch (e) {
+    console.error(`dd2dash0 review: ${(e as Error).message}`);
+    return EXIT.refused;
   }
 }
 
