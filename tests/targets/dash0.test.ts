@@ -9,7 +9,7 @@ import {
 
 const TOKEN = "tok_SECRET_should_never_leak";
 const rule = (over: Partial<PrometheusAlertRule> = {}): PrometheusAlertRule => ({
-  id: "dd-high-mem",
+  id: "3e643081-f9f9-5867-88b2-d6c8a6b05f30", // T6: UUIDv5 of the Datadog monitor id
   name: "[Redis] High memory consumption",
   expression: "avg_over_time((100 * avg(x) / avg(y))[5m:1m]) > $__threshold",
   thresholds: { failed: 90, degraded: 70 },
@@ -52,17 +52,17 @@ function fakeDash0(opts: { transform?: (kind: string, body: any) => any; failWit
     if (fail) return new Response(JSON.stringify(fail.body), { status: fail.status, headers: fail.headers });
     const json = (x: unknown, status = 200) => new Response(JSON.stringify(x), { status, headers: { "content-type": "application/json" } });
     const m = /^\/api\/(dashboards|alerting\/check-rules)\/(.+)$/.exec(url.pathname);
-    // Like live Dash0 (2026-11-07): PUT upserts by origin; a check-rule body carrying `id` is rejected with 400.
-    if (method === "PUT" && m) {
-      const origin = decodeURIComponent(m[2]!);
-      if (m[1] === "dashboards") {
-        stored.set(`d:${origin}`, opts.transform?.("dashboard", body) ?? body);
-        return json(body);
-      }
-      if ("id" in body) return json({ error: { code: 400, message: "unexpected field id" } }, 400);
-      // Dash0 normalises durations on the way back (dash0-cli fixture: "5m0s") and assigns its own id.
-      const stored0 = { ...body, id: "srv-0001", interval: body.interval === "1m" ? "1m0s" : body.interval };
-      stored.set(`r:${origin}`, opts.transform?.("rule", stored0) ?? stored0);
+    // Like live Dash0 (probes 2026-11-07): PUT /api/dashboards/{origin} upserts by origin; Import Check Rule upserts
+    // by a UUID id and rejects any other id with 400.
+    if (method === "PUT" && m && m[1] === "dashboards") {
+      stored.set(`d:${decodeURIComponent(m[2]!)}`, opts.transform?.("dashboard", body) ?? body);
+      return json(body);
+    }
+    if (method === "POST" && url.pathname === "/api/import/check-rule") {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(body.id ?? "")) return json({ error: { code: 400, message: "id must be a UUID" } }, 400);
+      // Dash0 normalises durations on the way back (dash0-cli fixture: "5m0s").
+      const stored0 = { ...body, interval: body.interval === "1m" ? "1m0s" : body.interval };
+      stored.set(`r:${body.id}`, opts.transform?.("rule", stored0) ?? stored0);
       return json(stored0);
     }
     if (method === "GET" && m) {
@@ -91,7 +91,7 @@ describe("preflight", () => {
   it("rejects $__threshold without thresholds, bad durations and bad ids", () => {
     expect(preflightCheckRule(rule({ thresholds: {} })).join()).toMatch(/thresholds.degraded or thresholds.failed/);
     expect(preflightCheckRule(rule({ for: "5 minutes" })).join()).toMatch(/not a Dash0 duration/);
-    expect(preflightCheckRule(rule({ id: "DD High Mem" })).join()).toMatch(/must match/);
+    expect(preflightCheckRule(rule({ id: "DD High Mem" })).join()).toMatch(/must be a UUID/);
   });
   it("rejects dangling $refs, grid overflow, unplaced panels and the CR form", () => {
     const d = dash({ layouts: [{ kind: "Grid", spec: { items: [{ x: 20, y: 0, width: 8, height: 8, content: { $ref: "#/spec/panels/nope" } }] } }] });
@@ -111,7 +111,7 @@ describe("dry run", () => {
     expect(calls).toHaveLength(0);
     expect(m.summary["dry-run"]).toBe(2);
     expect(readdirSync(join(out, "dashboards"))).toEqual(["dd-redis-overview.json"]);
-    expect(JSON.parse(readFileSync(join(out, "check-rules", "dd-high-mem.json"), "utf8")).enabled).toBe(false); // D-30
+    expect(JSON.parse(readFileSync(join(out, "check-rules", "3e643081-f9f9-5867-88b2-d6c8a6b05f30.json"), "utf8")).enabled).toBe(false); // D-30
   });
   it("is deterministic: the same input gives a byte-identical manifest", async () => {
     const a = tmp(), b = tmp();
@@ -123,21 +123,21 @@ describe("dry run", () => {
     const out = tmp();
     const m = await importAll({ dashboards: [], rules: [rule({ thresholds: {} })] }, { dryRun: true, outDir: out });
     expect(m.results[0]).toMatchObject({ action: "rejected-preflight" });
-    expect(readdirSync(join(out, "check-rules"))).toEqual(["dd-high-mem.json"]);
+    expect(readdirSync(join(out, "check-rules"))).toEqual(["3e643081-f9f9-5867-88b2-d6c8a6b05f30.json"]);
   });
 });
 
 describe("live import (fake Dash0)", () => {
-  it("upserts one item at a time by origin (PUT), sends auth + dataset, and reads each back by origin", async () => {
+  it("dashboards upsert by origin (PUT), rules via the Import API by UUID id; auth + dataset; each read back", async () => {
     const { f, calls } = fakeDash0();
     const m = await importAll({ dashboards: [dash()], rules: [rule()] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
     expect(calls.map((c) => `${c.method} ${c.url.pathname}`)).toEqual([
       "PUT /api/dashboards/dd-redis-overview",
       "GET /api/dashboards/dd-redis-overview",
-      "PUT /api/alerting/check-rules/dd-high-mem",
-      "GET /api/alerting/check-rules/dd-high-mem",
+      "POST /api/import/check-rule",
+      "GET /api/alerting/check-rules/3e643081-f9f9-5867-88b2-d6c8a6b05f30",
     ]);
-    expect("id" in calls[2]!.body).toBe(false); // live Dash0 rejects a check-rule body with id (400)
+    expect(calls[2]!.body.id).toBe("3e643081-f9f9-5867-88b2-d6c8a6b05f30"); // the Import API upserts by this UUID
     expect(calls.every((c) => c.headers.Authorization === `Bearer ${TOKEN}` && c.url.searchParams.get("dataset") === "thinc")).toBe(true);
     expect(m.summary).toMatchObject({ imported: 2, readBackMatch: 2, failed: 0 });
   });
@@ -154,13 +154,21 @@ describe("live import (fake Dash0)", () => {
   it("re-running upserts instead of duplicating: still exactly one rule per origin", async () => {
     const { f, stored } = fakeDash0();
     for (let i = 0; i < 2; i++) await importAll({ dashboards: [dash()], rules: [rule()] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
-    expect([...stored.keys()].sort()).toEqual(["d:dd-redis-overview", "r:dd-high-mem"]);
+    expect([...stored.keys()].sort()).toEqual(["d:dd-redis-overview", "r:3e643081-f9f9-5867-88b2-d6c8a6b05f30"]);
   });
-  it("origins may contain underscores and dots (T6: dd-monitor-redisdb__high_mem)", async () => {
+  it("a non-UUID rule id is rejected before sending (Dash0 would answer 400)", async () => {
     const { f, calls } = fakeDash0();
     const m = await importAll({ dashboards: [], rules: [rule({ id: "dd-monitor-redisdb__high_mem" })] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
+    expect(m.results[0]).toMatchObject({ action: "rejected-preflight" });
+    expect(calls).toHaveLength(0);
+  });
+  it("dashboard origins may contain underscores and dots", async () => {
+    const { f, calls } = fakeDash0();
+    const d = dash();
+    d.metadata.dash0Extensions = { id: "dd-redisdb__overview.v2" };
+    const m = await importAll({ dashboards: [d], rules: [] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
     expect(m.summary).toMatchObject({ imported: 1, readBackMatch: 1 });
-    expect(calls[0]!.url.pathname).toBe("/api/alerting/check-rules/dd-monitor-redisdb__high_mem");
+    expect(calls[0]!.url.pathname).toBe("/api/dashboards/dd-redisdb__overview.v2");
   });
   it("reports 'missing' when the read-back by origin finds nothing", async () => {
     const { f } = fakeDash0();

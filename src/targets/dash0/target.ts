@@ -45,8 +45,8 @@ export async function importAll(items: { dashboards: DashboardDefinition[]; rule
   const client = opts.dryRun ? null : new Dash0Client(opts.config!);
   const results: ImportResult[] = [];
 
-  // The origin is the asset's stable key: metadata.dash0Extensions.id for dashboards, `id` for check rules
-  // (T6: dd-monitor-<id>). Both are upserted with PUT /…/{origin}; a rule's `id` is never sent in the body.
+  // Stable keys: a dashboard's origin is metadata.dash0Extensions.id (T5: dd-<datadog id>), upserted with PUT by
+  // origin. A check rule's key is its UUID `id` (T6: UUIDv5 of the Datadog monitor id), upserted by the Import API.
   for (const d of items.dashboards) {
     const origin = d.metadata.dash0Extensions?.id;
     if (!origin) throw new Error(`dashboard '${d.metadata.name}' has no metadata.dash0Extensions.id (its origin); re-runs would duplicate it`);
@@ -59,15 +59,14 @@ export async function importAll(items: { dashboards: DashboardDefinition[]; rule
     );
   }
   for (const raw of items.rules) {
-    const origin = raw.id;
-    if (!origin) throw new Error(`check rule '${raw.name}' has no origin (id); re-runs would duplicate it`);
-    const { id: _origin, ...rest } = raw;
-    const body: PrometheusAlertRule = { ...rest, enabled: raw.enabled ?? opts.enableRules ?? false };
+    const id = raw.id;
+    if (!id) throw new Error(`check rule '${raw.name}' has no id; re-runs would duplicate it`);
+    const r: PrometheusAlertRule = { ...raw, enabled: raw.enabled ?? opts.enableRules ?? false };
     results.push(
-      await one("check-rule", origin, body.name, body, preflightCheckRule({ ...body, id: origin }), opts, client, async (c) => {
-        await c.putCheckRule(origin, body);
-        const back = await c.getCheckRule(origin);
-        return back ? compareCheckRule(body, back) : { state: "missing" };
+      await one("check-rule", id, r.name, r, preflightCheckRule(r), opts, client, async (c) => {
+        await c.importCheckRule(r);
+        const back = await c.getCheckRule(id);
+        return back ? compareCheckRule(r, back) : { state: "missing" };
       }),
     );
   }
@@ -130,7 +129,7 @@ async function one(
 
 export function compareCheckRule(sent: PrometheusAlertRule, got: PrometheusAlertRule): ReadBack {
   const fields: string[] = [];
-  // No id comparison: the body carries none; reading back by origin is what ties the rule to us.
+  if (got.id !== undefined && got.id !== sent.id) fields.push("id");
   if (got.name !== sent.name) fields.push("name");
   if (squash(got.expression) !== squash(sent.expression)) fields.push("expression");
   for (const k of ["degraded", "failed"] as const) if ((got.thresholds?.[k] ?? null) !== (sent.thresholds?.[k] ?? null)) fields.push(`thresholds.${k}`);

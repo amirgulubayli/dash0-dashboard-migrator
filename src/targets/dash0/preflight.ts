@@ -3,14 +3,15 @@
 import { LIMITS, type DashboardDefinition, type PrometheusAlertRule } from "./schema.js";
 
 const DURATION = /^(\d+(ms|s|m|h|d|w|M|Q|y))+$/;
-// An origin is a URL path segment (encoded). T6 origins look like dd-monitor-redisdb__high_mem.
+// A dashboard origin is a URL path segment (encoded), e.g. dd-redisdb__overview.
 const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export function preflightCheckRule(r: PrometheusAlertRule): string[] {
   const errs: string[] = [];
   if (!r.name?.trim()) errs.push("name is required");
   if (!r.expression?.trim()) errs.push("expression is required");
-  if (r.id !== undefined && !ID.test(r.id)) errs.push(`id '${r.id}' must match ${ID}`);
+  if (r.id !== undefined && !UUID.test(r.id)) errs.push(`id '${r.id}' must be a UUID (Dash0 rejects other ids on Import Check Rule; T6 uses UUIDv5)`);
   if (/\$__threshold\b/.test(r.expression ?? "")) {
     const t = r.thresholds;
     if (!t || (t.degraded === undefined && t.failed === undefined)) errs.push("expression uses $__threshold, so thresholds.degraded or thresholds.failed is required");
