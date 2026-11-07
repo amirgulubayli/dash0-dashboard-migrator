@@ -33,6 +33,7 @@ const DASH = {
     widget(2, "query_value", "Error rate %", [{ response_format: "scalar", queries: [{ ...logQ("a", "service:api status:error"), aggregator: "sum" }, { ...logQ("b", "service:api"), aggregator: "sum" }], formulas: [{ formula: "100 * a / b" }] }], 4),
     widget(3, "timeseries", "Errors per command", [{ response_format: "timeseries", queries: [logQ("logs", "source:redis status:error"), { data_source: "metrics", name: "cmds", query: "sum:redis.net.commands{*}" }], formulas: [{ formula: "logs / cmds" }] }], 8),
     widget(4, "timeseries", "Average duration", [{ response_format: "timeseries", queries: [logQ("d", "service:api", { compute: { aggregation: "avg", metric: "@duration" } })], formulas: [{ formula: "d" }] }]),
+    widget(6, "timeseries", "Error rate over time", [{ response_format: "timeseries", queries: [logQ("a", "service:api status:error"), logQ("b", "service:api")], formulas: [{ formula: "100 * a / b" }] }], 4),
     { id: 5, layout: { x: 4, y: 2, width: 6, height: 4 }, definition: { type: "list_stream", title: "Error stream", requests: [{ response_format: "event_list", query: { data_source: "logs_stream", query_string: "status:error" } }] } },
   ],
 };
@@ -52,11 +53,17 @@ describe("log widgets through T5 with T4 + T12", () => {
     expect(e.rules).toEqual(expect.arrayContaining(["log.count", "log.group_by.limit", "widget.timeseries"]));
   });
 
-  it("a formula over two log queries (error rate) combines both counts", () => {
+  it("a log query in a scalar widget fails closed until the window form lands (Ali's review of #19)", () => {
     const e = p("Error rate %");
+    expect(e).toMatchObject({ placeholder: true, status: "manual" });
+    expect(e.findings.some((f) => f.code === "query.datasource" && /scalar widget/.test(f.message))).toBe(true);
+  });
+
+  it("a formula over two log queries (error rate) combines both counts in a chart", () => {
+    const e = p("Error rate over time");
     expect(e.promql).toHaveLength(1);
     expect(e.promql[0]).toMatch(/^100 \* .*dash0\.logs.* \/ .*dash0\.logs/);
-    expect(e.panel.spec.plugin.kind).toBe("StatChart");
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesChart");
   });
 
   it("a formula can mix a log query and a metric query", () => {
