@@ -39,7 +39,16 @@ export function dashboardFromDatadog(json: unknown, ref: SourceRef): { dashboard
     findings.push({ itemKind: "panel", itemId: dashId, ...f } as Finding);
 
   if (d.layout_type === "free") {
-    find({ status: "bounded", code: "layout.free", itemKind: "dashboard", message: "free-layout dashboard: positions are not on Datadog's 12-column grid; T5 repacks them", original: "layout_type: free" });
+    // Catalog (T17) layout.free: exact-under A.style (positions are presentation, not meaning).
+    find({
+      status: "exact-under",
+      code: "layout.free",
+      ruleId: "layout.free",
+      itemKind: "dashboard",
+      message: "free-layout dashboard: positions are not on Datadog's 12-column grid; T5 repacks them",
+      assumptions: ["fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"],
+      original: "layout_type: free",
+    });
   }
 
   const items: (Panel | Group)[] = [];
