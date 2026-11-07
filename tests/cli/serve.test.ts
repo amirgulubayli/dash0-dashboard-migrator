@@ -27,7 +27,9 @@ describe("events and narration", () => {
     const done = ev.at(-1)!;
     if (done.type !== "run.done") throw new Error();
     expect(done.topGaps.map((g) => g.code)).not.toContain("scope.var.free-form");
-    expect(done.topGaps[0]!.code).toBe("metric.unmapped");
+    // Every top gap is a reason on some bounded/manual/unsupported item.
+    const gapCodes = new Set(run.report.items.filter((i) => !["exact", "exact-under"].includes(i.status)).flatMap((i) => i.reason_codes));
+    for (const g of done.topGaps) expect(gapCodes.has(g.code), g.code).toBe(true);
   });
   it("narrates milestones and problems, stays quiet on routine exact panels", () => {
     const said = ev.map(narrate);

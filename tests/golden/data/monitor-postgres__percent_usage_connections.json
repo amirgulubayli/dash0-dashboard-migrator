@@ -4,51 +4,24 @@
     "kind": "alert",
     "title": "[Postgres] Number of connections is approaching connection limit on {{host.name}}",
     "widget_type": "query alert",
-    "status": "exact-under",
-    "promql": [
-      "avg_over_time((avg (avg_over_time({otel_metric_name=\"postgresql.percent_usage_connections\"}[1m])))[15m:1m]) > $__threshold"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
       "classify.monitor.metric",
       "alert.opt.notification",
       "alert.opt.new_group_delay",
       "alert.opt.require_full_window.true",
-      "select.metric.kind-metadata",
-      "scope.all",
-      "time.rollup.monitor-bucket",
-      "space.agg",
-      "monitor.window",
-      "monitor.cmp.gt",
-      "alert.threshold.both",
-      "alert.id",
-      "alert.name",
-      "alert.tags",
-      "alert.msg.summary",
-      "alert.msg.label",
-      "alert.msg.conditional",
-      "alert.defaults",
-      "emit.rules-disabled",
-      "emit.certificate",
-      "validate.preflight",
-      "emit.id",
-      "emit.single-item",
-      "emit.rules-disabled"
+      "metric.derived",
+      "emit.certificate"
     ],
     "assumptions": [
-      "A.boundary",
-      "A.eval-1m",
       "A.full-window",
-      "A.kind-metadata",
-      "A.monitor-rollup-60s",
-      "A.msg-conditional",
       "A.no-new-groups",
       "A.notify-manual"
     ],
     "findings": [
-      "exact-under alert.defaults",
-      "exact-under alert.msg.conditional",
-      "exact-under metric.unmapped",
-      "exact-under monitor.option"
+      "exact-under monitor.option",
+      "manual metric.derived"
     ]
   }
 ]
