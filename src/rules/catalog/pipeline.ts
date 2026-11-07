@@ -33,6 +33,7 @@ export const T12_TABLE_IDS = [
   "log.monitor.formula",
   "log.indexes",
   "log.monitor.count",
+  "log.scalar.window",
 ] as const;
 
 export const PIPELINE_RULES: RuleDef[] = [
@@ -69,6 +70,13 @@ export const PIPELINE_RULES: RuleDef[] = [
   log("log.indexes", 160, "exact-under", "indexes other than '*'", "all logs (Dash0 has no indexes)", { assumptions: ["A.all-indexes"] }),
   log("log.monitor.count", 170, "bounded", "logs(Q).rollup(count).by(g).last(W) op T", "sum by (g) (increase(...[W])) op $__threshold", { assumptions: ["A.log-count"], epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["unit", "proof:T3"] }),
   log("log.monitor.formula", 175, "bounded", 'formula("...").last(W) over log queries', "the formula over windowed counts", { assumptions: ["A.log-count"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
+  log("log.scalar.window", 180, "bounded", "scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe)", "the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value", {
+    assumptions: ["A.log-count", "A.log-range"],
+    epsilon: EPS_RATE,
+    requires: ["probe:range-var"],
+    evidence: ["unit"],
+    note: "T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed).",
+  }),
   // Still planned: not in T12 yet.
   logs("logs.rate", 200, "bounded", "log count shown as a rate", 'sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m]))', { epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["proof:T3"] }),
   logs("logs.measure", 220, "manual", "avg / sum / percentile over @attr", "no output: dash0.logs only counts", { findingCode: "query.datasource" }),

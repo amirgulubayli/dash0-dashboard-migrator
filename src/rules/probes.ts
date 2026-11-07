@@ -14,9 +14,14 @@ export const PROBES = {
     answer: "open",
   },
   "probe:at-modifier": {
-    question: "Does Dash0 accept the @ end() modifier and the $__range variable in panel queries?",
-    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted; 935/935 queries with the new constructs accepted (hub #278)",
+    question: "Does Dash0 accept the @ end() modifier in queries?",
+    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted by the query API; 935/935 queries with the new constructs accepted (hub #278). That test did NOT show that a dashboard substitutes $__range: see probe:range-var.",
     answer: "yes",
+  },
+  "probe:range-var": {
+    question: "Does a Dash0 dashboard substitute $__range with its visible time range in panel queries (and a stat panel with calculation last-number show the value at the end of that range)?",
+    how: "The query API does not substitute variables (it rejects [$__interval] with a parse error) and Dash0's docs only describe $__interval, so only a rendered panel can answer: put the same count over [$__range] and over a fixed window side by side on a throwaway dashboard, change the time range (15m, 1h) and compare",
+    answer: "open",
   },
   "probe:lt-threshold": {
     question: "How does Dash0 compare $__threshold for `<` expressions (is higher always worse)?",

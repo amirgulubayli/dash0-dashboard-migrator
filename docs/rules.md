@@ -7,7 +7,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 68 | 42 | 17 | 37 | 164 |
+| implemented | 68 | 42 | 18 | 37 | 165 |
 | planned | 18 | 22 | 2 | 14 | 56 |
 
 ## Pipeline order
@@ -31,7 +31,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 15 | `panel` Panel options | panel attribute | no | 4 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 6 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
-| 18 | `logs` Log queries | log query or search term | yes | 24 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
+| 18 | `logs` Log queries | log query or search term | yes | 25 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
 | 19 | `validate` Validate | emitted artefact | no | 3 | Every output parses and passes preflight before it may be emitted. |
 | 20 | `canonical` Canonical form and hash | emitted artefact | no | 3 | One spelling per meaning, so the output hash is a function of the input only. |
 | 21 | `emit` Import and report | emitted artefact or run | no | 6 | Idempotent single-item import, read-back, and a certificate for every source item. |
@@ -371,6 +371,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 160 | `log.indexes` | indexes other than '*' | all logs (Dash0 has no indexes) | exact-under(A.all-indexes) | unit | — | T12 | implemented |
 | 170 | `log.monitor.count` | logs(Q).rollup(count).by(g).last(W) op T | sum by (g) (increase(...[W])) op $__threshold | bounded(ε) | unit, proof:T3 | probe:log-labels | T12 | implemented |
 | 175 | `log.monitor.formula` | formula("...").last(W) over log queries | the formula over windowed counts | bounded(ε) | unit, proof:T3 | — | T12 | implemented |
+| 180 | `log.scalar.window` | scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe) | the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value | bounded(ε) | unit | probe:range-var | T12 | implemented |
 | 200 | `logs.rate` | log count shown as a rate | sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m])) | bounded(ε) | proof:T3 | probe:log-labels | T12 | planned |
 | 220 | `logs.measure` | avg / sum / percentile over @attr | no output: dash0.logs only counts | manual | — | — | T12 | planned |
 | 230 | `logs.stream` | log_stream / list_stream widget | placeholder until the LogTable schema comes from T0 | manual | — | — | T12 | planned |
@@ -381,6 +382,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 - `log.or.inclusion-exclusion`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `log.monitor.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `log.monitor.formula`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `log.scalar.window`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed).
 - `logs.rate`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 
 ## Validate (`validate`)
@@ -436,13 +438,14 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.at-range` | the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live) | 1 |
 | `A.monotonic` | the gauge only increases between resets (a running total), so its change per second is rate() | 1 |
 | `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
-| `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 5 |
+| `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 6 |
 | `A.log-source` | logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent | 1 |
 | `A.log-attr-default` | a log attribute without a table entry keeps its name in OTel (dots become underscores in the label) | 1 |
 | `A.log-fulltext` | Datadog's free-text match of a word equals a case-insensitive substring match on the log body | 1 |
 | `A.group-limit` | the number of groups stays within the widget's group limit, so Datadog shows every group too | 1 |
 | `A.severity-map` | the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level) | 1 |
 | `A.all-indexes` | every Datadog log index is queried (Dash0 has no indexes) | 1 |
+| `A.log-range` | the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (calculation last), so a scalar covers the same timeframe Datadog aggregates over | 1 |
 | `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
@@ -466,7 +469,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | Probe | Question | How | Rules waiting |
 |---|---|---|---|
 | `probe:anchored` (open) | Does Dash0 accept increase(x[1m] anchored)? | maths.md §11 probe 1: run it in the Dash0 query API | `time.as_count.counter.anchored` |
-| `probe:at-modifier` (yes) | Does Dash0 accept the @ end() modifier and the $__range variable in panel queries? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted; 935/935 queries with the new constructs accepted (hub #278) | `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist` |
+| `probe:at-modifier` (yes) | Does Dash0 accept the @ end() modifier in queries? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted by the query API; 935/935 queries with the new constructs accepted (hub #278). That test did NOT show that a dashboard substitutes $__range: see probe:range-var. | `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist` |
+| `probe:range-var` (open) | Does a Dash0 dashboard substitute $__range with its visible time range in panel queries (and a stat panel with calculation last-number show the value at the end of that range)? | The query API does not substitute variables (it rejects [$__interval] with a parse error) and Dash0's docs only describe $__interval, so only a rendered panel can answer: put the same count over [$__range] and over a fixed window side by side on a throwaway dashboard, change the time range (15m, 1h) and compare | `log.scalar.window` |
 | `probe:lt-threshold` (open) | How does Dash0 compare $__threshold for `<` expressions (is higher always worse)? | maths.md §11 probe 5, T0 check-rule export | `monitor.cmp.lt` |
 | `probe:threshold-label` (open) | Does Dash0 expose which threshold fired (failed / degraded) as a label usable in annotation templates? | T0: fire a test rule and read its notification payload | `alert.msg.conditional.label` |
 | `probe:statchart-calculation` (open) | Which StatChart `calculation` names does Dash0 accept (mean, max, min, sum, last)? | T0: export a StatChart with each calculation | `widget.query_value`, `widget.alert_value` |
@@ -540,7 +544,9 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `log.group_by.limit` (exact-under(A.top-stable), implemented, T12)
 - `log.group_by.multi-limit` (exact-under(A.group-limit), implemented, T12)
 - `log.indexes` (exact-under(A.all-indexes), implemented, T12)
+- `log.scalar.window` (bounded(ε), implemented, T12)
 
 ## Implemented ahead of an open probe
 
 - `monitor.cmp.lt` needs probe:lt-threshold
+- `log.scalar.window` needs probe:range-var
