@@ -17,6 +17,8 @@ export interface Gap {
   items: string[];
   /** Distinct finding messages (capped), so the brief shows real examples. */
   examples: string[];
+  /** Every distinct subject in the gap (metric names for metric gaps, uncapped), most items first. */
+  subjects: string[];
   /** Ranking score: items weighted by how bad their worst finding in the gap is. */
   score: number;
   /** Whether v0 lets an agent work on it (only mapping-table gaps). */
@@ -38,14 +40,19 @@ export function gapKey(code: string, message: string): { key: string; scope: str
 }
 
 export function findGaps(s: Snapshot): Gap[] {
-  const by = new Map<string, { code: string; scope: string | null; items: Map<string, number>; examples: Set<string> }>();
+  const by = new Map<string, { code: string; scope: string | null; items: Map<string, number>; examples: Set<string>; subjects: Map<string, Set<string>> }>();
   const add = (item: SnapshotItem) => {
     for (const f of item.findings) {
       const w = WEIGHT[f.status];
       if (!w) continue;
       const { key, scope } = gapKey(f.code, f.message);
       let g = by.get(key);
-      if (!g) by.set(key, (g = { code: f.code, scope, items: new Map(), examples: new Set() }));
+      if (!g) by.set(key, (g = { code: f.code, scope, items: new Map(), examples: new Set(), subjects: new Map() }));
+      const subject = /(?:no mapping for|tag) '?([A-Za-z0-9_.]+)/.exec(f.message)?.[1];
+      if (subject) {
+        if (!g.subjects.has(subject)) g.subjects.set(subject, new Set());
+        g.subjects.get(subject)!.add(item.id);
+      }
       g.items.set(item.id, Math.max(g.items.get(item.id) ?? 0, w));
       if (g.examples.size < 12) g.examples.add(f.message);
     }
@@ -58,6 +65,7 @@ export function findGaps(s: Snapshot): Gap[] {
       scope: g.scope,
       items: [...g.items.keys()].sort(),
       examples: [...g.examples].sort(),
+      subjects: [...g.subjects.entries()].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0])).map(([k]) => k),
       score: [...g.items.values()].reduce((a, b) => a + b, 0),
       actionable: ACTIONABLE.has(g.code),
     }))

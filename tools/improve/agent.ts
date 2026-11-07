@@ -66,7 +66,9 @@ Rules:
 - Add a test file tests/improve/gen-<scope>.test.ts that loads the table with the repo's loader and asserts the rows
   you added (including at least one "none" or "approximate" row if you added any).
 - Use measure to see the gap shrink and that no item got worse, and run_tests before you submit.
-- Submit with a short summary: rows added by status, anything you deliberately left unmapped and why.`;
+- Submit with a short summary: rows added by status, anything you deliberately left unmapped and why.
+- If something outside your allowed files blocks you (for example an existing test that fails because of your
+  change), don't stop silently: submit with a summary starting 'BLOCKED:' that names the file and the problem.`;
 
 function brief(g: Gap): string {
   const src = g.scope ? SOURCES[g.scope] : undefined;
@@ -76,6 +78,9 @@ function brief(g: Gap): string {
     "Example findings:",
     ...g.examples.map((e) => `- ${e}`),
     "",
+    ...(g.subjects.length
+      ? [`Every name in this gap, most-used first. These are what the fixtures use: cover them first, each as exact / approximate / none, before adding any other row:`, g.subjects.join(", "), ""]
+      : []),
     src
       ? `Upstream sources for '${g.scope}' (fetch these):\n- Datadog metadata: ${src.datadog}\n- OTel receiver metadata: ${src.otel}`
       : `No upstream source is registered for this gap; work only from what is in the repository, and map nothing you can't justify.`,
@@ -195,6 +200,7 @@ export async function runAgent(o: AgentOptions): Promise<AgentResult> {
 
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: brief(o.gap) }];
   let cost = 0;
+  let nudged = false;
   for (let turn = 1; turn <= o.maxTurns; turn++) {
     if (cost >= o.budgetUsd) return { submitted: false, summary: "", turns: turn - 1, costUsd: cost, stop: `budget ($${cost.toFixed(2)} of $${o.budgetUsd})` };
     let msg: Anthropic.Beta.BetaMessage;
@@ -227,7 +233,18 @@ export async function runAgent(o: AgentOptions): Promise<AgentResult> {
       continue;
     }
     const calls = msg.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
-    if (calls.length === 0) return { submitted: false, summary: "", turns: turn, costUsd: cost, stop: `ended without submitting (${msg.stop_reason})` };
+    if (calls.length === 0) {
+      const said = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
+      if (said) o.log(`turn ${turn}: agent said: ${said.slice(0, 600)}`);
+      // One reminder: the round only counts if the agent submits (or says why it can't, which is logged).
+      if (!nudged && msg.stop_reason === "end_turn") {
+        nudged = true;
+        messages.push({ role: "assistant", content: msg.content });
+        messages.push({ role: "user", content: "You ended without calling submit. Call submit now: either with your summary, or with a summary starting 'BLOCKED:' that says exactly what stops you (for example a file you are not allowed to edit)." });
+        continue;
+      }
+      return { submitted: false, summary: said, turns: turn, costUsd: cost, stop: `ended without submitting (${msg.stop_reason})` };
+    }
     if (msg.stop_reason === "max_tokens") return { submitted: false, summary: "", turns: turn, costUsd: cost, stop: "max_tokens with a pending tool call" };
     messages.push({ role: "assistant", content: msg.content });
 
@@ -253,7 +270,13 @@ export async function runAgent(o: AgentOptions): Promise<AgentResult> {
       }
     }
     messages.push({ role: "user", content: results });
-    if (submitted !== null) return { submitted: true, summary: submitted, turns: turn, costUsd: cost, stop: "submitted" };
+    if (submitted !== null) {
+      if (submitted.startsWith("BLOCKED:")) {
+        o.log(`agent blocked: ${submitted.slice(0, 600)}`);
+        return { submitted: false, summary: submitted, turns: turn, costUsd: cost, stop: "blocked" };
+      }
+      return { submitted: true, summary: submitted, turns: turn, costUsd: cost, stop: "submitted" };
+    }
   }
   return { submitted: false, summary: "", turns: o.maxTurns, costUsd: cost, stop: "max turns" };
 }
