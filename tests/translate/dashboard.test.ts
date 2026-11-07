@@ -63,7 +63,8 @@ describe("Redis overview -> Dash0", () => {
     expect(text).toContain("source:redis $scope $host status:error");
     expect(text).toContain(logs.itemId);
     expect(logs.status).toBe("manual");
-    expect(logs.findings.map((f) => f.code)).toContain("logs.not_translated");
+    expect(logs.findings.map((f) => f.code)).toContain("query.datasource"); // catalog: widget.logs reports query.datasource
+    expect(logs.rules).toContain("widget.logs");
   });
   it("stat panels take the calculation from the Datadog aggregator", () => {
     const stats = r.panels.filter((p) => p.persesKind === "StatChart");
@@ -104,12 +105,20 @@ describe("all fixture dashboards", () => {
     expect(String(hostmap.panel.spec.plugin.spec.text)).toContain("avg:nginx.net.request_per_s{*} by {host}");
     expect(r.panels.filter((p) => p.placeholder && p.sourceType !== "log_stream")).toHaveLength(5);
   });
-  it("postgres query_table: one PromQL query per formula, aliases become series names", () => {
+  it("postgres 4-column query_table is a placeholder (catalog widget.query_table.complex): Dash0 can't join columns per group", () => {
     const r = toPerses(dash("postgres__postgresql_screenboard_dashboard"), stub);
     const t = r.panels.find((p) => p.title === "Resources by table")!;
-    expect(t.persesKind).toBe("TimeSeriesTable");
-    expect(t.panel.spec.queries!.map((q) => q.spec.plugin.spec.seriesNameFormat)).toEqual(["Disk Usage", "Index Scans", "Live Rows", "Dead Rows"]);
-    expect(t.findings.map((f) => f.code)).toContain("panel.table.table");
+    expect(t).toMatchObject({ persesKind: "Markdown", placeholder: true, status: "manual" });
+    expect(t.rules).toContain("widget.query_table.complex");
+    expect(String(t.panel.spec.plugin.spec.text)).toContain("4 columns");
+  });
+  it("every panel cites a catalog widget.* rule; exact-under rules carry their assumptions", () => {
+    for (const d of ingested.dashboards) {
+      for (const p of toPerses(d, stub).panels) {
+        expect(p.rules.some((x) => x.startsWith("widget.")), p.itemId).toBe(true);
+        for (const f of p.findings.filter((x) => x.status === "exact-under" && x.ruleId?.startsWith("widget."))) expect(f.assumptions?.length, f.code).toBeGreaterThan(0);
+      }
+    }
   });
 });
 

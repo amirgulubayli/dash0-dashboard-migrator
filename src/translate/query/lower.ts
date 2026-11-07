@@ -22,7 +22,12 @@ interface Lowered {
    * Datadog gauge that holds a running total (ddKind gauge, OTel counter), which is what per_second() and friends need.
    */
   rateForm?: PNode;
+  /** The query already aggregates over the whole monitor window (sum(last_W) with .as_count()): no subquery. */
+  windowed?: boolean;
 }
+
+/** top/bottom shortcuts: top10, bottom5_max, top_mean ... -> [k, N, method]. */
+const TOP_SHORTCUT = /^(top|bottom)(\d+)?(?:_(mean|min|max|last|area|l2norm|norm))?$/;
 
 const PER_UNIT: Record<string, number> = { per_second: 1, per_minute: 60, per_hour: 3600 };
 
@@ -30,6 +35,9 @@ class Lowerer {
   rules: RuleId[] = [];
   extraAssumptions: AssumptionId[] = [];
   findings: Finding[] = [];
+
+  /** Set by translateMonitor for sum(last_W): the window in seconds, so .as_count() can become increase(x[W]). */
+  monitorSumWindow?: number;
 
   constructor(
     readonly ctx: TranslateContext,
@@ -162,6 +170,93 @@ class Lowerer {
       const x = this.expr(exprArg(0), env);
       return { node: { k: "call", fn: e.name, args: [x.node, { k: "num", value: numArg(1) }] }, groups: x.groups };
     }
+    // round(q): nearest integer.
+    if (e.name === "round" && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      this.use("fn.round");
+      return { node: { k: "call", fn: "round", args: [x.node] }, groups: x.groups };
+    }
+
+    // exclude_null(q): drop the N/A group, i.e. series that lack a group-by label.
+    if (e.name === "exclude_null" && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      this.use("fn.exclude_null");
+      const labels = x.groups ?? [];
+      const node = labels.length
+        ? mapSelectors(x.node, (sel) => ({ ...sel, matchers: [...sel.matchers, ...labels.filter((l) => !sel.matchers.some((m) => m.label === l && m.op === "!=" && m.value === "")).map((label) => ({ label, op: "!=" as const, value: "" }))] }))
+        : x.node;
+      return { node, groups: x.groups };
+    }
+
+    // max(a, b) / min(a, b): pointwise. With a constant it is a clamp; between queries a filter-or.
+    if ((e.name === "max" || e.name === "min") && e.args.length === 2) {
+      const a = this.expr(exprArg(0), env);
+      const b = this.expr(exprArg(1), env);
+      const clamp = e.name === "max" ? "clamp_min" : "clamp_max";
+      if (a.groups === null && b.groups === null) this.manual("fn.max_min.constants", `${e.name}() of two constants`);
+      if (a.groups === null || b.groups === null) {
+        const [q, n] = a.groups === null ? [b, a] : [a, b];
+        if (n.node.k !== "num") this.manual("fn.max_min.args", `${e.name}(): the scalar argument must be a number`);
+        this.use("fn.max_min.scalar");
+        return { node: { k: "call", fn: clamp, args: [q.node, n.node] }, groups: q.groups };
+      }
+      if (a.groups.join(",") !== b.groups.join(",")) this.manual("arith.group-mismatch", `${e.name}() between different group-bys`);
+      this.use("fn.max_min.series");
+      const cmp = e.name === "max" ? ">=" : "<=";
+      return { node: { k: "binary", op: "or", lhs: { k: "binary", op: cmp, lhs: a.node, rhs: b.node }, rhs: b.node }, groups: a.groups };
+    }
+
+    // top/bottom: rank and keep N series. topk ranks per step; Datadog ranks once over the window (A.top-stable).
+    const short = TOP_SHORTCUT.exec(e.name);
+    if (short && (e.name !== "top" && e.name !== "bottom" ? e.args.length === 1 : e.args.length >= 1 && e.args.length <= 4)) {
+      let k = short[1] === "top" ? "topk" : "bottomk";
+      let n = short[2] !== undefined ? Number(short[2]) : 10;
+      if (e.name === "top" || e.name === "bottom") {
+        if (e.args.length >= 2) n = numArg(1);
+        const order = e.args[3];
+        if (order) {
+          if (order.type !== "string" || !["asc", "desc"].includes(order.value)) this.manual("fn.top.args", `${e.name}(): order must be 'asc' or 'desc'`);
+          if (order.value === "asc") k = k === "topk" ? "bottomk" : "topk";
+        }
+        const method = e.args[2];
+        if (method && (method.type !== "string" || !["mean", "min", "max", "last", "area", "l2norm", "norm", "sum"].includes(method.value)))
+          this.manual("fn.top.args", `${e.name}(): unknown ranking method`);
+      }
+      if (!Number.isInteger(n) || n <= 0) this.manual("fn.top.args", `${e.name}(): N must be a positive integer`);
+      const x = this.expr(exprArg(0), env);
+      this.use("fn.top");
+      return { node: { k: "call", fn: k, args: [{ k: "num", value: n }, x.node] }, groups: x.groups };
+    }
+
+    if ((e.name === "cutoff_min" || e.name === "cutoff_max") && e.args.length === 2) {
+      const x = this.expr(exprArg(0), env);
+      this.use("fn.cutoff");
+      const op = e.name === "cutoff_min" ? ">=" : "<=";
+      return { node: { k: "binary", op, lhs: x.node, rhs: { k: "num", value: numArg(1) } }, groups: x.groups };
+    }
+
+    if ((e.name === "count_not_null" || e.name === "count_nonzero") && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      this.use(`fn.${e.name}`);
+      const inner: PNode = e.name === "count_nonzero" ? { k: "binary", op: "!=", lhs: x.node, rhs: { k: "num", value: 0 } } : x.node;
+      return { node: { k: "agg", op: "count", by: [], expr: inner }, groups: [] };
+    }
+
+    if (e.name === "default_zero" && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      if (x.groups === null || x.groups.length > 0)
+        this.manual("fn.default_zero.grouped", "default_zero() over a grouped query: PromQL can't fill gaps per series");
+      this.use("fn.default_zero.single");
+      return { node: { k: "binary", op: "or", lhs: x.node, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: x.groups };
+    }
+
+    if (e.name === "derivative" && e.args.length === 1) {
+      const x = this.expr(exprArg(0), env);
+      if (!x.rateForm) this.manual("fn.derivative.kind", "derivative() has a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total");
+      this.use("fn.derivative.counter");
+      return { node: x.rateForm, groups: x.groups };
+    }
+
     // per_second/per_minute/per_hour: the change per unit of a running total, i.e. k * rate() over the counter.
     if (PER_UNIT[e.name] !== undefined && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
@@ -176,8 +271,8 @@ class Lowerer {
       return { node, groups: x.groups };
     }
 
-    // diff: each point minus the previous one, one rollup interval earlier.
-    if (e.name === "diff" && e.args.length === 1) {
+    // diff: each point minus the previous one, one rollup interval earlier. monotonic_diff keeps only increases.
+    if ((e.name === "diff" || e.name === "monotonic_diff") && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
       const step = this.interval;
       const shifted = mapSelectors(x.node, (sel) => {
@@ -185,8 +280,13 @@ class Lowerer {
         if (typeof sel.offset === "number" && typeof step === "number") return { ...sel, offset: sel.offset + step };
         this.manual("fn.diff.offset", "diff() over a query that already has a variable offset");
       });
-      this.use("fn.diff");
-      return { node: { k: "binary", op: "-", lhs: x.node, rhs: shifted }, groups: x.groups };
+      const delta: PNode = { k: "binary", op: "-", lhs: x.node, rhs: shifted };
+      if (e.name === "diff") {
+        this.use("fn.diff");
+        return { node: delta, groups: x.groups };
+      }
+      this.use("fn.monotonic_diff");
+      return { node: { k: "binary", op: ">=", lhs: delta, rhs: { k: "num", value: 0 } }, groups: x.groups };
     }
 
     let shift: number | undefined;
@@ -219,8 +319,25 @@ class Lowerer {
       if (why === "derived") this.manual("metric.derived", `${m.metric}: the equivalent is an expression over several OTel metrics (not translated yet)`);
       if (why === "needs_transform") this.manual("metric.needs_transform", `${m.metric}: the mapping needs a scale or sumBy transform that T4 doesn't apply yet`);
     }
+    // Datadog's declared kind (metadata.csv) for a metric without a curated entry.
+    let hint = mapping ? undefined : this.ctx.ddKind?.(m.metric);
+    // No metadata.csv entry: an OpenMetrics-style counter name (.count/.total) queried with .as_count()/.as_rate()
+    // carries two independent signals that it is a monotonic count.
+    const countModifier = calls.some((c) => c.name === "as_count" || c.name === "as_rate");
+    if (!mapping && hint === undefined && this.ctx.ddKind && countModifier && /\.(count|total)$/.test(m.metric)) {
+      hint = "count";
+      this.use("time.unmapped.suffix-counter");
+    }
     if (mapping) this.use("select.metric.mapped");
-    else {
+    else if (hint) {
+      if (hint === "distribution") this.manual("metric.distribution", `${m.metric} is a Datadog distribution; no histogram rule yet`);
+      this.use("select.metric.kind-metadata");
+      this.find("exact-under", "metric.unmapped", `no mapping for ${m.metric}; kept the Datadog name, kind ${hint} from metadata.csv`, {
+        ruleId: "select.metric.kind-metadata",
+        assumptions: ["A.kind-metadata"],
+      });
+      mapping = hint === "gauge" ? { otel: m.metric, kind: "gauge", ddKind: "gauge" } : { otel: m.metric, kind: "counter", ddKind: hint };
+    } else {
       this.use("select.metric.unmapped");
       this.find("exact-under", "metric.unmapped", `no mapping for ${m.metric}; kept the Datadog name and assumed a gauge`, {
         ruleId: "select.metric.unmapped",
@@ -228,6 +345,7 @@ class Lowerer {
       });
       mapping = { otel: m.metric, kind: "gauge" };
     }
+    const kindKnown = mapped || hint !== undefined;
 
     if (mapping.status === "approximate") {
       this.use("select.metric.approximate");
@@ -249,17 +367,21 @@ class Lowerer {
     // means a plain query already shows per-second values, so it needs rate() (D-18).
     let kind = mapping.kind;
     let ddRate = false;
+    const unmappedCounter = !mapped && hint !== undefined && hint !== "gauge";
     if (mapping.ddKind !== undefined) {
       if (mapping.ddKind === "gauge" && kind !== "histogram") kind = "gauge";
       else if (mapping.ddKind === "rate" && kind === "counter") ddRate = true;
-      else this.manual("time.kind", `Datadog ${mapping.ddKind} stored as an OTel ${kind}: no tested rule yet`);
+      else if (!(unmappedCounter && mapping.ddKind === "count"))
+        this.manual("time.kind", `Datadog ${mapping.ddKind} stored as an OTel ${kind}: no tested rule yet`);
     }
+    if (unmappedCounter) this.use("time.unmapped.counter");
 
     // Time aggregation, Datadog order: per series first.
     let fn = "avg";
     let width: Duration = this.interval;
     let explicitRollup = false;
     let counterMode: "increase" | "rate" | null = null;
+    let fillZero = false;
     for (const c of calls) {
       if (c.name === "rollup") {
         const f = c.args[0];
@@ -274,11 +396,11 @@ class Lowerer {
         }
         if (c.args.length > 2) this.manual("time.rollup.args", ".rollup(): too many arguments");
         explicitRollup = true;
-      } else if (c.name === "as_count" && this.monitor) {
-        this.manual("monitor.as_count", ".as_count() in a monitor: Datadog evaluates it on a sum path we don't model yet");
+      } else if (c.name === "as_count" && this.monitor && kind !== "gauge" && this.monitorSumWindow === undefined) {
+        this.manual("monitor.as_count", ".as_count() in a monitor other than sum(last_W): Datadog evaluates it on a sum path we don't model yet");
       } else if (c.name === "as_count" || c.name === "as_rate") {
         // .as_count()/.as_rate() suggest a count or rate metric, so don't lean on the gauge assumption here.
-        if (!mapped) this.manual("time.kind-unknown", `.${c.name}() on ${m.metric}: its kind is unknown (no mapping entry), so the time aggregation can't be chosen`);
+        if (!kindKnown) this.manual("time.kind-unknown", `.${c.name}() on ${m.metric}: its kind is unknown (no mapping entry), so the time aggregation can't be chosen`);
         if (kind === "gauge") this.use(`time.${c.name}.gauge`);
         else if (kind === "counter") {
           this.use(`time.${c.name}.counter`);
@@ -289,18 +411,38 @@ class Lowerer {
         } else this.manual(`time.${c.name}.${kind}`, `.${c.name}() on a ${kind} metric has no exact rule`);
       } else if (c.name === "fill") {
         const a = c.args[0];
-        if (c.args.length === 1 && a?.type === "word" && a.value === "null") this.use("time.fill.null");
+        const zero = (a?.type === "word" && a.value === "zero") || (a?.type === "expr" && a.expr.type === "number" && a.expr.value === 0);
+        if (c.args.length >= 1 && c.args.length <= 2 && a?.type === "word" && a.value === "null") this.use("time.fill.null");
+        else if (c.args.length >= 1 && c.args.length <= 2 && zero) fillZero = true;
         else this.manual("time.fill", ".fill() other than null has no exact rule (PromQL does not fill gaps)");
+      } else if (c.name === "weighted" && c.args.length === 0) {
+        this.use("time.weighted");
       } else this.manual(`fn.${c.name}`, `no exact rule for .${c.name}()`);
     }
     if (ddRate && !counterMode) {
       this.use("time.ddrate.plain");
       counterMode = "rate";
     }
+    if (unmappedCounter && hint === "count" && !counterMode) {
+      if (explicitRollup && fn !== "sum") this.manual("time.rollup.counter", `.rollup(${fn}) on a COUNT metric has no rule`);
+      if (explicitRollup) this.use("time.rollup.counter");
+      this.use("time.count.default");
+      counterMode = "increase";
+    }
     if ((kind === "counter" && !counterMode) || kind === "histogram" || (kind === "delta" && fn !== "sum"))
       this.manual("time.kind", `a ${kind} metric needs an explicit .as_count()/.as_rate() to fix its time aggregation`);
-    if (counterMode && explicitRollup) this.manual("time.rollup.counter", ".rollup() combined with a counter rate has no exact rule");
+    if (counterMode && explicitRollup) {
+      const ok = (counterMode === "increase" && fn === "sum") || (counterMode === "rate" && fn === "avg");
+      if (!ok) this.manual("time.rollup.counter", `.rollup(${fn}) combined with ${counterMode}() has no rule`);
+      this.use("time.rollup.counter");
+    }
 
+    // sum(last_W):q.as_count() in a monitor: the window's total count is increase over the whole window.
+    const windowed = this.monitorSumWindow !== undefined && counterMode === "increase";
+    if (windowed) {
+      if (explicitRollup) this.manual("time.rollup.counter", ".rollup() combined with a counter rate has no exact rule");
+      width = this.monitorSumWindow!;
+    }
     // rate()/increase() need at least two samples per window; on dashboards use Perses' $__rate_interval for that.
     const range: Duration = counterMode && width === "$__interval" ? "$__rate_interval" : width;
     const sel: PNode = { k: "selector", matchers, range };
@@ -322,7 +464,13 @@ class Lowerer {
     const node: PNode = { k: "agg", op: agg as "avg", by, expr: inner };
     // For per_second() and friends: the derivative of a sum/avg of running totals is the sum/avg of their rates.
     const runningTotal = mapping.ddKind === "gauge" && mapping.kind === "counter" && !counterMode && !explicitRollup;
-    if (runningTotal && (agg === "sum" || agg === "avg")) {
+    if (fillZero) {
+      if (by.length > 0 || this.monitor) this.manual("time.fill", ".fill(zero) on a grouped query (or in a monitor): PromQL can't fill gaps per series");
+      this.use("time.fill.zero.single");
+      return { node: { k: "binary", op: "or", lhs: node, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: by };
+    }
+    if (windowed) return { node, groups: by, windowed: true };
+    if ((runningTotal || (kind === "counter" && counterMode !== null && !explicitRollup)) && (agg === "sum" || agg === "avg")) {
       const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
       const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
       return { node, groups: by, rateForm };
@@ -358,9 +506,25 @@ class Lowerer {
       return [{ label: this.label(tags[0]!.key!), op: "=~", value: `^(${tags.map((t) => pattern(t.value)).join("|")})$` }];
     }
     if (s.type === "not") {
-      if (s.expr.type !== "tag" || s.expr.negated) this.manual("scope.not.complex", "NOT over a compound filter has no matcher form", s);
-      this.use("scope.not");
-      return this.tag({ ...s.expr, negated: true });
+      const inner = s.expr;
+      if (inner.type === "tag" && !inner.negated) {
+        this.use("scope.not");
+        return this.tag({ ...inner, negated: true });
+      }
+      if (inner.type === "var" && !inner.negated) return this.variable(inner.name, true);
+      if (inner.type === "in" && !inner.negated) {
+        this.use("scope.not.set");
+        return [{ label: this.label(inner.key), op: "!~", value: `^(${inner.values.map(pattern).join("|")})$` }];
+      }
+      if (inner.type === "or") {
+        // NOT (k:a OR k:b) -> k!~"^(a|b)$" when every branch is a positive tag on the same key.
+        const tags = inner.items.filter((i): i is Extract<ScopeExpr, { type: "tag" }> => i.type === "tag" && !i.negated && i.key !== null && !i.value.startsWith("$"));
+        if (tags.length === inner.items.length && new Set(tags.map((t) => t.key)).size === 1) {
+          this.use("scope.not.set");
+          return [{ label: this.label(tags[0]!.key!), op: "!~", value: `^(${tags.map((t) => pattern(t.value)).join("|")})$` }];
+        }
+      }
+      this.manual("scope.not.complex", "NOT over a compound filter has no matcher form", s);
     }
     return this.tag(s);
   }
@@ -370,9 +534,8 @@ class Lowerer {
     const label = this.label(t.key);
     if (t.value.startsWith("$")) {
       // `topic:$queue.value`: a template variable used as the value of a fixed key.
-      if (t.negated) this.manual("scope.var.negated", "negated template variables are not supported", t);
-      this.use("scope.var");
-      return [{ label, op: "=~", value: `^(${t.value.replace(/\.(value|key)$/, "")})$` }];
+      this.use(t.negated ? "scope.var.negated" : "scope.var");
+      return [{ label, op: t.negated ? "!~" : "=~", value: `^(${t.value.replace(/\.(value|key)$/, "")})$` }];
     }
     if (t.value.includes("*")) {
       this.use("scope.tag.wildcard");
@@ -383,8 +546,9 @@ class Lowerer {
   }
 
   variable(name: string, negated: boolean): PMatcher[] {
-    if (negated) this.manual("scope.var.negated", `negated template variable $${name} is not supported`);
     const def = this.ctx.variables?.[name];
+    if (negated && (!def || def.tag === null))
+      this.manual("scope.var.negated", `negated free-form template variable $${name}: its value is a whole tag, which no matcher can exclude`);
     if (!def || def.tag === null) {
       // Free-form variable (Datadog `$scope` with no prefix): its value is a whole tag, which no single matcher can take.
       // At its default value `*` it filters nothing, so dropping it is exact under that assumption.
@@ -394,8 +558,8 @@ class Lowerer {
       });
       return [];
     }
-    this.use("scope.var");
-    return [{ label: this.label(def.tag), op: "=~", value: `^($${name})$` }];
+    this.use(negated ? "scope.var.negated" : "scope.var");
+    return [{ label: this.label(def.tag), op: negated ? "!~" : "=~", value: `^($${name})$` }];
   }
 
   // ---------- result ----------
@@ -472,13 +636,37 @@ export function translateMonitor(
   let thresholds: MonitorTranslation["thresholds"] = null;
   let negated = false;
   const r = run(ctx, 60, true, (l) => {
-    if (mq.change) l.manual("monitor.change", `${mq.change.kind}() monitors have no exact rule yet`);
     if (mq.windowKind !== "last") l.manual("monitor.window.kind", `${mq.window} windows are not supported (only last_*)`);
     if (!["avg", "sum", "min", "max"].includes(mq.timeAgg)) l.manual("monitor.time-agg", `monitor time aggregation ${mq.timeAgg}()`);
     if (mq.windowSeconds % 60 !== 0) l.manual("monitor.window.width", "monitor window must be whole minutes");
-    const inner = l.expr(mq.query).node;
-    l.use("monitor.window");
-    let expr: PNode = { k: "call", fn: `${mq.timeAgg}_over_time`, args: [{ k: "subquery", expr: inner, range: mq.windowSeconds, step: 60 }] };
+    // sum(last_W):q.as_count(): the window total is increase over the whole window (no 1m subquery).
+    if (mq.timeAgg === "sum" && !mq.change) l.monitorSumWindow = mq.windowSeconds;
+    const lowered = l.expr(mq.query);
+    let expr: PNode;
+    if (lowered.windowed) {
+      l.use("monitor.sum.as_count");
+      expr = lowered.node;
+    } else {
+      l.use("monitor.window");
+      expr = { k: "call", fn: `${mq.timeAgg}_over_time`, args: [{ k: "subquery", expr: lowered.node, range: mq.windowSeconds, step: 60 }] };
+    }
+
+    // change(fn(last_W), last_C): X - X offset C; pct_change: 100 * (X - X offset C) / X offset C.
+    if (mq.change) {
+      const c = mq.change.compareWindowSeconds;
+      if (c % 60 !== 0) l.manual("monitor.change.window", "change() compare window must be whole minutes");
+      const before = mapSelectors(expr, (sel) => {
+        if (typeof sel.offset === "string") return l.manual("monitor.change.offset", "change() over a query with a variable offset");
+        return { ...sel, offset: (sel.offset ?? 0) + c };
+      });
+      l.use("monitor.change");
+      const delta: PNode = { k: "binary", op: "-", lhs: expr, rhs: before };
+      if (mq.change.kind === "change") expr = delta;
+      else {
+        l.use("arith.div");
+        expr = { k: "binary", op: "*", lhs: { k: "num", value: 100 }, rhs: { k: "binary", op: "/", lhs: delta, rhs: before } };
+      }
+    }
 
     // The query's threshold is what Datadog evaluates; options.thresholds.critical should equal it.
     const crit = mq.threshold;
@@ -499,7 +687,15 @@ export function translateMonitor(
       negated = true;
       expr = { k: "neg", expr };
       thresholds = { failed: -crit, ...(opts.warning !== undefined ? { degraded: -opts.warning } : {}) };
-    } else l.manual("monitor.cmp", `comparator ${mq.op} has no check-rule form`);
+    } else {
+      // == T / != T: compare the distance to T against a threshold of 0 (one level only: Dash0 runs the expression once per threshold).
+      if (opts.warning !== undefined) l.manual("monitor.cmp.eq.warning", `comparator ${mq.op} with a warning threshold has no check-rule form`);
+      l.use("monitor.cmp.eq");
+      const dist: PNode = { k: "call", fn: "abs", args: [{ k: "binary", op: "-", lhs: expr, rhs: { k: "num", value: crit } }] };
+      expr = mq.op === "==" ? { k: "neg", expr: dist } : dist;
+      op = mq.op === "==" ? ">=" : ">";
+      thresholds = { failed: 0 };
+    }
     return { k: "binary", op, lhs: expr, rhs: { k: "placeholder", name: "$__threshold" } };
   });
   const { node: _n, ...rest } = r;

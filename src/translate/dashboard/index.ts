@@ -31,13 +31,18 @@ export function toPerses(d: Dashboard, translate: TranslateExpr): DashboardTrans
   for (const v of d.variables) {
     variables[v.name] = { tag: null };
     const pinnedTo = v.default ?? "*";
+    // Catalog (T17): variable.pinned is exact-under A.var-default when the default is '*'. A different default
+    // would need variable.default.value (a fixed matcher), which isn't implemented, so it falls back to
+    // variable.unknown (manual; the finding code stays variable.pinned).
+    const star = pinnedTo === "*";
     findings.push({
-      status: "exact-under",
+      status: star ? "exact-under" : "manual",
       code: "variable.pinned",
-      message: `template variable $${v.name}${v.tagKey ? ` (tag ${v.tagKey})` : ""} is pinned to '${pinnedTo}'; no Dash0 variable is created`,
+      ruleId: star ? "variable.pinned" : "variable.unknown",
+      message: `template variable $${v.name}${v.tagKey ? ` (tag ${v.tagKey})` : ""} is pinned to '*'; no Dash0 variable is created${star ? "" : ` (Datadog's default was '${pinnedTo}')`}`,
       itemKind: "variable",
       itemId: `${dashItem}/var-${v.name}`,
-      assumptions: [pinnedTo === "*" ? `$${v.name} is left at '*'` : `viewers accept '*' instead of Datadog's default '${pinnedTo}'`],
+      ...(star ? { assumptions: ["a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"] } : { original: `$${v.name} default ${pinnedTo}` }),
     });
   }
 
