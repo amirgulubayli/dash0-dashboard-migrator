@@ -1,13 +1,15 @@
 // Datadog ingest: an exported folder or the official API -> IR. The only network I/O on the source side.
 // Files are read in sorted order and API results are sorted by id, so the output order is deterministic.
 // A file that can't be parsed or recognised becomes a finding and the run continues.
+// Exports may be JSON or YAML (.yaml/.yml, the brief's example); both parse to the same document.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, extname, join, relative } from "node:path";
+import { parseAllDocuments } from "yaml";
 import type { IngestResult, SourceRef } from "../../ir/index.js";
 import { alertFromDatadog, dashboardFromDatadog, isDashboardJson, isMonitorJson } from "./normalize.js";
 
 export interface IngestOptions {
-  /** Folder of exported JSON (any depth). */
+  /** Folder of exported JSON or YAML (.json, .yaml, .yml; any depth). */
   input?: string;
   /** Read from the Datadog API instead (needs DD_API_KEY and DD_APP_KEY). */
   api?: boolean;
@@ -28,7 +30,7 @@ export async function ingestDatadog(opts: IngestOptions): Promise<IngestResult> 
 
 export function ingestFolder(dir: string, only?: IngestOptions["only"]): IngestResult {
   const result: IngestResult = { dashboards: [], alerts: [], findings: [] };
-  for (const file of jsonFiles(dir)) {
+  for (const file of exportFiles(dir)) {
     const rel = relative(dir, file).replace(/\\/g, "/");
     const id = basename(file, extname(file));
     const fail = (message: string): void => {
@@ -36,9 +38,9 @@ export function ingestFolder(dir: string, only?: IngestOptions["only"]): IngestR
     };
     let json: unknown;
     try {
-      json = JSON.parse(readFileSync(file, "utf8"));
+      json = parseExport(file, readFileSync(file, "utf8"));
     } catch (e) {
-      fail(`${rel}: not valid JSON (${e instanceof Error ? e.message : String(e)})`);
+      fail(`${rel}: ${e instanceof Error ? e.message : String(e)}`);
       continue;
     }
     const ref: SourceRef = { vendor: "datadog", id, origin: rel };
@@ -66,14 +68,38 @@ function withId(ref: SourceRef, json: unknown): SourceRef {
   return typeof id === "string" || typeof id === "number" ? { ...ref, id: String(id) } : ref;
 }
 
-function jsonFiles(dir: string): string[] {
+const YAML_EXT = /\.ya?ml$/i;
+
+/**
+ * One export file -> one document. JSON goes through JSON.parse. YAML uses the yaml package's default YAML 1.2 core
+ * schema, so the result is plain JSON data: no yes/no booleans, no dates, no custom tags. Duplicate keys and
+ * several documents in one file are errors rather than a silent choice, because JSON.parse would keep the last key
+ * and we would drop the other documents.
+ */
+export function parseExport(file: string, text: string): unknown {
+  if (!YAML_EXT.test(file)) {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error(`not valid JSON (${e instanceof Error ? e.message : String(e)})`);
+    }
+  }
+  const docs = parseAllDocuments(text, { uniqueKeys: true, prettyErrors: false });
+  if (docs.length === 0) return null; // empty file: neither a dashboard nor a monitor, reported as unrecognised
+  const bad = docs.flatMap((d) => d.errors);
+  if (bad.length) throw new Error(`not valid YAML (${bad[0]!.message.split("\n")[0]})`);
+  if (docs.length > 1) throw new Error(`${docs.length} YAML documents in one file; export one dashboard or monitor per file`);
+  return docs[0]!.toJS({ maxAliasCount: 100 });
+}
+
+function exportFiles(dir: string): string[] {
   const out: string[] = [];
   const walk = (d: string) => {
     for (const name of readdirSync(d).sort()) {
       if (name.startsWith(".") || name === "node_modules") continue;
       const p = join(d, name);
       if (statSync(p).isDirectory()) walk(p);
-      else if (name.toLowerCase().endsWith(".json")) out.push(p);
+      else if (/\.(json|ya?ml)$/i.test(name)) out.push(p);
     }
   };
   walk(dir);

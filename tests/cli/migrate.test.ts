@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { stringify } from "yaml";
 import { main, parseFlags } from "../../src/cli.js";
 import { migrate, type MigrateOptions } from "../../src/pipeline/migrate.js";
 import { writeReport } from "../../src/report/index.js";
@@ -138,5 +139,49 @@ describe("modes", () => {
     const hm = r.report.items.find((i) => i.id === "dd-monitor-redisdb__high_mem")!;
     expect(hm.target).toEqual({ dash0Id: HIGH_MEM_ID, kind: "check-rule", action: "imported", readBack: "match" });
     expect(hm.certificate.checks.importedReadBack).toBe(true);
+  });
+});
+
+/** Every file under `dir`, keyed by its relative path. */
+function tree(dir: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (d: string) => {
+    for (const n of readdirSync(d).sort()) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) walk(p);
+      else out[relative(dir, p)] = readFileSync(p, "utf8");
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return out;
+}
+
+describe("YAML input (Plan 07 item 5)", async () => {
+  // The fixtures again, every file re-serialised as YAML: same documents, different syntax.
+  const yamlDir = mkdtempSync(join(tmpdir(), "t8-yaml-in-"));
+  for (const [rel, text] of Object.entries(tree(join(ROOT, "fixtures", "datadog")))) {
+    if (!rel.endsWith(".json")) continue;
+    const dest = join(yamlDir, rel.replace(/\.json$/, ".yaml"));
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, stringify(JSON.parse(text)));
+  }
+  const j = opts();
+  const y = opts({ ingest: { input: yamlDir } });
+  const [rj, ry] = await Promise.all([migrate(j), migrate(y)]);
+  const items = (r: typeof rj) => JSON.stringify(r.report.items.map(({ source: _source, ...rest }) => rest));
+
+  it("a YAML export and its JSON twin give the same input hash", () => {
+    expect(ry.report.run.inputHash).toBe(rj.report.run.inputHash);
+  });
+  it("the same Dash0 payloads, byte for byte", () => {
+    const a = tree(join(j.outDir, "dash0"));
+    expect(Object.keys(a).length).toBeGreaterThan(0);
+    expect(tree(join(y.outDir, "dash0"))).toEqual(a);
+  });
+  it("the same report items (translations, certificates, findings); only the source path names the .yaml file", () => {
+    expect(ry.report.items.length).toBe(rj.report.items.length);
+    expect(items(ry)).toBe(items(rj));
+    expect(ry.report.summary).toEqual(rj.report.summary);
+    expect(ry.report.items.every((i) => !String(i.source).endsWith(".json"))).toBe(true);
   });
 });
