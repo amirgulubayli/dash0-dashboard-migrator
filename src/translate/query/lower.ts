@@ -3,7 +3,7 @@
 import type { Expr, MetricQuery, MonitorQuery, ScopeExpr } from "../../parse/index.js";
 import { validatePromQL } from "../../validate/promql.js";
 import { mapSelectors, render, type Duration, type PMatcher, type PNode } from "./promql.js";
-import { RULES, type AssumptionId, type RuleId } from "./rules.js";
+import { ASSUMPTIONS, RULES, type AssumptionId, type RuleId } from "./rules.js";
 import { worst, type Finding, type MetricMapping, type QueryTranslation, type Status, type TranslateContext } from "./types.js";
 
 class Manual extends Error {}
@@ -37,18 +37,42 @@ class Lowerer {
   assume(a: AssumptionId): void {
     if (!this.extraAssumptions.includes(a)) this.extraAssumptions.push(a);
   }
-  find(severity: Finding["severity"], code: string, message: string, original?: unknown): void {
+  /** Record a CONTRACT-001 finding. Assumption ids are expanded to their checkable wording. */
+  find(
+    status: Finding["status"],
+    code: string,
+    message: string,
+    opts: { ruleId?: RuleId; assumptions?: AssumptionId[]; original?: unknown } = {},
+  ): void {
     // A formula can reference the same query twice (`query1 / (query1 + query2)`): report each finding once.
     if (this.findings.some((f) => f.code === code && f.message === message)) return;
-    this.findings.push({ severity, code, where: this.ctx.where ?? "", message, ...(original !== undefined ? { original } : {}) });
+    const original = opts.original === undefined ? undefined : typeof opts.original === "string" ? opts.original : JSON.stringify(stripSpans(opts.original));
+    this.findings.push({
+      status,
+      code,
+      message,
+      itemKind: this.monitor ? "alert" : "query",
+      itemId: this.ctx.where ?? "",
+      ...(opts.ruleId !== undefined && { ruleId: opts.ruleId }),
+      ...(opts.assumptions?.length && { assumptions: opts.assumptions.map((a) => ASSUMPTIONS[a]) }),
+      ...(original !== undefined && { original }),
+    });
   }
   manual(code: string, message: string, original?: unknown): never {
-    this.find("unsupported", code, message, original);
+    this.find("manual", code, message, { original });
     throw new Manual(message);
   }
 
   label(ddTag: string): string {
-    return this.ctx.tag?.(ddTag) ?? ddTag.replace(/[^A-Za-z0-9_]/g, "_");
+    const mapped = this.ctx.tag?.(ddTag);
+    if (mapped !== undefined) return mapped;
+    const label = ddTag.replace(/[^A-Za-z0-9_]/g, "_");
+    this.use("label.default");
+    this.find("exact-under", "tag.unmapped", `tag '${ddTag}' has no tag-table entry; using label '${label}'`, {
+      ruleId: "label.default",
+      assumptions: ["A.tag-default"],
+    });
+    return label;
   }
 
   // ---------- expressions ----------
@@ -100,6 +124,8 @@ class Lowerer {
         );
       this.use("arith.same-groups");
     } else this.use("arith.number");
+    if (op === "/" && r.node.k === "num" && r.node.value === 0)
+      this.manual("arith.div-zero", "division by the constant 0: Datadog drops the points, PromQL would return ±Inf/NaN");
     if (op === "/" && r.groups) this.use("arith.div");
     return { node: { k: "binary", op, lhs: l.node, rhs: r.node }, groups: l.groups ?? r.groups };
   }
@@ -149,16 +175,28 @@ class Lowerer {
 
     let mapping: MetricMapping | undefined = this.ctx.metric?.(m.metric);
     const mapped = mapping !== undefined;
+    if (!mapping) {
+      // The table can know a metric and still have no usable OTel equivalent: never query a metric that doesn't exist.
+      const why = this.ctx.availability?.(m.metric) ?? "unmapped";
+      if (why === "no_equivalent") this.manual("metric.no_equivalent", `${m.metric}: the OTel receiver emits no equivalent metric`);
+      if (why === "derived") this.manual("metric.derived", `${m.metric}: the equivalent is an expression over several OTel metrics (not translated yet)`);
+      if (why === "needs_transform") this.manual("metric.needs_transform", `${m.metric}: the mapping needs a scale or sumBy transform that T4 doesn't apply yet`);
+    }
     if (mapping) this.use("select.metric.mapped");
     else {
       this.use("select.metric.unmapped");
-      this.find("warn", "metric.unmapped", `no mapping for ${m.metric}; kept the Datadog name and assumed a gauge`);
+      this.find("exact-under", "metric.unmapped", `no mapping for ${m.metric}; kept the Datadog name and assumed a gauge`, {
+        ruleId: "select.metric.unmapped",
+        assumptions: ["A.kind-gauge"],
+      });
       mapping = { otel: m.metric, kind: "gauge" };
     }
 
     if (mapping.status === "approximate") {
       this.use("select.metric.approximate");
-      this.find("warn", "metric.approximate", `${m.metric} -> ${mapping.otel} is an approximate mapping${mapping.note ? `: ${mapping.note}` : ""}`);
+      this.find("bounded", "metric.approximate", `${m.metric} -> ${mapping.otel} is an approximate mapping${mapping.note ? `: ${mapping.note}` : ""}`, {
+        ruleId: "select.metric.approximate",
+      });
     }
 
     // Mapping-table labels select the right OTel series (redis.cpu.sys -> redis.cpu.time{state="sys"}).
@@ -199,6 +237,8 @@ class Lowerer {
         }
         if (c.args.length > 2) this.manual("time.rollup.args", ".rollup(): too many arguments");
         explicitRollup = true;
+      } else if (c.name === "as_count" && this.monitor) {
+        this.manual("monitor.as_count", ".as_count() in a monitor: Datadog evaluates it on a sum path we don't model yet");
       } else if (c.name === "as_count" || c.name === "as_rate") {
         // .as_count()/.as_rate() suggest a count or rate metric, so don't lean on the gauge assumption here.
         if (!mapped) this.manual("time.kind-unknown", `.${c.name}() on ${m.metric}: its kind is unknown (no mapping entry), so the time aggregation can't be chosen`);
@@ -224,7 +264,9 @@ class Lowerer {
       this.manual("time.kind", `a ${kind} metric needs an explicit .as_count()/.as_rate() to fix its time aggregation`);
     if (counterMode && explicitRollup) this.manual("time.rollup.counter", ".rollup() combined with a counter rate has no exact rule");
 
-    const sel: PNode = { k: "selector", matchers, range: width };
+    // rate()/increase() need at least two samples per window; on dashboards use Perses' $__rate_interval for that.
+    const range: Duration = counterMode && width === "$__interval" ? "$__rate_interval" : width;
+    const sel: PNode = { k: "selector", matchers, range };
     let inner: PNode;
     if (counterMode) inner = { k: "call", fn: counterMode, args: [sel] };
     else {
@@ -285,7 +327,7 @@ class Lowerer {
       // `topic:$queue.value`: a template variable used as the value of a fixed key.
       if (t.negated) this.manual("scope.var.negated", "negated template variables are not supported", t);
       this.use("scope.var");
-      return [{ label, op: "=~", value: t.value.replace(/\.(value|key)$/, "") }];
+      return [{ label, op: "=~", value: `^(${t.value.replace(/\.(value|key)$/, "")})$` }];
     }
     if (t.value.includes("*")) {
       this.use("scope.tag.wildcard");
@@ -302,11 +344,13 @@ class Lowerer {
       // Free-form variable (Datadog `$scope` with no prefix): its value is a whole tag, which no single matcher can take.
       // At its default value `*` it filters nothing, so dropping it is exact under that assumption.
       this.assume("A.var-default");
-      this.find("warn", "scope.var.free-form", `template variable $${name} has no tag key; dropped (exact while it is left at '*')`);
+      this.find("exact-under", "scope.var.free-form", `template variable $${name} has no tag key; dropped (exact while it is left at '*')`, {
+        assumptions: ["A.var-default"],
+      });
       return [];
     }
     this.use("scope.var");
-    return [{ label: this.label(def.tag), op: "=~", value: `$${name}` }];
+    return [{ label: this.label(def.tag), op: "=~", value: `^($${name})$` }];
   }
 
   // ---------- result ----------
@@ -327,11 +371,18 @@ class Lowerer {
     const promql = render(node);
     const v = validatePromQL(promql);
     if (!v.ok) {
-      this.find("error", "promql.invalid", `emitted PromQL does not parse: ${v.errors.map((x) => x.message).join("; ")}`, promql);
+      this.find("manual", "promql.invalid", `emitted PromQL does not parse: ${v.errors.map((x) => x.message).join("; ")}`, { original: promql });
       return { status: "manual", promql: null, rules: this.rules, assumptions: [], findings: this.findings };
     }
     return { status, promql, rules: this.rules, assumptions: assumptions.sort(), findings: this.findings };
   }
+}
+
+/** AST fragment without source spans, for a finding's `original`. */
+function stripSpans(x: unknown): unknown {
+  if (Array.isArray(x)) return x.map(stripSpans);
+  if (x && typeof x === "object") return Object.fromEntries(Object.entries(x).filter(([k]) => k !== "span").map(([k, v]) => [k, stripSpans(v)]));
+  return x;
 }
 
 /** Datadog wildcard value -> regex body. `*` matches anything; every other character is literal. */
@@ -386,8 +437,12 @@ export function translateMonitor(
 
     // The query's threshold is what Datadog evaluates; options.thresholds.critical should equal it.
     const crit = mq.threshold;
-    if (opts.critical !== undefined && opts.critical !== crit)
-      l.find("warn", "monitor.threshold.mismatch", `options.thresholds.critical (${opts.critical}) differs from the query threshold (${crit}); using the query's`);
+    if (opts.critical !== undefined && opts.critical !== crit) {
+      l.assume("A.query-threshold");
+      l.find("exact-under", "monitor.threshold.mismatch", `options.thresholds.critical (${opts.critical}) differs from the query threshold (${crit}); using the query's`, {
+        assumptions: ["A.query-threshold"],
+      });
+    }
     let op: ">" | ">=" = ">"; // every other branch below either sets it or throws
     if (mq.op === ">" || mq.op === ">=") {
       l.use("monitor.cmp.gt");

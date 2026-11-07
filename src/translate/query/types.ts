@@ -1,28 +1,14 @@
-// T4 types. Finding follows the plan 00 contract; it moves to src/ir once T1 lands.
+// T4 types. Status and Finding are the shared CONTRACT-001 types from src/ir.
+import type { Finding, MetricAvailability, Status } from "../../ir/index.js";
 
-/** Plan 03 §2: the relation between the Datadog meaning and the emitted PromQL meaning. */
-export type Status = "exact" | "exact-under" | "bounded" | "manual";
-
-/** Worst first: composition takes the worst status of its parts. */
-export const STATUS_ORDER: Status[] = ["exact", "exact-under", "bounded", "manual"];
-
-export function worst(a: Status, b: Status): Status {
-  return STATUS_ORDER.indexOf(a) >= STATUS_ORDER.indexOf(b) ? a : b;
-}
-
-export interface Finding {
-  severity: "info" | "warn" | "error" | "unsupported";
-  code: string;
-  where: string;
-  message: string;
-  original?: unknown;
-}
+export type { Finding, MetricAvailability, Status };
+export { worst } from "../../ir/index.js";
 
 /** OTel-side metric kind (plan 03 §3). `gauge` is assumed when the mapping table has no entry. */
 export type MetricKind = "gauge" | "counter" | "delta" | "histogram";
 
 /**
- * Structurally compatible with T1's `MetricLookup` (src/ir/context.ts, PR #4), so `metricLookup(mappings)` plugs in
+ * Structurally compatible with T1's `MetricLookup` (src/ir/context.ts), so `metricLookup(mappings)` plugs in
  * as `ctx.metric` directly. Only `otel` and `kind` are required.
  */
 export interface MetricMapping {
@@ -39,15 +25,20 @@ export interface MetricMapping {
 }
 
 export interface TranslateContext {
-  /** Datadog metric name -> OTel metric. Undefined: keep the Datadog name, assume gauge, warn. */
+  /** Datadog metric name -> OTel metric. Undefined: see `availability`; truly unmapped keeps the Datadog name, assumes gauge, warns. */
   metric?: (ddName: string) => MetricMapping | undefined;
-  /** Datadog tag key -> PromQL label. Undefined: dots become underscores. */
+  /**
+   * Why a metric has no lookup (T1 `metricAvailability`). `no_equivalent`, `derived` and `needs_transform` fail closed
+   * (manual). Without it, every metric the lookup doesn't return is treated as unmapped.
+   */
+  availability?: (ddName: string) => MetricAvailability;
+  /** Datadog tag key -> PromQL label. Undefined: dots become underscores, with a `tag.unmapped` finding. */
   tag?: (ddTag: string) => string | undefined;
   /** Dashboard template variables: name -> the tag key it filters (Datadog `prefix`), or null for free-form. */
   variables?: Record<string, { tag: string | null }>;
   /** Default rollup width for dashboard queries: seconds, or "$__interval" (the default). */
   interval?: number | "$__interval";
-  /** JSON path of the item being translated, copied into every finding. */
+  /** Item id copied into every finding's `itemId`, e.g. "dd-dash-abc/panel-12/query1". */
   where?: string;
 }
 

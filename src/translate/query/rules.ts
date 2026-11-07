@@ -9,6 +9,9 @@ export const ASSUMPTIONS = {
   "A.monitor-rollup-60s": "Datadog evaluates the monitor's inner query on 60 s buckets",
   "A.nonzero-denominator": "the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN)",
   "A.var-default": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
+  "A.var-regex": "the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a|b) for several)",
+  "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
+  "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;
@@ -34,7 +37,7 @@ export const RULES = {
   "select.metric.approximate": bounded("the mapping table marks the OTel metric as approximate (see the entry's note)"),
   "select.labels": exact("mapping-table labels pick the series: redis.cpu.sys -> {otel_metric_name=\"redis.cpu.time\", state=\"sys\"}"),
   "time.ddrate.plain": bounded(
-    "Datadog RATE metric (stored per second) read from an OTel counter: a plain query -> rate(x[w]) (D-18, maths.md T3b)",
+    "Datadog RATE metric (stored per second) read from an OTel counter: a plain query -> rate(x[w]) (D-18, maths.md T3b); dashboards use w = $__rate_interval",
   ),
   "scope.all": exact("{*} -> no matchers"),
   "scope.tag.eq": exact("key:value -> key=\"value\""),
@@ -43,7 +46,8 @@ export const RULES = {
   "scope.in": exact("key IN (a,b) -> key=~\"^(a|b)$\""),
   "scope.or.same-key": exact("key:a OR key:b -> key=~\"^(a|b)$\""),
   "scope.not": exact("NOT key:a -> key!=\"a\""),
-  "scope.var": exact("$var -> label=~\"$var\" on the variable's tag (value substituted by the dashboard)"),
+  "scope.var": under(["A.var-regex"], "$var -> label=~\"^($var)$\" on the variable's tag (anchored: Dash0 regex is unanchored)"),
+  "label.default": under(["A.tag-default"], "tag without a tag-table entry -> label with dots replaced by underscores"),
   // time aggregation (Datadog does time first, then space)
   "time.rollup.default": under(["A.align", "A.boundary"], "implicit avg rollup -> avg_over_time(x[interval])"),
   "time.rollup.explicit": under(["A.align", "A.boundary"], ".rollup(fn, s) -> fn_over_time(x[s])"),
@@ -54,8 +58,10 @@ export const RULES = {
   "time.as_count.gauge": exact(".as_count() has no effect on gauges"),
   "time.as_rate.gauge": exact(".as_rate() has no effect on gauges"),
   "time.as_count.delta": under(["A.align", "A.boundary"], ".as_count() on a delta sum -> sum_over_time(x[w])"),
-  "time.as_count.counter": bounded(".as_count() on a cumulative counter -> increase(x[w]) (extrapolated, maths.md T3b)"),
-  "time.as_rate.counter": bounded(".as_rate() on a cumulative counter -> rate(x[w]) (maths.md T3b)"),
+  "time.as_count.counter": bounded(
+    ".as_count() on a cumulative counter -> increase(x[w]) (extrapolated, maths.md T3b); dashboards use w = $__rate_interval",
+  ),
+  "time.as_rate.counter": bounded(".as_rate() on a cumulative counter -> rate(x[w]) (maths.md T3b); dashboards use w = $__rate_interval"),
   "time.fill.null": exact(".fill(null) is Datadog's default: no filling"),
   // space aggregation
   "space.agg": exact("avg|sum|min|max|count by {tags} -> PromQL aggregation by (labels)"),
