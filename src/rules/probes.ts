@@ -14,8 +14,13 @@ export const PROBES = {
     answer: "open",
   },
   "probe:at-modifier": {
-    question: "Does Dash0 accept the @ end() modifier and the $__range variable in panel queries?",
-    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted; 935/935 queries with the new constructs accepted (hub #278)",
+    question: "Does Dash0 accept the @ end() modifier in queries?",
+    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted by the query API; 935/935 queries with the new constructs accepted (hub #278). That test did NOT show that a dashboard substitutes $__range: see probe:range-var.",
+    answer: "yes",
+  },
+  "probe:range-var": {
+    question: "Does a Dash0 dashboard substitute $__range with its visible time range in panel queries (and a stat panel with calculation last-number show the value at the end of that range)?",
+    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), visual check on a throwaway dashboard (the query API does not substitute variables, so only a rendered panel can answer): a StatChart (calculation last-number) over sum(increase({otel_metric_name=\"dash0.logs\", service_name=\"frontend\"}[$__range])) equalled the same query over a fixed [5m] with the picker at 5m (about 3k) and over a fixed [1h] with the picker at 1h (about 32k). 15m was not read. Import also accepted calculation last-number, and it rendered the last value.",
     answer: "yes",
   },
   "probe:lt-threshold": {

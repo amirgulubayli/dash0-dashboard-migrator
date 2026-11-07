@@ -19,7 +19,7 @@ const m = loadMappings(join(ROOT, "mappings"));
 const attributes = loadLogAttributes(join(ROOT, "mappings", "log-attributes.yaml"));
 const base = { metric: metricLookup(m), availability: (d: string) => metricAvailability(m, d), tag: tagLookup(m) };
 const translate: TranslateExpr = (e, o) => translateQuery(e, { ...base, variables: o.variables, where: o.where }, o.env);
-const translateLog: TranslateLog = (q, o) => translateLogQuery(q, { attributes, variables: o.variables, where: o.where });
+const translateLog: TranslateLog = (q, o) => translateLogQuery(q, { attributes, variables: o.variables, where: o.where, ...(o.scalar && { interval: "$__range" as const }) });
 
 const logQ = (name: string, query: string, extra: object = {}) => ({ data_source: "logs", name, indexes: ["*"], compute: { aggregation: "count" }, search: { query }, ...extra });
 const widget = (id: number, type: string, title: string, requests: unknown, x = 0) => ({ id, layout: { x, y: 0, width: 4, height: 2 }, definition: { type, title, requests } });
@@ -34,6 +34,8 @@ const DASH = {
     widget(3, "timeseries", "Errors per command", [{ response_format: "timeseries", queries: [logQ("logs", "source:redis status:error"), { data_source: "metrics", name: "cmds", query: "sum:redis.net.commands{*}" }], formulas: [{ formula: "logs / cmds" }] }], 8),
     widget(4, "timeseries", "Average duration", [{ response_format: "timeseries", queries: [logQ("d", "service:api", { compute: { aggregation: "avg", metric: "@duration" } })], formulas: [{ formula: "d" }] }]),
     widget(6, "timeseries", "Error rate over time", [{ response_format: "timeseries", queries: [logQ("a", "service:api status:error"), logQ("b", "service:api")], formulas: [{ formula: "100 * a / b" }] }], 4),
+    widget(7, "toplist", "Top erroring services", [{ response_format: "scalar", queries: [{ ...logQ("q", "status:error", { group_by: [{ facet: "service", limit: 5, sort: { order: "desc" } }] }), aggregator: "sum" }], formulas: [{ formula: "q", limit: { count: 5, order: "desc" } }] }]),
+    widget(8, "query_value", "Errors and commands", [{ response_format: "scalar", queries: [{ ...logQ("e", "status:error"), aggregator: "sum" }, { data_source: "metrics", name: "c", query: "sum:redis.net.commands{*}", aggregator: "sum" }], formulas: [{ formula: "e" }, { formula: "c" }] }]),
     { id: 5, layout: { x: 4, y: 2, width: 6, height: 4 }, definition: { type: "list_stream", title: "Error stream", requests: [{ response_format: "event_list", query: { data_source: "logs_stream", query_string: "status:error" } }] } },
   ],
 };
@@ -53,10 +55,28 @@ describe("log widgets through T5 with T4 + T12", () => {
     expect(e.rules).toEqual(expect.arrayContaining(["log.count", "log.group_by.limit", "widget.timeseries"]));
   });
 
-  it("a log query in a scalar widget fails closed until the window form lands (Ali's review of #19)", () => {
+  it("a log query in a stat panel uses the window form over the whole timeframe, shown as last-number (#26)", () => {
     const e = p("Error rate %");
+    expect(e.placeholder).toBe(false);
+    expect(e.status).toBe("bounded");
+    expect(e.promql).toHaveLength(1);
+    expect(e.promql[0]).toMatch(/^100 \* .*\[\$__range\].* \/ .*\[\$__range\]/);
+    expect(e.promql[0]).not.toContain("$__interval");
+    expect(e.rules).toContain("log.scalar.window");
+    expect(e.panel.spec.plugin.kind).toBe("StatChart");
+    expect(e.panel.spec.plugin.spec.calculation).toBe("last-number");
+  });
+
+  it("a log query in a toplist fails closed until the TimeSeriesTable display of [$__range] is probed", () => {
+    const e = p("Top erroring services");
     expect(e).toMatchObject({ placeholder: true, status: "manual" });
-    expect(e.findings.some((f) => f.code === "query.datasource" && /scalar widget/.test(f.message))).toBe(true);
+    expect(e.findings.some((f) => f.code === "query.datasource" && /toplist\/table/.test(f.message))).toBe(true);
+  });
+
+  it("a stat panel mixing a window log count with a metric query fails closed (arith.scalar-log-mixed)", () => {
+    const e = p("Errors and commands");
+    expect(e).toMatchObject({ placeholder: true, status: "manual" });
+    expect(e.rules).toContain("arith.scalar-log-mixed");
   });
 
   it("a formula over two log queries (error rate) combines both counts in a chart", () => {

@@ -30,8 +30,10 @@ export type TranslateExpr = (e: Expr, o: TranslateOptions) => ExprTranslation;
  * T12's translateLogQuery, wrapped by the caller with the log-attribute table:
  *   (q, o) => translateLogQuery(q, { attributes, variables: o.variables, where: o.where })
  * Optional: without it, log queries fail closed as before.
+ * scalar: the widget shows one value for the whole timeframe (T5 stat panels): T12 emits the window form,
+ * [$__range] (log.scalar.window), instead of one [$__interval] bucket.
  */
-export type TranslateLog = (q: DatadogLogQuery, o: Omit<TranslateOptions, "env">) => LogTranslation;
+export type TranslateLog = (q: DatadogLogQuery, o: Omit<TranslateOptions, "env"> & { scalar?: boolean }) => LogTranslation;
 
 export interface PanelQuery {
   promql: string;

@@ -5,6 +5,7 @@ import { worst, type Finding, type Panel, type Status } from "../../ir/index.js"
 import type { PersesPanel } from "../../targets/dash0/index.js";
 import type { RequestTranslation } from "./queries.js";
 import { conditionalFormatsToThresholds, markersToThresholds } from "./thresholds.js";
+import type { LogTableTranslation } from "./logtable.js";
 
 export interface PanelResult {
   itemId: string;
@@ -24,7 +25,7 @@ export interface PanelResult {
 /** query_value aggregator -> StatChart calculation. */
 const CALC: Record<string, string> = { avg: "mean", sum: "sum", min: "min", max: "max", last: "last-number" };
 
-export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | null): PanelResult {
+export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | null, logs?: LogTableTranslation): PanelResult {
   const title = p.title?.trim() || p.sourceType;
   const findings: Finding[] = [...(q?.findings ?? [])];
   let status: Status = q?.status ?? "exact";
@@ -85,8 +86,20 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       // T2 already emitted the widget.unsupported finding for this panel.
       return placeholder(unsupportedRule(p.sourceType), `Dash0 has no panel for the Datadog '${p.sourceType}' widget.`);
     case "logs":
-      note("manual", "query.datasource", "log widgets are not migrated by this panel mapper yet (T12 translates log queries; LogTable integration is pending)", p.requests[0]?.queries[0]?.expr);
-      return placeholder("widget.logs", "Log widgets are not migrated yet.");
+      // log_stream / list_stream -> LogTable (logs.stream) when the search has an AND-of-filters form.
+      if (logs?.spec) {
+        status = worst(status, logs.status);
+        for (const r of logs.rules) if (!rules.includes(r)) rules.push(r);
+        for (const a of logs.assumptions) if (!assumptions.includes(a)) assumptions.push(a);
+        findings.push(...logs.findings);
+        return result("LogTable", { ...logs.spec });
+      }
+      if (logs) {
+        findings.push(...logs.findings);
+        return placeholder("widget.logs", "The log search has no Dash0 LogTable filter form (see the findings).");
+      }
+      note("manual", "query.datasource", "log widgets need the log-attribute table (mappings/log-attributes.yaml) to become a LogTable", p.requests[0]?.queries[0]?.expr);
+      return placeholder("widget.logs", "Log widgets are not migrated without the log-attribute table.");
   }
 
   // Query-backed panels: with no PromQL at all, show a placeholder instead of an empty chart.
@@ -112,8 +125,17 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
     }
     case "stat": {
       const agg = p.requests[0]?.queries[0]?.aggregator;
-      let calculation = agg ? CALC[agg] : undefined;
-      if (calculation) under("widget.query_value", ["A.align", "A.boundary"], `aggregator ${agg} -> StatChart calculation ${calculation}`);
+      // A log query in the window form ([$__range], log.scalar.window) already is the whole-timeframe value:
+      // the panel shows the value at the end of the range (A.log-range), whatever the Datadog aggregator.
+      const logWindow = q.rules.includes("log.scalar.window");
+      // last-number is only right for the window form: a stat that also shows a metric query fails closed.
+      if (logWindow && !p.requests.every((r) => r.queries.every((x) => x.dataSource === "logs"))) {
+        return placeholder("arith.scalar-log-mixed", "This stat panel mixes a whole-timeframe log count with a metric query; one StatChart calculation can't show both as Datadog does.");
+      }
+      let calculation = logWindow ? "last-number" : agg ? CALC[agg] : undefined;
+      if (logWindow) {
+        /* rule and assumptions come from T12 with the query */
+      } else if (calculation) under("widget.query_value", ["A.align", "A.boundary"], `aggregator ${agg} -> StatChart calculation ${calculation}`);
       else {
         calculation = "mean";
         under("widget.query_value.default-agg", ["A.agg-default"], agg ? `aggregator '${agg}' has no StatChart calculation; mean used` : "no aggregator given; Datadog's avg assumed", agg);
