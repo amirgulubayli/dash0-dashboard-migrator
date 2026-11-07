@@ -1,124 +1,202 @@
-# CONTRACT-003: report.json v2, review.json, and the CLI ↔ web UI flow (DRAFT)
+# CONTRACT-003: plan / review / apply, report.json v2 and review.json (DRAFT, rev 2)
 
-Owner: Michael (T8 + U2). Status: **DRAFT for review** by Henry (console), Amir (T7, merge train) and Ali (T4/T12 findings).
-Nothing here is built yet. Code follows only after the team agrees.
+Owner: Michael (T8 + U2). Status: **DRAFT rev 2.** It folds in Henry's and Ali's reviews of rev 1 and the agreed CLI/web UI spec. Code follows only after the team agrees.
+Changes from rev 1 are listed in §10.
 
 ## 1. Why
-The review console (`console/`, Henry's U1, PR #23) reads `report.json` and writes `review.json`. Today:
-- **Missing from the report:** the console needs groups with their layout, where the run came from (`run.source`), metric coverage, and an explanation for each reason code (Henry's #383).
-- **No way back:** there's no path for the reviewer's decisions to the import (console U3), and no Dash0 link or verification result after import (U5).
-- **Two UIs:** the live viewer (`dd2dash0 serve`) and the console are separate web apps.
+- **The CLI is the product.** Dash0 asks for a CLI-first tool, and an engineer must be able to plan, review and apply a migration from the terminal alone.
+- **The web UI follows the CLI.** The UI (Henry's console, `console/`) adds visuals: it shows the CLI's data and decides nothing.
+- **Gaps today:**
+  - There's no reviewed path from translation to import.
+  - The review isn't tied to the payloads that get imported.
+  - The report lacks what the UI needs: groups, coverage, explanations, rule flow, gaps, links.
 
 ## 2. Principles
-1. **Additive only.** Every v1 field keeps its name, type and meaning. A v1 reader (the console's `src/lib/report.ts` as of `8c3e65a`) keeps working unchanged. `schema` becomes `"dd2dash0.report/v2"`.
-2. **Deterministic.** Same input and options give byte-identical `report.json`: canonical JSON with sorted keys and a trailing newline, no timestamps. `report_sha256` is the SHA-256 of those exact bytes.
-3. **The CLI decides, the UI displays.** Every number, label, explanation and review order comes from the CLI. The console computes nothing about translation. No AI and no network in either.
-4. **No guessed links.** A field the CLI can't fill truthfully is `null` and never made up. That applies to `target.url` until its format is verified live.
+1. **Additive report.** Every v1 field keeps its name, type and meaning. A v1 reader (the console's `src/lib/report.ts` at `8c3e65a`) keeps working. `schema` becomes `"dd2dash0.report/v2"`.
+2. **Deterministic.** Same input + config → byte-identical plan: canonical JSON, sorted keys, trailing newline, no timestamps, no model.
+3. **The CLI decides, the UI shows.** Every number, label, sentence, order and verdict comes from CLI files. No AI and no external network in either.
+4. **No guessed values.** A field the CLI can't fill truthfully is `null`.
+5. **Nothing silent.** Every refusal names the items and the reason. Every Dash0 failure carries its trace id.
 
-## 3. report.json v2: what changes
+## 3. Commands (`src/cli.ts`, HOT)
+```
+dd2dash0 plan   [--config dd2dash0.yaml] (--input <dir> | --api) [--select <glob>…] [--out plan/]
+dd2dash0 review plan/ [--terminal] [--port 4317]
+dd2dash0 apply  plan/ --approved plan/review.json [--enable-rules] [--allow-pending] [--force] [--verify-data] [--ui]
+dd2dash0 migrate …        # one-shot: plan + apply of everything, as today (kept for scripts and the live dry runs)
+dd2dash0 diff planA/ planB/
+dd2dash0 parity plan/     # T10's compare script folded in: fills checks.parity (§5.5)
+```
+**Config:** an optional `dd2dash0.yaml`:
+```yaml
+source: { kind: api, site: datadoghq.eu }   # or { kind: folder, path: ./exports }
+select: ["redis*"]
+mappings: ./mappings
+channels: ./mappings/notification-channels.yaml
+dash0: { dataset: default, orgId: f22d83d8-… }   # orgId only builds UI links
+enableRules: false
+allowPending: false
+verifyData: false
+```
+- **Precedence:** flags override the file. Secrets come only from env / `.env` and never appear in a config or a plan.
+- **Recorded:** the resolved config is written into `plan.lock` and `report.json` (`run.config`).
 
-### 3.1 `run` (new fields)
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| 0 | ok |
+| 1 | some imports failed |
+| 2 | refused: plan hash, drift, pending items or a disallowed decision |
+| 3 | usage or config error |
+
+## 4. The plan directory
+```
+plan/
+  plan.lock     # canonical JSON: { schema: "dd2dash0.plan/v1", inputHash, catalogHash, config, files: { "<relative path>": "<sha256>" } }
+  report.json   # v2 (§5)
+  report.md
+  events.jsonl
+  dash0/dashboards/<origin>.json
+  dash0/check-rules/<uuid>.json
+  parity/<item>.json     # optional, written by `dd2dash0 parity`
+  review.json            # written by `review`; not in plan.lock
+  apply/                 # written by `apply`: report.json (post-import), import-manifest.json; not in plan.lock
+```
+- **The plan hash** is `sha256(plan.lock bytes)`. It covers every report and payload file, so a hand edit to *any* of them voids a review.
+- **Sharing:** paths are relative; zip the folder to share it.
+
+## 5. report.json v2: additions
+
+### 5.1 `run`
 | Field | Type | Meaning |
 |---|---|---|
-| `run.source` | `{ kind: "api" \| "folder"; site: string \| null; path: string \| null }` | `api` with the Datadog site (`datadoghq.eu`), or `folder` with the `--input` path as given (relative paths stay relative, so the hash doesn't depend on the machine) |
-| `run.toolCommit` | `string \| null` | git commit of the CLI build if known (env `DD2DASH0_COMMIT` or a build stamp), else `null`. Never read from the working tree at run time, which would break determinism across checkouts |
-| `run.catalogHash` | `string` | SHA-256 of the canonical rule catalog (`src/rules` CATALOG): which rule version produced this report |
+| `run.source` | `{ kind: "api" \| "folder"; site: string \| null; path: string \| null }` | Where the input came from (relative path as given) |
+| `run.toolCommit` | `string \| null` | CLI build commit from a build stamp, else `null`. Never read from the working tree at run time |
+| `run.catalogHash` | `string` | sha256 of the canonical rule catalog: the rule version behind this report |
+| `run.config` | object | The resolved config (§3), without secrets |
+| `run.planHash` | `string` | The plan hash (§4). Present in `plan/report.json`; `apply/report.json` keeps the plan's hash |
 
-### 3.2 `summary` (new fields)
+### 5.2 `summary`
 | Field | Type | Meaning |
 |---|---|---|
-| `summary.metrics` | `{ total; mapped; approximate; derived; needsTransform; noEquivalent; unmapped }` | Counts over **distinct Datadog metric names** referenced by metric queries in this run. `mapped + approximate + derived + needsTransform + noEquivalent + unmapped = total` (T1's `metricAvailability`, with approximate split from mapped by the entry's status) |
-| `summary.groups` | `number` | Number of group items (§3.4) |
-| `summary.reviewOrder` | `string[]` | Item ids in the order a person should review them (§3.6) |
+| `summary.metrics` | `{ total; mapped; approximate; derived; needsTransform; noEquivalent; unmapped }` | Counts over distinct Datadog metric names in metric queries; the parts add up to `total` |
+| `summary.groups` | `number` | Group items |
+| `summary.reviewOrder` | `string[]` | Items **that need a decision** (§6), in this order: (1) status `manual`, `unsupported`, then `bounded`; (2) alerts before panels; (3) more findings first; (4) `id`. Items that are `exact` or `exact-under` are **not** included: they need no decision (they import as translated) |
+| `summary.gaps` | `{ code; panels; fixKind: "mapping" \| "rule" \| "dash0-limit" \| "source"; example: string }[]` | Codes ranked by the number of panels they block (gap ranking view) |
+| `summary.flow` | `{ construct; ruleId; claim; count }[]` | Aggregated from every item's `certificate.rules` and the catalog: Datadog construct → rule → claim (rule-flow view). `construct` is the rule's catalog stage, plus the Datadog function name where there is one |
 
-### 3.3 Top level (new field)
+### 5.3 Top level
 | Field | Type | Meaning |
 |---|---|---|
-| `reasonCodes` | `Record<code, { label: string; explanation: string; catalogRule: string \| null }>` | One entry for **every** code that appears in `reason_codes` or `findings` in this file, and no others. `label` is 2–4 words for a chip. `explanation` is one or two sentences. Both come from the rule catalog (`match`/`emit`/`note`) or `FINDING_CODES`. `catalogRule` is the rule id when the code is a rule |
+| `reasonCodes` | `Record<code, { label; explanation; plain; catalogRule: string \| null }>` | Exactly one entry per code used in this file's `reason_codes` and `findings`. `label`: 2–4 words. `explanation`: technical, 1–2 sentences. `plain`: one sentence. All come from the rule catalog |
 
-### 3.4 Group items (new item kind)
-`items[].kind` adds `"group"`, one per Datadog group widget. Its fields:
+**Invariant, enforced by a test:** every code resolves to a catalog row or a rule's `findingCode`. There's no free-text fallback. Ali's corpus check found 14 codes that don't resolve yet:
+- **The T5 codes PR #16 adds:** `layout.clamped`, `widget.toplist.unranked`, `query.empty`, `widget.query_value.default-agg`.
+- **Manual outcomes with no row yet:** `fn.autosmooth`, `fn.throughput`, `fn.rate`, `fn.forecast`, `fn.ewma_3`, `fn.ewma_10`, `fn.outliers`, `fn.calendar_shift`, `fn.sum`, `source.unreadable`.
+
+T17 (Michael) adds the rows, and the corpus/fixture conformance test (Ali offered `tests/cli/report-codes.test.ts`) keeps it that way.
+
+### 5.4 Items
+**Group items (new kind `"group"`):** one per Datadog group, placed before its panels.
 
 | Field | Value |
 |---|---|
-| `id` | `dd-dash-<dashboard id>/<group widget id>`: the prefix of its panels' ids |
-| `kind` | `"group"` |
+| `id` | `dd-dash-<dashboard>/<group widget id>` |
 | `title`, `dashboard` | group title, dashboard title |
 | `widget_type` | `"group"` |
-| `group` | `null` |
-| `layout` | the Dash0 Grid section (24 columns) |
-| `source_layout` | the Datadog group position (12 columns, dashboard-relative) |
-| `status` | `"exact"` (structure only; groups need no review) |
-| `source_queries`, `promql`, `reason_codes`, `findings` | `[]` (layout findings such as `layout.clamped` sit on the panels) |
-| `certificate` | `{ rules: ["layout.group"], status: "exact", … }` |
-| `target` | the dashboard's target |
+| `group`, `group_id` | `null` |
+| `layout` | Dash0 Grid section (24 columns) |
+| `source_layout` | Datadog group position (12 columns, dashboard-relative) |
+| `status` | `"exact"` |
+| `source_queries`, `promql`, `reason_codes`, `findings` | `[]` |
+| `certificate.rules` | `["layout.group"]` |
+| `target` | the dashboard's |
 
-Group items come **before** their panels in `items`, in file order.
+**Panel and alert items, new fields:**
 
-### 3.5 Panel and alert items (new fields)
 | Field | Type | Meaning |
 |---|---|---|
-| `source_layout` | `{x,y,w,h} \| null` | **Datadog** position (12 columns, relative to its group). The existing `layout` stays the **Dash0** position (24 columns, relative to its group section) |
-| `group_id` | `string \| null` | id of the parent group item, or `null` for top-level widgets |
-| `target.url` | `string \| null` | Link to the item in Dash0. `null` until a URL format is verified live (open probe; see §7) |
-| `certificate.checks.returnsData` | `boolean \| null` | After a live import with `--verify-data`: every PromQL of the item returned at least one series over the last 1 h. `null` = not checked |
-| `certificate.checks.parity` | `{ window: string; points: number; maxAbsErr: number; tolerance: number; ok: boolean } \| null` | Filled by the parity step (T10 compare script) when it runs; `null` otherwise. `tolerance` is the rule's stated ε, or the float bound for exact claims (maths.md T9) |
+| `group_id` | `string \| null` | Parent group item's id. The console matches groups **by id**, not by title |
+| `source_layout` | `{x,y,w,h} \| null` | **Datadog** position, 12 columns, relative to its group. **The console's map uses this.** The existing `layout` stays the Dash0 position (24 columns) |
+| `condition` | `string \| null` | For `exact-under`: the item's assumptions as plain sentences, joined with "; ". Otherwise `null` |
+| `explain` | `{ technical: string; plain: string }` | From catalog templates over the item's rules. Example: technical "time.rollup.explicit: exact-under(A.align, A.boundary)"; plain "Same values as Datadog as long as both tools line their minutes up the same way." |
+| `ruleSpans` | `{ ruleId; query: number; start: number; end: number }[]` | Which part of which source query each rule handled (query-diff view). **Emitted by T4/T12 (Ali)**; `[]` until then |
+| `decision_required` | `boolean` | `true` exactly for the items in `summary.reviewOrder` |
 
-### 3.6 Review order (deterministic, replaces any model-based ranking)
-`summary.reviewOrder` sorts reviewable items (all alerts, plus panels whose status isn't `exact`) by:
-1. **Status:** `manual`, `unsupported`, `bounded`, `exact-under`.
-2. **Alerts before panels** within the same status, because a wrong alert costs more than a wrong chart.
-3. **More findings first.**
-4. **`id`** as the tie-break.
+### 5.5 After apply (`apply/report.json`) and parity
+| Field | Type | Meaning |
+|---|---|---|
+| `target.url` | `string \| null` | Dash0 link (§5.6), or `null` when `dash0.orgId` isn't configured or the id isn't resolved |
+| `target.dash0Uid` | `string \| null` | Dash0's internal id, resolved from `GET /api/dashboards` (origin → id) after the PUT |
+| `certificate.checks.importedReadBack` | `boolean \| null` | As in v1 |
+| `certificate.checks.returnsData` | `boolean \| null` | With `--verify-data`: every PromQL of the item returned at least one series over `--verify-window` (default 1h). `null` = not checked |
+| `certificate.checks.parity` | `{ window; points; maxAbsErr; tolerance; ok } \| null` | From `dd2dash0 parity`. `tolerance` = the rule's ε, or the float bound for exact claims (maths.md T9). Series go in `plan/parity/<item>.json` |
 
-The console shows it as "suggested order". It never reorders by anything else.
+### 5.6 Dash0 link format (from Ali's decoding of a real link, #543; **one click still to confirm**)
+- **Format:** `https://app.dash0.com/dashboards?org=<ORG_UUID>&s=<STATE>`, where `STATE = base64url(zlib(JSON))` with padding percent-encoded, and `JSON = {"/dashboards":{"list":{"open":true,"id":"<DASHBOARD_UID>"}}}`.
+- **Org id:** `ORG_UUID` comes from config (`dash0.orgId` / `DASH0_ORG_ID`); it can't be derived from the token.
+- **Dashboard id:** `DASHBOARD_UID` is Dash0's internal id, not our origin.
+- **Check rules:** the link format isn't known, so `target.url = null` for check rules until it's probed.
 
-## 4. review.json (console → CLI), unchanged from console INTEGRATION.md §3
+## 6. review.json (written by `review` or the console)
 ```json
-{ "schema_version": "1", "report_sha256": "<sha256 of report.json bytes>", "reviewer": "name",
-  "decisions": [{ "id": "<item id>", "decision": "approved" | "flagged" | "acknowledged", "note": "" }] }
+{ "schema_version": "1", "plan_sha256": "<plan hash>", "report_sha256": "<sha256 of plan/report.json bytes>",
+  "reviewer": "name", "decisions": [{ "id": "<item id>", "decision": "approved" | "flagged" | "acknowledged", "note": "" }] }
 ```
+- **Binding:** `apply` checks `plan_sha256`. During the switch, a review that has only `report_sha256` is accepted if it matches the report bytes, with a warning that payload edits aren't covered.
+- **Allowed decisions** (console rules):
 
-## 5. The flow and the CLI surface (`src/cli.ts`, HOT)
-```
-dd2dash0 migrate --from datadog (--input <dir> | --api) --dry-run --out out   # 1. translate, write report + payloads
-dd2dash0 serve --out out                                                        # 2. console at /, report at /report.json
-                                                                                #    (live replay at /live); export review.json
-dd2dash0 import --out out --approved out/review.json [--enable-rules] [--verify-data]   # 3. import what was approved
-```
+  | Item | Allowed |
+  |---|---|
+  | `bounded` panel | `approved` \| `flagged` |
+  | `manual` / `unsupported` panel | `acknowledged` |
+  | alert | `approved` \| `flagged` |
+  | `exact` / `exact-under` item | none (`decision_required: false`) |
 
-**`serve` (changed):**
-- Serves the built console at `/`, the run's `report.json` at `/report.json` (the console's same-origin fetch, so nothing is written into `console/public`), and the current viewer at `/live`.
-- `/events`, `/api/summary`, `/api/item` and `/api/el-token` are unchanged.
-- If the console hasn't been built, `/` falls back to the viewer with a one-line notice.
+## 7. Review and apply behaviour
+- **`review`** serves the prebuilt console (`dist/console/`) at `/`, the plan's report at `/report.json`, and the live viewer at `/live`.
+  - **Saving:** decisions go to `plan/review.json` through `POST /api/review` on the same local server.
+  - **Live:** `/events` streams progress.
+  - **`--terminal`** walks `summary.reviewOrder`. It shows the Datadog query, PromQL, `explain.technical`, reasons and the condition; keys are `a` approve, `f` flag + note, `k` acknowledge, `s` skip, `q` quit (progress saved). It writes the same `review.json`.
+- **`apply`:**
+  1. **Hash check:** verify the plan hash (exit 2 on mismatch).
+  2. **Source drift:** re-read the Datadog sources; if the input hash differs, exit 2 ("source changed since plan").
+  3. **Target drift:** for each item already in Dash0, read it back. If it differs from what the previous apply wrote (a hand edit), refuse that item unless `--force`.
+  4. **Import per decision:**
 
-**`import` (new):**
-1. **Hash check.** Read `out/report.json` and `out/dash0/**` from a previous `--dry-run`. Refuse with a clear error if `sha256(report.json bytes) ≠ review.report_sha256`, if the report isn't a dry-run report, or if a decision isn't allowed for its item (console rules: approximate panel → approved|flagged; unsupported/no-equivalent → acknowledged; check rule → approved|flagged).
-2. **Import per decision:**
+     | Item | Decision | Apply does |
+     |---|---|---|
+     | `exact` / `exact-under` panel | none needed | import translated |
+     | `bounded` panel | `approved` | import translated |
+     | `bounded` panel | `flagged` | Markdown placeholder: original query + note + reasons (T5's placeholder rule) |
+     | `bounded` panel | none | refuse, listing ids (`--allow-pending` imports translated) |
+     | `manual` / `unsupported` panel | any | placeholder, as is |
+     | alert | `approved` | import (disabled unless `--enable-rules`) |
+     | alert | `flagged` / none | skip, listed |
 
-   | Item | Decision | Import does |
-   |---|---|---|
-   | exact or exact-under panel | none needed | imports the translated panel |
-   | bounded panel | `approved` | imports the translated panel |
-   | bounded panel | `flagged` | a Markdown placeholder holding the original query, the reviewer's note and the reason codes |
-   | bounded panel | none | refuses: lists the pending ids. `--allow-pending` imports them as translated |
-   | manual / unsupported panel | any | already a placeholder; imported as-is |
-   | check rule | `approved` | imports it (disabled unless `--enable-rules`) |
-   | check rule | `flagged` / none | not imported, listed in the report |
+     Dashboards are imported with `PUT /api/dashboards/{origin}`, check rules with `POST /api/import/check-rule` and their UUIDv5 id (T7). Both are idempotent.
+  5. **Failures:** continue past them and record each with Dash0's trace id. Exit 1 if any failed. A re-run retries only what's missing or failed.
+  6. **Report:** write `apply/report.json` with `target`, `target.url`, `target.dash0Uid`, the read-back result and, with `--verify-data`, `returnsData`.
 
-   Placeholders are built by the same deterministic rule T5 uses (`widget.unknown` / placeholder text), plus the note.
-3. **Rewrite the report.** Write a new `report.json` with `target`, `target.url`, `certificate.checks.importedReadBack` and, with `--verify-data`, `returnsData`. Its hash is new, so old decisions don't carry over.
+## 8. Terminal output
+- **On a TTY:** colour (hand-written ANSI), a progress line per dashboard, the summary table with block-character coverage bars, and a next-step hint.
+- **Piped or `--json`:** plain lines, or one JSON event per line (the `events.jsonl` events).
 
-**`migrate` without `--dry-run`** keeps today's behaviour: import everything, as in the live dry runs. `import --approved` is the reviewed path.
+## 9. Tests
+- **Report shape:**
+  - the v1 field names and types are pinned against a v1 fixture
+  - the reason-code invariant holds (§5.3)
+  - `summary.reviewOrder` = exactly the items with `decision_required`
+- **Determinism:** `plan` twice gives byte-identical files and plan hash. `apply` twice changes nothing in Dash0 and leaves `apply/report.json` byte-identical apart from fields Dash0 returns.
+- **Refusals:** a mismatched plan hash, source drift, target drift, a disallowed decision and pending bounded panels each exit 2, naming the ids.
+- **Web UI:** console unit tests for the new fields (the old fixture still parses), plus **one Playwright e2e** on the fixtures: plan → review in the browser → approve/flag → save → apply in dry-run → check the result.
 
-## 6. Compatibility and tests
-- **Old fields:** a test pins every v1 field name and type against a v1 fixture.
-- **Determinism:** `migrate` twice gives byte-identical v2 reports. `import` twice with the same review gives byte-identical post-import reports, apart from fields Dash0 returns.
-- **Review gate tests:** a mismatched hash, a disallowed decision and pending bounded panels each fail with exit code 2 and a message naming the ids.
-- **Console:** `src/lib/report.ts` maps the new fields, and its existing fixture (`cli-report.redis.json`, v1) must still parse.
-
-## 7. Open questions
-1. **Dash0 link format.** `/dashboards/<uuid>?org=<org id>` redirected to the list in our test. Needs a live probe, plus the org id from a new env var `DASH0_ORG_ID`. Until then `target.url = null`.
-2. **`returnsData` window.** 1 h is enough for live Redis but not for dashboards whose data is sparse. Make it `--verify-window`? (default 1h)
-3. **Henry:** is `source_layout` (12 columns) what the map wants, rather than `layout` (24)?
-4. **Amir:** `import` reuses T7's `importAll` per item. Is a filtered `importAll({dashboards, rules})` call enough, or does T7 need a per-item entry point?
+## 10. Changes from rev 1
+- **Commands:** `migrate --dry-run` + `import --approved` becomes `plan` / `review` / `apply` (plus `diff` and `parity`), with a config file and exit codes.
+- **Review binding:** the review binds to the **plan hash** (all report and payload files), with `report_sha256` kept as a transition alias.
+- **Review order (Henry):** exact-under items are excluded and `decision_required` is added.
+- **Henry's other points:** a per-item `condition`, `group_id` matching, and `source_layout` confirmed for the map.
+- **Reason codes (Ali):** the invariant is enforced, with no fallback; the 14 unresolved codes are listed for T17 and `plain` is added. Plus `explain` (technical + plain), `ruleSpans` (Ali), `summary.gaps` and `summary.flow` for the visual views.
+- **Links:** the `target.url` format is filled in from Ali's decoding (#543), with `target.dash0Uid` and `dash0.orgId` config; check-rule links stay `null`.
+- **Drift checks:** for the source and the target.
