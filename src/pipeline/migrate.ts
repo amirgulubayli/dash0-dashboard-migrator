@@ -103,7 +103,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
 
   const kindsFile = join(o.mappingsDir, "datadog", "_kinds.json");
   const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...(attributes ? [logAttributesFile] : []), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f)), ...(existsSync(kindsFile) ? [kindsFile] : []), ...(channels ? [channels.file] : [])];
-  const inputHash = sha256(canonicalJson({ dashboards: ingested.dashboards.map((d) => d.original), alerts: ingested.alerts.map((a) => a.original) }));
+  const inputHash = inputHashOf(ingested);
   const report = buildReport({
     version: o.version,
     inputHash,
@@ -116,6 +116,11 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
     mode: o.mode,
   });
   return { report, manifest, dashboards: dashboards.map((d) => d.out), alerts };
+}
+
+/** Hash of the Datadog sources as ingested: the plan records it, and `apply` re-ingests and compares (source drift). */
+export function inputHashOf(ingested: { dashboards: { original: unknown }[]; alerts: { original: unknown }[] }): string {
+  return sha256(canonicalJson({ dashboards: ingested.dashboards.map((d) => d.original), alerts: ingested.alerts.map((a) => a.original) }));
 }
 
 /** Exit status for the CLI: fail only when something we tried to import failed or was rejected. */
