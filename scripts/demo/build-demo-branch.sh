@@ -11,7 +11,7 @@ set -euo pipefail
 
 BASE="${BASE:-feature/datadog-to-dash0}"
 # Order matters: the catalog before T6, T4 before T8 (T8 is stacked on T5, T7, T2 and T4).
-DEFAULT_HEADS="michael/claude/rule-catalog ali/claude/query-promql amir/claude/dash0-target amir/claude/datadog-ingest amir/claude/dashboard-perses amir/claude/cli-report michael/claude/monitor-check-rule"
+DEFAULT_HEADS="michael/claude/rule-catalog ali/claude/query-promql amir/claude/dash0-target amir/claude/datadog-ingest amir/claude/dashboard-perses amir/claude/cli-report michael/claude/monitor-check-rule michael/claude/demo-scripts"
 HEADS="${HEADS:-$DEFAULT_HEADS}"
 BRANCH="demo/dry-run"
 
