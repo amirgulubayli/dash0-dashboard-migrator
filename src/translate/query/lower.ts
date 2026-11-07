@@ -4,7 +4,7 @@ import type { Expr, MetricQuery, MonitorQuery, ScopeExpr } from "../../parse/ind
 import { validatePromQL } from "../../validate/promql.js";
 import { mapSelectors, render, type Duration, type PMatcher, type PNode } from "./promql.js";
 import { ASSUMPTIONS, RULES, type AssumptionId, type RuleId } from "./rules.js";
-import { worst, type Finding, type MetricMapping, type QueryTranslation, type Status, type TranslateContext } from "./types.js";
+import { worst, type FormulaEnv, type Finding, type LoweredRef, type MetricMapping, type QueryTranslation, type Status, type TranslateContext } from "./types.js";
 
 class Manual extends Error {}
 
@@ -33,6 +33,8 @@ const PER_UNIT: Record<string, number> = { per_second: 1, per_minute: 60, per_ho
 
 class Lowerer {
   rules: RuleId[] = [];
+  /** Merged from formula refs translated elsewhere (LoweredRef). */
+  external: { status: Status; rules: string[]; assumptions: string[] }[] = [];
   extraAssumptions: AssumptionId[] = [];
   findings: Finding[] = [];
 
@@ -92,7 +94,7 @@ class Lowerer {
 
   // ---------- expressions ----------
 
-  expr(e: Expr, env?: Map<string, Expr>): Lowered {
+  expr(e: Expr, env?: FormulaEnv): Lowered {
     switch (e.type) {
       case "number":
         return { node: { k: "num", value: e.value }, groups: null };
@@ -121,6 +123,7 @@ class Lowerer {
       case "ref": {
         const target = env?.get(e.name);
         if (!target) this.manual("formula.ref.unknown", `formula references unknown query '${e.name}'`);
+        if ("type" in target && target.type === "lowered") return this.lowered(target);
         return this.expr(target, env);
       }
       case "call":
@@ -128,7 +131,18 @@ class Lowerer {
     }
   }
 
-  binary(op: "+" | "-" | "*" | "/", left: Expr, right: Expr, env?: Map<string, Expr>): Lowered {
+  /** A ref translated elsewhere: take its tree, carry its claim and findings into this result. */
+  lowered(ref: LoweredRef): Lowered {
+    if (ref.status === "manual") {
+      for (const f of ref.findings) if (!this.findings.some((x) => x.code === f.code && x.message === f.message)) this.findings.push(f);
+      this.manual("formula.ref.manual", "the formula uses a query that could not be translated");
+    }
+    this.external.push({ status: ref.status, rules: ref.rules, assumptions: ref.assumptions });
+    for (const f of ref.findings) if (!this.findings.some((x) => x.code === f.code && x.message === f.message)) this.findings.push(f);
+    return { node: ref.node, groups: ref.groups };
+  }
+
+  binary(op: "+" | "-" | "*" | "/", left: Expr, right: Expr, env?: FormulaEnv): Lowered {
     const l = this.expr(left, env);
     const r = this.expr(right, env);
     if (l.groups && r.groups) {
@@ -145,7 +159,7 @@ class Lowerer {
     return { node: { k: "binary", op, lhs: l.node, rhs: r.node }, groups: l.groups ?? r.groups };
   }
 
-  call(e: Extract<Expr, { type: "call" }>, env?: Map<string, Expr>): Lowered {
+  call(e: Extract<Expr, { type: "call" }>, env?: FormulaEnv): Lowered {
     const exprArg = (i: number): Expr => {
       const a = e.args[i];
       if (a?.type !== "expr") this.manual("fn.args", `${e.name}(): argument ${i + 1} must be a query`);
@@ -576,14 +590,20 @@ class Lowerer {
       status = worst(status, "exact-under");
       if (!assumptions.includes(a)) assumptions.push(a);
     }
-    if (!node) return { status: "manual", promql: null, rules: this.rules, assumptions: [], findings: this.findings };
+    const rules: string[] = [...this.rules];
+    for (const x of this.external) {
+      status = worst(status, x.status);
+      for (const a of x.assumptions) if (!assumptions.includes(a)) assumptions.push(a);
+      for (const id of x.rules) if (!rules.includes(id)) rules.push(id);
+    }
+    if (!node) return { status: "manual", promql: null, rules, assumptions: [], findings: this.findings };
     const promql = render(node);
     const v = validatePromQL(promql);
     if (!v.ok) {
       this.find("manual", "promql.invalid", `emitted PromQL does not parse: ${v.errors.map((x) => x.message).join("; ")}`, { original: promql });
-      return { status: "manual", promql: null, rules: this.rules, assumptions: [], findings: this.findings };
+      return { status: "manual", promql: null, rules, assumptions: [], findings: this.findings };
     }
-    return { status, promql, rules: this.rules, assumptions: assumptions.sort(), findings: this.findings };
+    return { status, promql, rules, assumptions: assumptions.sort(), findings: this.findings };
   }
 }
 
@@ -615,7 +635,7 @@ function run(ctx: TranslateContext, interval: Duration, monitor: boolean, f: (l:
 }
 
 /** A dashboard query or formula. `env` maps formula refs (`query1`) to their parsed queries. */
-export function translateQuery(e: Expr, ctx: TranslateContext = {}, env?: Map<string, Expr>): QueryTranslation {
+export function translateQuery(e: Expr, ctx: TranslateContext = {}, env?: FormulaEnv): QueryTranslation {
   const { node: _n, ...r } = run(ctx, ctx.interval ?? "$__interval", false, (l) => l.expr(e, env).node);
   return r;
 }

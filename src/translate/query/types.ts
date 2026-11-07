@@ -47,6 +47,24 @@ export interface TranslateContext {
   where?: string;
 }
 
+/**
+ * A query translated elsewhere (e.g. a `data_source: logs` query by T12), usable as a formula ref. Its status,
+ * rules, assumptions and findings are merged into the formula's result.
+ */
+export interface LoweredRef {
+  type: "lowered";
+  node: import("./promql.js").PNode;
+  /** Output labels (sorted), or null for a scalar. */
+  groups: string[] | null;
+  status: Status;
+  rules: string[];
+  assumptions: string[];
+  findings: Finding[];
+}
+
+/** Formula environment: query name -> parsed Datadog metric query, or an already-translated query. */
+export type FormulaEnv = Map<string, import("../../parse/index.js").Expr | LoweredRef>;
+
 export interface QueryTranslation {
   status: Status;
   /** Rendered PromQL, or null when status is manual. */
