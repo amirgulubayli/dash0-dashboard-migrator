@@ -3,7 +3,7 @@ import { isGroup, type Alert, type Dashboard, type Finding, type Panel } from ".
 import type { DashboardTranslation } from "../translate/dashboard/index.js";
 import { canonicalJson, dash0Id, sha256, type GridItem, type Manifest } from "../targets/dash0/index.js";
 import { validatePromQL } from "../validate/promql.js";
-import type { AlertConversion } from "../pipeline/alerts-interim.js";
+import type { AlertConversion } from "../translate/alerts/index.js";
 import type { Report, ReportItem, ReportStatus } from "./types.js";
 
 export interface BuildInput {
@@ -34,6 +34,17 @@ export function buildReport(b: BuildInput): Report {
     else findings.push(f);
   }
   const readBackCheck = (t: ReportItem["target"]) => (!t || t.readBack === "skipped" ? null : t.readBack === "match");
+  // Catalog (T17) rules for the target and report steps, cited in every certificate they applied to.
+  const emitRules = (t: ReportItem["target"], alert: boolean): string[] => {
+    const out = ["emit.certificate"];
+    if (!t) return out;
+    out.push("validate.preflight");
+    if (t.action === "rejected-preflight") return out;
+    out.push("emit.id", "emit.single-item");
+    if (alert && !b.options.enableRules) out.push("emit.rules-disabled");
+    if (t.readBack === "match") out.push("emit.readback");
+    return out;
+  };
 
   for (const { source: d, translation: t } of b.dashboards) {
     findings.push(...t.findings);
@@ -76,7 +87,7 @@ export function buildReport(b: BuildInput): Report {
         certificate: {
           sourceHash: sha256(canonicalJson(src?.panel.original ?? null)),
           outputHash: sha256(canonicalJson(r.panel)),
-          rules: r.rules,
+          rules: [...r.rules, ...emitRules(tgt, false)],
           status,
           assumptions: r.assumptions,
           ...epsilonOf(r.findings),
@@ -115,7 +126,7 @@ export function buildReport(b: BuildInput): Report {
       certificate: {
         sourceHash: sha256(canonicalJson(a.original)),
         outputHash: c.rule ? sha256(canonicalJson(c.rule)) : null,
-        rules: c.rules,
+        rules: [...c.rules, ...emitRules(tgt, true)],
         status: c.status,
         assumptions: c.assumptions,
         ...epsilonOf(c.findings),

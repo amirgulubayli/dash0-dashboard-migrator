@@ -6,6 +6,9 @@ import { main, parseFlags } from "../../src/cli.js";
 import { migrate, type MigrateOptions } from "../../src/pipeline/migrate.js";
 import { writeReport } from "../../src/report/index.js";
 import { validatePromQL } from "../../src/validate/promql.js";
+import { checkRuleUuid } from "../../src/translate/alerts/index.js";
+
+const HIGH_MEM_ID = checkRuleUuid("redisdb__high_mem"); // T6: UUIDv5 of the Datadog monitor id
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const opts = (over: Partial<MigrateOptions> = {}): MigrateOptions => ({
@@ -63,8 +66,9 @@ describe("migrate over the fixtures (dry run)", async () => {
       'avg_over_time((100 * avg (avg_over_time({otel_metric_name="redis.memory.used"}[1m])) / avg (avg_over_time({otel_metric_name="redis.maxmemory"}[1m])))[5m:1m]) > $__threshold',
     ]);
     expect(a.thresholds).toEqual({ failed: 90, degraded: 70 });
-    expect(a.status).toBe("bounded"); // require_full_window / new_host_delay are reported, not silently dropped
-    expect(a.reason_codes).toEqual(expect.arrayContaining(["monitor.option.require_full_window", "monitor.option.new_host_delay"]));
+    // T6 (catalog alert.opt.*): require_full_window / new_host_delay become stated assumptions, not dropped
+    expect(a.status).toBe("exact-under");
+    expect(a.certificate.rules).toEqual(expect.arrayContaining(["alert.opt.require_full_window.true", "alert.opt.new_group_delay"]));
     expect(a.manual_actions).toEqual(expect.arrayContaining([expect.stringMatching(/enable the check rule/)]));
   });
 
@@ -98,7 +102,7 @@ describe("migrate over the fixtures (dry run)", async () => {
 
   it("writes the Dash0 payloads, and the report is deterministic byte for byte", async () => {
     expect(existsSync(join(o.outDir, "dash0", "dashboards", "dd-redisdb-overview.json"))).toBe(true);
-    expect(existsSync(join(o.outDir, "dash0", "check-rules", "dd-redisdb-high-mem.json"))).toBe(true);
+    expect(existsSync(join(o.outDir, "dash0", "check-rules", `${HIGH_MEM_ID}.json`))).toBe(true);
     const again = await migrate(opts());
     const a = writeReport(rep, mkdtempSync(join(tmpdir(), "t8a-")));
     const b = writeReport(again.report, mkdtempSync(join(tmpdir(), "t8b-")));
@@ -122,16 +126,17 @@ describe("modes", () => {
       const url = new URL(String(u));
       const body = init.body ? JSON.parse(String(init.body)) : undefined;
       const json = (x: unknown, s = 200) => new Response(JSON.stringify(x), { status: s });
-      if (url.pathname === "/api/import/dashboard") return store.set(`d/${body.metadata.dash0Extensions.id}`, body), json(body);
-      if (url.pathname === "/api/import/check-rule") return store.set(`r/${body.id}`, body), json(body);
       const m = /^\/api\/(dashboards|alerting\/check-rules)\/(.+)$/.exec(url.pathname);
+      // As probed live: dashboards upsert with PUT by origin; check rules via Import Check Rule by UUID id.
+      if (init.method === "PUT" && m?.[1] === "dashboards") return store.set(`d/${m[2]}`, body), json(body);
+      if (url.pathname === "/api/import/check-rule") return store.set(`r/${body.id}`, body), json(body);
       const v = m && store.get(`${m[1] === "dashboards" ? "d" : "r"}/${m[2]}`);
       return v ? json(v) : json({ error: { code: 404, message: "nf" } }, 404);
     }) as typeof fetch;
     const r = await migrate(opts({ mode: "live", dash0: { apiUrl: "https://api.example.test", token: "t", fetch: f, sleep: async () => {} } }));
     expect(r.report.summary.import).toMatchObject({ mode: "live", imported: 6, readBackMatch: 6, failed: 0, rejected: 0 });
     const hm = r.report.items.find((i) => i.id === "dd-monitor-redisdb__high_mem")!;
-    expect(hm.target).toEqual({ dash0Id: "dd-redisdb-high-mem", kind: "check-rule", action: "imported", readBack: "match" });
+    expect(hm.target).toEqual({ dash0Id: HIGH_MEM_ID, kind: "check-rule", action: "imported", readBack: "match" });
     expect(hm.certificate.checks.importedReadBack).toBe(true);
   });
 });

@@ -7,7 +7,15 @@ import { loadMappings, metricAvailability, metricLookup, tagLookup } from "../ir
 import { translateQuery, type TranslateContext } from "../translate/query/index.js";
 import { toPerses, type DashboardTranslation, type TranslateExpr } from "../translate/dashboard/index.js";
 import { canonicalJson, importAll, sha256, type Dash0Config, type DashboardDefinition, type Manifest, type PrometheusAlertRule } from "../targets/dash0/index.js";
-import { interimAlertConverter, type AlertConverter, type AlertConversion } from "./alerts-interim.js";
+import { makeAlertConverter, type AlertConversion, type ConverterContext } from "../translate/alerts/index.js";
+import { translateMonitor } from "../translate/query/index.js";
+import type { Alert } from "../ir/index.js";
+
+/** Monitor -> check rule. Default: T6 (src/translate/alerts) over T4's translateMonitor. */
+export type AlertConverter = (a: Alert, ctx: TranslateContext) => AlertConversion;
+type T6Context = TranslateContext & ConverterContext;
+const t6 = makeAlertConverter((mq, t, ctx: T6Context) => translateMonitor(mq, t, ctx));
+const defaultAlertConverter: AlertConverter = (a, ctx) => t6(a, ctx as T6Context);
 import { buildReport } from "../report/build.js";
 import type { Report } from "../report/types.js";
 
@@ -42,7 +50,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   const translate: TranslateExpr = (e, t) => translateQuery(e, { ...base, variables: t.variables, where: t.where }, t.env);
 
   const dashboards = ingested.dashboards.map((d) => ({ source: d, out: toPerses(d, translate) }));
-  const convert = o.alertConverter ?? interimAlertConverter;
+  const convert = o.alertConverter ?? defaultAlertConverter;
   const alerts = ingested.alerts.map((alert) => ({ alert, conversion: convert(alert, base) }));
 
   let manifest: Manifest | null = null;

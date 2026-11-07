@@ -32,8 +32,9 @@ describe("events and narration", () => {
     const said = ev.map(narrate);
     expect(said[0]).toMatch(/^Starting migration: 4 Datadog dashboards and 6 monitors, as a dry run\.$/);
     expect(said.at(-1)).toMatch(/^Finished\. \d+(\.\d)? percent of query panels translated/);
-    const exactPanel = ev.findIndex((e) => e.type === "item.done" && e.kind === "panel" && e.status === "exact");
-    expect(said[exactPanel]).toBeNull();
+    const routine = ev.findIndex((e) => e.type === "item.done" && e.kind === "panel" && (e.status === "exact" || e.status === "exact-under"));
+    expect(routine).toBeGreaterThan(-1);
+    expect(said[routine]).toBeNull();
     expect(said.some((s) => s?.includes("can't be migrated automatically"))).toBe(true);
   });
 });
@@ -65,7 +66,7 @@ describe("serve", async () => {
     expect(s).toMatchObject({ dashboards: 4, monitors: 6 });
     expect(s.not_migrated.length).toBeGreaterThan(0);
     const items = await (await get("/api/item?q=high%20memory")).json();
-    expect(items[0]).toMatchObject({ id: "dd-monitor-redisdb__high_mem", status: "bounded" });
+    expect(items[0]).toMatchObject({ id: "dd-monitor-redisdb__high_mem", status: "exact-under" });
     expect(items[0].promql[0]).toContain("$__threshold");
   });
   it("streams every event over SSE with narration, then ends", async () => {
