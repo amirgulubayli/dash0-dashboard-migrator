@@ -14,6 +14,14 @@ export const ASSUMPTIONS = {
   "A.dd-per-unit":
     "Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog)",
   "A.no-gaps": "every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier",
+  "A.kind-metadata": "the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry)",
+  "A.otel-counter": "the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry)",
+  "A.top-stable": "the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same series as PromQL's per-step topk",
+  "A.static-tags": "each series keeps its tags for the whole window, so .weighted() has nothing to re-weight",
+  "A.dd-count-default":
+    "Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog)",
+  "A.kind-suffix":
+    "a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming)",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
 } as const;
 
@@ -37,6 +45,31 @@ export const RULES = {
   // selection
   "select.metric.mapped": exact("Datadog metric -> {otel_metric_name=...} through the mapping table"),
   "select.metric.unmapped": under(["A.kind-gauge"], "no mapping entry: keep the Datadog name, assume gauge"),
+  "select.metric.kind-metadata": under(
+    ["A.kind-metadata"],
+    "no mapping entry: keep the Datadog name; take its kind from the integration's metadata.csv",
+  ),
+  "time.unmapped.counter": {
+    status: "bounded",
+    assumptions: ["A.kind-metadata", "A.otel-counter"],
+    description: "Datadog count/rate (metadata.csv) without a mapping entry: .as_count() -> increase(x[w]), .as_rate() or a plain rate -> rate(x[w])",
+  },
+  "time.unmapped.suffix-counter": {
+    status: "bounded",
+    assumptions: ["A.kind-suffix", "A.otel-counter"],
+    description: "no metadata.csv entry, name ends in .count/.total, queried with .as_count()/.as_rate(): treated as a Datadog count",
+  },
+  "time.count.default": {
+    status: "bounded",
+    assumptions: ["A.kind-metadata", "A.otel-counter", "A.dd-count-default"],
+    description: "Datadog COUNT metric (metadata.csv) queried without a modifier -> increase(x[w]), the same as .as_count()",
+  },
+  "time.rollup.counter": {
+    status: "bounded",
+    assumptions: [],
+    description: ".as_count().rollup(sum, s) -> increase(x[s]); .as_rate().rollup(avg, s) -> rate(x[s]) (maths.md T3b)",
+  },
+  "time.fill.zero.single": exact(".fill(zero) on a single-series query -> q or vector(0) (the same as default_zero)"),
   "select.metric.approximate": bounded("the mapping table marks the OTel metric as approximate (see the entry's note)"),
   "select.labels": exact("mapping-table labels pick the series: redis.cpu.sys -> {otel_metric_name=\"redis.cpu.time\", state=\"sys\"}"),
   "time.ddrate.plain": bounded(
@@ -49,6 +82,8 @@ export const RULES = {
   "scope.in": exact("key IN (a,b) -> key=~\"^(a|b)$\""),
   "scope.or.same-key": exact("key:a OR key:b -> key=~\"^(a|b)$\""),
   "scope.not": exact("NOT key:a -> key!=\"a\""),
+  "scope.not.set": exact("NOT (key:a OR key:b) / NOT key IN (a,b) / NOT key:a* -> key!~\"^(a|b)$\""),
+  "scope.var.negated": under(["A.var-regex"], "!$var / -$var -> label!~\"^($var)$\""),
   "scope.var": under(["A.var-regex"], "$var -> label=~\"^($var)$\" on the variable's tag (anchored: Dash0 regex is unanchored)"),
   "label.default": under(["A.tag-default"], "tag without a tag-table entry -> label with dots replaced by underscores"),
   // time aggregation (Datadog does time first, then space)
@@ -65,7 +100,8 @@ export const RULES = {
     ".as_count() on a cumulative counter -> increase(x[w]) (extrapolated, maths.md T3b); dashboards use w = $__rate_interval",
   ),
   "time.as_rate.counter": bounded(".as_rate() on a cumulative counter -> rate(x[w]) (maths.md T3b); dashboards use w = $__rate_interval"),
-  "time.fill.null": exact(".fill(null) is Datadog's default: no filling"),
+  "time.fill.null": exact(".fill(null) and .fill(null, limit) are Datadog's default: no filling"),
+  "time.weighted": under(["A.static-tags"], ".weighted() only re-weights series whose tags change within the window"),
   // space aggregation
   "space.agg": exact("avg|sum|min|max|count by {tags} -> PromQL aggregation by (labels)"),
   "space.default-avg": exact("legacy query without aggregator: Datadog averages -> avg"),
@@ -79,9 +115,19 @@ export const RULES = {
     status: "bounded",
     assumptions: ["A.dd-per-unit"],
     description:
-      "per_second/per_minute/per_hour(q) where q sums or averages a Datadog gauge holding an OTel counter's running total -> k * agg(rate(x[w])) (maths.md T3b)",
+      "per_second/per_minute/per_hour(q) where q sums or averages a running total or a counter -> k * agg(rate(x[w])) (maths.md T3b)",
   },
   "fn.diff": under(["A.align", "A.no-gaps"], "diff(q) -> q - (q offset interval): each point minus the previous one"),
+  "fn.derivative.counter": {
+    status: "bounded",
+    assumptions: ["A.dd-per-unit"],
+    description: "derivative(q) where q sums or averages a Datadog gauge holding an OTel counter's running total -> agg(rate(x[w]))",
+  },
+  "fn.top": under(["A.top-stable"], "top(q, N, method, order) / topN / bottomN -> topk(N, q) or bottomk(N, q)"),
+  "fn.cutoff": exact("cutoff_min(q, n) -> q >= n, cutoff_max(q, n) -> q <= n (values beyond the cutoff are removed)"),
+  "fn.count_not_null": exact("count_not_null(q) -> count(q): the number of series with a value at each step"),
+  "fn.count_nonzero": exact("count_nonzero(q) -> count(q != 0)"),
+  "fn.default_zero.single": exact("default_zero(q) on a single-series query -> q or vector(0)"),
   "map.timeshift": exact("timeshift(q, -s) / hour_before(q) / ... -> offset s on every selector"),
   "arith.number": exact("arithmetic with a constant"),
   "arith.same-groups": exact("arithmetic between queries with identical group-by labels (one-to-one matching)"),
@@ -92,6 +138,13 @@ export const RULES = {
     ["A.monitor-rollup-60s", "A.boundary"],
     "fn(last_W):Q -> fn_over_time((Q on 1m buckets)[W:1m]), the subquery form that mirrors Datadog's order (maths.md §5)",
   ),
+  "monitor.change": exact("change(fn(last_W), last_C) -> X - X offset C; pct_change -> 100 * (X - X offset C) / X offset C"),
+  "monitor.sum.as_count": {
+    status: "bounded",
+    assumptions: [],
+    description: "sum(last_W):q.as_count() on a counter -> agg(increase(x[W])): the window's total count (maths.md T3b/T4)",
+  },
+  "monitor.cmp.eq": exact("== T -> -abs(expr - T) >= $__threshold with failed 0; != T -> abs(expr - T) > $__threshold with failed 0"),
   "monitor.cmp.gt": exact("> / >= -> expr > $__threshold, critical -> failed, warning -> degraded"),
   "monitor.cmp.lt": exact("< / <= -> -(expr) > $__threshold with negated thresholds (maths.md T7)"),
 } as const satisfies Record<string, Rule>;

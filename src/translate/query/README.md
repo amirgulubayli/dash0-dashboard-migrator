@@ -31,6 +31,9 @@ Choices worth knowing:
 - **`per_second`/`per_minute`/`per_hour`** have a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total: `60 * sum(rate(x[$__rate_interval]))` (bounded). **`diff(q)`** becomes `q - (q offset interval)`, the structural form of "each point minus the previous one" (exact-under alignment and no gaps).
 - **`<` and `<=` monitors are negated** (maths.md T7). Thresholds are negated too, and `negated: true` is set.
 
+## Metric kinds without a curated mapping
+`ctx.ddKind(dd)` gives Datadog's declared kind (from integrations-core `metadata.csv`) for metrics the curated tables don't cover. Gauges keep `avg_over_time`. COUNT/RATE metrics are read as OTel cumulative counters: `.as_count()`, or a plain COUNT, becomes `increase()`; `.as_rate()`, or a plain RATE, becomes `rate()`. These are `bounded`, with the assumptions in the ledger. With no metadata entry, a `.count`/`.total` name queried with `.as_count()`/`.as_rate()` is read as a count, under `A.kind-suffix`.
+
 ## Fails closed
 Anything without a rule makes the whole query `manual`, with no PromQL and an `unsupported` finding that names the construct. Examples: `top`, `anomalies`, `per_second`, `weighted`, `fill(zero)`, `pXX:`, OR across tag keys, bare tags, mismatched group-bys in arithmetic, `change()` monitors, and `.as_count()`/`.as_rate()` on a metric whose kind isn't in the mapping table.
 

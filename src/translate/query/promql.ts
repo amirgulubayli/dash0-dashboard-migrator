@@ -14,14 +14,15 @@ export type PNode =
   | { k: "selector"; matchers: PMatcher[]; range?: Duration; offset?: Duration }
   | { k: "call"; fn: string; args: PNode[] }
   | { k: "agg"; op: "avg" | "sum" | "min" | "max" | "count"; by: string[]; expr: PNode }
-  | { k: "binary"; op: "+" | "-" | "*" | "/" | ">" | ">=" | "<" | "<="; lhs: PNode; rhs: PNode }
+  | { k: "binary"; op: "+" | "-" | "*" | "/" | ">" | ">=" | "<" | "<=" | "==" | "!=" | "or"; lhs: PNode; rhs: PNode }
   | { k: "num"; value: number }
   | { k: "neg"; expr: PNode }
   | { k: "subquery"; expr: PNode; range: Duration; step: Duration }
   /** A placeholder Dash0 substitutes, e.g. `$__threshold`. */
   | { k: "placeholder"; name: `$${string}` };
 
-const PREC: Record<string, number> = { ">": 1, ">=": 1, "<": 1, "<=": 1, "+": 2, "-": 2, "*": 3, "/": 3 };
+// PromQL precedence, loosest first: or < comparisons < + - < * /.
+const PREC: Record<string, number> = { or: 0, ">": 1, ">=": 1, "<": 1, "<=": 1, "==": 1, "!=": 1, "+": 2, "-": 2, "*": 3, "/": 3 };
 
 export function formatDuration(d: Duration): string {
   if (typeof d === "string") return d;

@@ -32,6 +32,11 @@ export interface TranslateContext {
    * (manual). Without it, every metric the lookup doesn't return is treated as unmapped.
    */
   availability?: (ddName: string) => MetricAvailability;
+  /**
+   * Datadog's own kind for a metric WITHOUT a curated mapping (generated from integrations-core metadata.csv).
+   * Curated mappings always win. Without it, an unmapped metric is assumed to be a gauge.
+   */
+  ddKind?: (ddName: string) => "gauge" | "count" | "rate" | "distribution" | undefined;
   /** Datadog tag key -> PromQL label. Undefined: dots become underscores, with a `tag.unmapped` finding. */
   tag?: (ddTag: string) => string | undefined;
   /** Dashboard template variables: name -> the tag key it filters (Datadog `prefix`), or null for free-form. */
