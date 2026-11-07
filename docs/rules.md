@@ -7,7 +7,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 42 | 16 | 11 | 33 | 102 |
+| implemented | 45 | 18 | 11 | 33 | 107 |
 | planned | 36 | 30 | 4 | 19 | 89 |
 
 ## Pipeline order
@@ -22,7 +22,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
 | 7 | `time` Time aggregation | postfix or rollup call | no | 26 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
-| 9 | `function` Functions | function call | yes | 24 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
+| 9 | `function` Functions | function call | yes | 29 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 8 | Formulas over named queries, constants, division. |
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 18 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
@@ -187,6 +187,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 120 | `fn.count_not_null` | count_not_null(q) | count(q) | exact | unit | — | T4 | implemented |
 | 125 | `fn.count_nonzero` | count_nonzero(q) | count(q != 0) | exact | unit | — | T4 | implemented |
 | 130 | `fn.default_zero.single` | default_zero(q) on a single-series query | q or vector(0) | exact | unit | — | T4 | implemented |
+| 131 | `fn.exclude_null` | exclude_null(q) | label!="" on every selector for each group-by label (drops the N/A group) | exact | unit | — | T4 | implemented |
+| 132 | `fn.monotonic_diff` | monotonic_diff(q) | (q - (q offset interval)) >= 0 | exact-under(A.align, A.no-gaps, A.mono-diff) | unit | — | T4 | implemented |
+| 133 | `fn.round` | round(q) | round(x) | exact | unit | — | T4 | implemented |
+| 134 | `fn.max_min.scalar` | max(q, n) / min(q, n) | clamp_min(x, n) / clamp_max(x, n) | exact | unit | — | T4 | implemented |
+| 135 | `fn.max_min.series` | max(a, b) / min(a, b) of two queries with the same group-by | a >= b or b / a <= b or b (pointwise) | exact-under(A.both-present) | unit | — | T4 | implemented |
 | 140 | `fn.top.window` | top(q, N, 'mean'\|'max'\|'min'\|'sum', 'desc'\|'asc') | x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc) | exact-under(A.top-uniform) | — | probe:at-modifier | T4 | planned |
 | 145 | `fn.top` | top(q, N, method, order) / topN / bottomN | topk(N, q) / bottomk(N, q) | exact-under(A.top-stable) | unit | — | T4 | implemented |
 | 150 | `fn.histogram.quantile` | pXX:metric on a distribution | histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w]))) | bounded(ε) | — | — | T4 | planned |
@@ -377,7 +382,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Id | Statement | Used by |
 |---|---|---|
-| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 8 |
+| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 9 |
 | `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 9 |
 | `A.kind-gauge` | the metric is a gauge; there is no mapping-table entry to confirm its kind | 1 |
 | `A.monitor-rollup-60s` | Datadog evaluates the monitor's inner query on 60 s buckets | 1 |
@@ -387,13 +392,15 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.tag-default` | the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry) | 1 |
 | `A.query-threshold` | Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical | 1 |
 | `A.dd-per-unit` | Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog) | 2 |
-| `A.no-gaps` | every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier | 1 |
+| `A.no-gaps` | every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier | 2 |
 | `A.kind-metadata` | the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry) | 3 |
 | `A.otel-counter` | the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry) | 3 |
 | `A.top-stable` | the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same series as PromQL's per-step topk | 1 |
 | `A.static-tags` | each series keeps its tags for the whole window, so .weighted() has nothing to re-weight | 1 |
 | `A.dd-count-default` | Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog) | 1 |
 | `A.kind-suffix` | a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming) | 1 |
+| `A.mono-diff` | Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0 | 1 |
+| `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
 | `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
@@ -439,6 +446,8 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `time.as_rate.delta.sum` (exact-under(A.align, A.boundary), planned, T4)
 - `time.weighted` (exact-under(A.static-tags), implemented, T4)
 - `fn.diff` (exact-under(A.align, A.no-gaps), implemented, T4)
+- `fn.monotonic_diff` (exact-under(A.align, A.no-gaps, A.mono-diff), implemented, T4)
+- `fn.max_min.series` (exact-under(A.both-present), implemented, T4)
 - `fn.top.window` (exact-under(A.top-uniform), planned, T4)
 - `fn.top` (exact-under(A.top-stable), implemented, T4)
 - `fn.histogram.quantile` (bounded(ε), planned, T4)

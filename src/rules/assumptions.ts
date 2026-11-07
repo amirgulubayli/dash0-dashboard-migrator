@@ -20,6 +20,8 @@ export const ASSUMPTIONS = {
   "A.static-tags": "each series keeps its tags for the whole window, so .weighted() has nothing to re-weight",
   "A.dd-count-default": "Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog)",
   "A.kind-suffix": "a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming)",
+  "A.mono-diff": "Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0",
+  "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
   // T17 additions
   "A.same-samples": "Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s)",
   "A.full-window": "every evaluated series has samples across the whole monitor window (Datadog require_full_window)",
@@ -56,5 +58,7 @@ export const T4_ASSUMPTION_IDS = [
   "A.static-tags",
   "A.dd-count-default",
   "A.kind-suffix",
+  "A.mono-diff",
+  "A.both-present",
   "A.query-threshold",
 ] as const satisfies readonly AssumptionId[];
