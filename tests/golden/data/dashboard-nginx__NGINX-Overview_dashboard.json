@@ -222,18 +222,28 @@
     "kind": "panel",
     "title": "NGINX Error logs",
     "widget_type": "log_stream",
-    "status": "manual",
+    "status": "exact-under",
     "promql": [],
     "rules": [
-      "widget.logs",
+      "logs.stream",
+      "log.match.reserved.approx",
+      "log.match.value",
+      "log.match.attr",
+      "panel.style",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "A.logtable-keys",
+      "A.log-source",
+      "A.log-attr-default",
+      "A.style"
+    ],
     "findings": [
-      "manual query.datasource"
+      "exact-under logs.stream",
+      "exact-under panel.style"
     ]
   },
   {

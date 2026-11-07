@@ -931,18 +931,30 @@
     "kind": "panel",
     "title": "Error Logs",
     "widget_type": "list_stream",
-    "status": "manual",
+    "status": "exact-under",
     "promql": [],
     "rules": [
-      "widget.logs",
+      "logs.stream",
+      "log.match.reserved.approx",
+      "log.match.value",
+      "log.match.var.dropped",
+      "log.match.status",
+      "panel.style",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "A.logtable-keys",
+      "A.log-source",
+      "A.var-default",
+      "A.style"
+    ],
     "findings": [
-      "manual query.datasource"
+      "exact-under log.match.var.dropped",
+      "exact-under logs.stream",
+      "exact-under panel.style"
     ]
   },
   {
@@ -950,18 +962,29 @@
     "kind": "panel",
     "title": "All Logs",
     "widget_type": "list_stream",
-    "status": "manual",
+    "status": "exact-under",
     "promql": [],
     "rules": [
-      "widget.logs",
+      "logs.stream",
+      "log.match.reserved.approx",
+      "log.match.value",
+      "log.match.var.dropped",
+      "panel.style",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "A.logtable-keys",
+      "A.log-source",
+      "A.var-default",
+      "A.style"
+    ],
     "findings": [
-      "manual query.datasource"
+      "exact-under log.match.var.dropped",
+      "exact-under logs.stream",
+      "exact-under panel.style"
     ]
   }
 ]
