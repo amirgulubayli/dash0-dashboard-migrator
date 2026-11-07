@@ -108,8 +108,8 @@ const CASES: [string, string, string, string][] = [
   ["fn.top", "top10(avg:system.cpu.user{*} by {host})", `topk(10, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
   ["fn.cutoff", "cutoff_min(avg:system.cpu.user{*}, 5)", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) >= 5`, "exact-under"],
   ["fn.cutoff", "cutoff_max(avg:system.cpu.user{*}, 95)", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) <= 95`, "exact-under"],
-  ["fn.count_not_null", "count_not_null(avg:system.cpu.user{*} by {host})", `count (avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
-  ["fn.count_nonzero", "count_nonzero(avg:system.cpu.user{*} by {host})", `count (avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) != 0)`, "exact-under"],
+  ["fn.count_not_null", "count_not_null(avg:system.cpu.user{*} by {host})", `count (avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))) or vector(0)`, "exact-under"],
+  ["fn.count_nonzero", "count_nonzero(avg:system.cpu.user{*} by {host})", `count (avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) != 0) or vector(0)`, "exact-under"],
   ["fn.default_zero.single", "default_zero(sum:system.cpu.user{*})", `sum (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) or vector(0)`, "exact-under"],
   ["fn.derivative.counter", "derivative(sum:redis.net.rejected{*})", `sum (rate(${SEL("redis.connections.rejected")}[$__rate_interval]))`, "bounded"],
   ["time.weighted", "avg:system.cpu.user{*}.weighted()", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
@@ -131,6 +131,10 @@ const CASES: [string, string, string, string][] = [
   ["fn.max_min.scalar", "min(100, avg:system.cpu.user{*} * 2)", `clamp_max(avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) * 2, 100)`, "exact-under"],
   ["fn.max_min.scalar", "max(avg:system.cpu.user{*}, 0)", `clamp_min(avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])), 0)`, "exact-under"],
   ["fn.max_min.series", "max(avg:redis.mem.used{*}, avg:redis.mem.maxmemory{*})", `avg (avg_over_time(${SEL("redis.memory.used")}[$__interval])) >= avg (avg_over_time(${SEL("redis.maxmemory")}[$__interval])) or avg (avg_over_time(${SEL("redis.maxmemory")}[$__interval]))`, "exact-under"],
+  ["fn.default_zero.grouped", "default_zero(avg:system.cpu.user{*} by {host})", `avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) or 0 * avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__range] @ end()))`, "exact-under"],
+  ["fn.per_unit.gauge", "per_minute(avg:system.cpu.user{*})", `60 * avg (rate(${SEL("system.cpu.utilization")}[$__rate_interval]))`, "bounded"],
+  ["fn.per_unit.gauge", "derivative(sum:system.cpu.user{*})", `sum (rate(${SEL("system.cpu.utilization")}[$__rate_interval]))`, "bounded"],
+  ["scope.same-key.var", "avg:system.cpu.user{host:web-*,$host}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', host_name=~"^($host)$", host_name=~"^web-.*$"')}[$__interval]))`, "exact-under"],
   ["arith.neg", "-avg:system.cpu.user{*}", `-avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   // T1 mapping fields (ddKind, labels, status)
   ["select.metric.mapped", "avg:redis.net.clients{*}", `avg (avg_over_time(${SEL("redis.clients.connected")}[$__interval]))`, "exact-under"],
@@ -254,8 +258,8 @@ describe("fail closed: manual, no PromQL, original kept", () => {
   for (const [code, src] of [
     ["fn.anomalies", "anomalies(avg:system.cpu.user{*}, 'basic', 2)"],
     ["fn.top.args", "top(avg:system.cpu.user{*} by {host}, 10, 'median', 'desc')"],
-    ["fn.default_zero.grouped", "default_zero(avg:system.cpu.user{*} by {host})"],
-    ["fn.derivative.kind", "derivative(avg:system.cpu.user{*})"],
+    ["fn.default_zero.scalar", "default_zero(5)"],
+    ["fn.derivative.kind", "derivative(max:system.cpu.user{*})"],
     ["scope.var.negated", "avg:system.cpu.user{!$scope}"],
     ["scope.not.complex", "avg:system.cpu.user{NOT (env:a AND host:b)}"],
     ["metric.distribution", "avg:dd.dist.latency{*}"],
@@ -275,6 +279,10 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["time.kind-unknown", "sum:unmapped.hits{*}.as_count()"],
     ["arith.group-mismatch", "max(avg:redis.mem.used{*} by {host}, avg:redis.mem.maxmemory{*})"],
     ["fn.max_min.constants", "max(1, 2)"],
+    ["fn.top.args", "bottom(avg:system.cpu.user{*} by {host}, 5, 'mean', 'asc')"],
+    ["fn.diff.agg", "diff(max:system.cpu.user{*} by {host})"],
+    ["fn.monotonic_diff.agg", "monotonic_diff(count:system.cpu.user{*})"],
+    ["fn.diff.agg", "diff(abs(avg:system.cpu.user{*}))"],
     ["time.kind-unknown", "sum:custom.requests.count2{*}.as_count()"],
     ["time.kind", "sum:redis.dd.count{*}"],
     ["select.labels.clash", "avg:redis.cpu.sys{state:user}"],
@@ -282,7 +290,7 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["metric.derived", "avg:redis.dd.derived{*}"],
     ["metric.needs_transform", "avg:redis.dd.scaled{*}"],
     ["arith.div-zero", "avg:system.cpu.user{*} / 0"],
-    ["fn.per_unit.kind", "per_minute(avg:system.cpu.user{*})"],
+    ["fn.per_unit.kind", "per_minute(min:system.cpu.user{*})"],
     ["fn.per_unit.kind", "per_minute(max:redis.keys.evicted{*})"],
     ["fn.per_unit.kind", "per_minute(sum:redis.keys.evicted{*}.rollup(sum, 60))"],
   ] as const) {
@@ -337,6 +345,23 @@ describe("monitors", () => {
     expect(r.rules).toContain("monitor.sum.as_count");
   });
 
+  it("sum(last_W) totals survive linear arithmetic and fail closed otherwise (no W/60x overcount)", () => {
+    const tot = (q: string) => `sum (increase(${SEL(q)}[5m]))`;
+    const lin = mon("sum(last_5m):sum:redis.net.commands{*}.as_count() * 2 - sum:nginx.requests{*}.as_count() > 100");
+    expect(lin.promql).toBe(`${tot("redis.commands.processed")} * 2 - ${tot("nginx.requests")} > $__threshold`);
+    expect(lin.rules).toContain("monitor.sum.as_count");
+    expect(lin.promql).not.toContain("[5m:1m]");
+    for (const q of [
+      "sum(last_5m):sum:redis.net.commands{*}.as_count() / sum:nginx.requests{*}.as_count() > 1",
+      "sum(last_5m):sum:redis.net.commands{*}.as_count() + 5 > 1",
+      "sum(last_5m):abs(sum:redis.net.commands{*}.as_count()) > 1",
+    ]) {
+      const r = mon(q);
+      expect(r, q).toMatchObject({ status: "manual", promql: null });
+      expect(r.findings.some((f) => f.code === "monitor.as_count"), q).toBe(true);
+    }
+  });
+
   it(".as_count() on a counter in a non-sum monitor stays manual", () => {
     const r = mon("avg(last_5m):sum:redis.net.commands{*}.as_count() > 100");
     expect(r).toMatchObject({ status: "manual", promql: null, thresholds: null });
@@ -352,6 +377,14 @@ describe("monitors", () => {
     const p = mon("pct_change(avg(last_5m),last_1h):avg:system.cpu.user{*} > 10");
     expect(p.promql).toBe(`100 * ((${X} - ${Xc}) / ${Xc}) > $__threshold`);
     expect(p.assumptions).toContain("A.nonzero-denominator");
+  });
+
+  it("default_zero on a grouped monitor query fills from the evaluation window", () => {
+    const r = track(mon("avg(last_10m):default_zero(avg:system.cpu.user{*} by {host}) > 5"));
+    expect(r.promql).toBe(
+      `avg_over_time((avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[1m])) or 0 * avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[10m])))[10m:1m]) > $__threshold`,
+    );
+    expect(r.rules).toContain("fn.default_zero.grouped.monitor");
   });
 
   it("== and != compare the distance to the threshold against 0", () => {

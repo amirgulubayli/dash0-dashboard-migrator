@@ -4,7 +4,7 @@ import type { Expr, MetricQuery, MonitorQuery, ScopeExpr } from "../../parse/ind
 import { validatePromQL } from "../../validate/promql.js";
 import { mapSelectors, render, type Duration, type PMatcher, type PNode } from "./promql.js";
 import { ASSUMPTIONS, RULES, type AssumptionId, type RuleId } from "./rules.js";
-import { worst, type Finding, type MetricMapping, type QueryTranslation, type Status, type TranslateContext } from "./types.js";
+import { worst, type FormulaEnv, type Finding, type LoweredRef, type MetricMapping, type QueryTranslation, type Status, type TranslateContext } from "./types.js";
 
 class Manual extends Error {}
 
@@ -22,6 +22,8 @@ interface Lowered {
    * Datadog gauge that holds a running total (ddKind gauge, OTel counter), which is what per_second() and friends need.
    */
   rateForm?: PNode;
+  /** rateForm comes from a plain gauge (needs the A.monotonic assumption). */
+  rateFormGauge?: boolean;
   /** The query already aggregates over the whole monitor window (sum(last_W) with .as_count()): no subquery. */
   windowed?: boolean;
 }
@@ -33,11 +35,17 @@ const PER_UNIT: Record<string, number> = { per_second: 1, per_minute: 60, per_ho
 
 class Lowerer {
   rules: RuleId[] = [];
+  /** Merged from formula refs translated elsewhere (LoweredRef). */
+  external: { status: Status; rules: string[]; assumptions: string[] }[] = [];
   extraAssumptions: AssumptionId[] = [];
   findings: Finding[] = [];
 
   /** Set by translateMonitor for sum(last_W): the window in seconds, so .as_count() can become increase(x[W]). */
   monitorSumWindow?: number;
+  /** A metric was lowered as a window total (increase over W); see translateMonitor. */
+  sawWindowed = false;
+  /** Set by translateMonitor: the evaluation window W in seconds. */
+  monitorWindow?: number;
 
   constructor(
     readonly ctx: TranslateContext,
@@ -92,7 +100,7 @@ class Lowerer {
 
   // ---------- expressions ----------
 
-  expr(e: Expr, env?: Map<string, Expr>): Lowered {
+  expr(e: Expr, env?: FormulaEnv): Lowered {
     switch (e.type) {
       case "number":
         return { node: { k: "num", value: e.value }, groups: null };
@@ -101,7 +109,7 @@ class Lowerer {
       case "neg": {
         this.use("arith.neg");
         const x = this.expr(e.expr, env);
-        return { node: { k: "neg", expr: x.node }, groups: x.groups };
+        return { node: { k: "neg", expr: x.node }, groups: x.groups, ...(x.windowed && { windowed: true }) };
       }
       case "metric":
         return this.metric(e, []);
@@ -121,6 +129,7 @@ class Lowerer {
       case "ref": {
         const target = env?.get(e.name);
         if (!target) this.manual("formula.ref.unknown", `formula references unknown query '${e.name}'`);
+        if ("type" in target && target.type === "lowered") return this.lowered(target);
         return this.expr(target, env);
       }
       case "call":
@@ -128,7 +137,18 @@ class Lowerer {
     }
   }
 
-  binary(op: "+" | "-" | "*" | "/", left: Expr, right: Expr, env?: Map<string, Expr>): Lowered {
+  /** A ref translated elsewhere: take its tree, carry its claim and findings into this result. */
+  lowered(ref: LoweredRef): Lowered {
+    if (ref.status === "manual") {
+      for (const f of ref.findings) if (!this.findings.some((x) => x.code === f.code && x.message === f.message)) this.findings.push(f);
+      this.manual("formula.ref.manual", "the formula uses a query that could not be translated");
+    }
+    this.external.push({ status: ref.status, rules: ref.rules, assumptions: ref.assumptions });
+    for (const f of ref.findings) if (!this.findings.some((x) => x.code === f.code && x.message === f.message)) this.findings.push(f);
+    return { node: ref.node, groups: ref.groups };
+  }
+
+  binary(op: "+" | "-" | "*" | "/", left: Expr, right: Expr, env?: FormulaEnv): Lowered {
     const l = this.expr(left, env);
     const r = this.expr(right, env);
     if (l.groups && r.groups) {
@@ -142,10 +162,24 @@ class Lowerer {
     if (op === "/" && r.node.k === "num" && r.node.value === 0)
       this.manual("arith.div-zero", "division by the constant 0: Datadog drops the points, PromQL would return ±Inf/NaN");
     if (op === "/" && r.groups) this.use("arith.div");
-    return { node: { k: "binary", op, lhs: l.node, rhs: r.node }, groups: l.groups ?? r.groups };
+    // sum(last_W):…as_count() is a window total. Totals stay totals only under linear arithmetic:
+    // a ± b of two totals, or a total scaled by a constant. Anything else (a/b, a*b, a + 5) is summed per
+    // bucket by Datadog and can't be taken from the window totals, so the monitor fails closed.
+    let windowed = false;
+    if (l.windowed || r.windowed) {
+      const linear =
+        op === "+" || op === "-"
+          ? !!(l.windowed && r.windowed)
+          : op === "*"
+            ? (l.windowed && r.groups === null) || (r.windowed && l.groups === null)
+            : !!(l.windowed && r.groups === null);
+      if (!linear) this.manual("monitor.as_count", `sum(last_W) with .as_count() combined by '${op}' is not a window total; no rule`);
+      windowed = true;
+    }
+    return { node: { k: "binary", op, lhs: l.node, rhs: r.node }, groups: l.groups ?? r.groups, ...(windowed && { windowed: true }) };
   }
 
-  call(e: Extract<Expr, { type: "call" }>, env?: Map<string, Expr>): Lowered {
+  call(e: Extract<Expr, { type: "call" }>, env?: FormulaEnv): Lowered {
     const exprArg = (i: number): Expr => {
       const a = e.args[i];
       if (a?.type !== "expr") this.manual("fn.args", `${e.name}(): argument ${i + 1} must be a query`);
@@ -214,6 +248,8 @@ class Lowerer {
       if (e.name === "top" || e.name === "bottom") {
         if (e.args.length >= 2) n = numArg(1);
         const order = e.args[3];
+        // bottom()'s direction argument isn't documented the same way as top()'s: don't guess which way it flips.
+        if (order && e.name === "bottom") this.manual("fn.top.args", "bottom() with an explicit order: semantics not confirmed");
         if (order) {
           if (order.type !== "string" || !["asc", "desc"].includes(order.value)) this.manual("fn.top.args", `${e.name}(): order must be 'asc' or 'desc'`);
           if (order.value === "asc") k = k === "topk" ? "bottomk" : "topk";
@@ -239,13 +275,27 @@ class Lowerer {
       const x = this.expr(exprArg(0), env);
       this.use(`fn.${e.name}`);
       const inner: PNode = e.name === "count_nonzero" ? { k: "binary", op: "!=", lhs: x.node, rhs: { k: "num", value: 0 } } : x.node;
-      return { node: { k: "agg", op: "count", by: [], expr: inner }, groups: [] };
+      // No matching series means 0 in Datadog, and no data in PromQL: add the zero explicitly (the result has no labels).
+      const count: PNode = { k: "agg", op: "count", by: [], expr: inner };
+      return { node: { k: "binary", op: "or", lhs: count, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: [] };
     }
 
     if (e.name === "default_zero" && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
-      if (x.groups === null || x.groups.length > 0)
-        this.manual("fn.default_zero.grouped", "default_zero() over a grouped query: PromQL can't fill gaps per series");
+      if (x.groups === null) this.manual("fn.default_zero.scalar", "default_zero() of a constant");
+      if (x.groups.length > 0) {
+        // Zero for every series seen in the dashboard's range: the same query over [$__range] @ end(), times 0.
+        // Dashboards: series seen in the visible range ($__range @ end()). Monitors: series seen in the evaluation window.
+        if (!this.monitor && this.interval !== "$__interval")
+          this.manual("fn.default_zero.grouped", "default_zero() over a grouped query with a fixed interval has no series set to fill");
+        if (this.monitor && this.monitorWindow === undefined) this.manual("fn.default_zero.grouped", "default_zero() in a monitor without a window");
+        const ranged = this.monitor
+          ? mapSelectors(x.node, (sel) => ({ ...sel, range: this.monitorWindow! }))
+          : mapSelectors(x.node, (sel) => ({ ...sel, range: "$__range", at: "end()" }));
+        this.use(this.monitor ? "fn.default_zero.grouped.monitor" : "fn.default_zero.grouped");
+        const zeros: PNode = { k: "binary", op: "*", lhs: { k: "num", value: 0 }, rhs: ranged };
+        return { node: { k: "binary", op: "or", lhs: x.node, rhs: zeros }, groups: x.groups };
+      }
       this.use("fn.default_zero.single");
       return { node: { k: "binary", op: "or", lhs: x.node, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: x.groups };
     }
@@ -253,7 +303,7 @@ class Lowerer {
     if (e.name === "derivative" && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
       if (!x.rateForm) this.manual("fn.derivative.kind", "derivative() has a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total");
-      this.use("fn.derivative.counter");
+      this.use(x.rateFormGauge ? "fn.per_unit.gauge" : "fn.derivative.counter");
       return { node: x.rateForm, groups: x.groups };
     }
 
@@ -265,7 +315,7 @@ class Lowerer {
           "fn.per_unit.kind",
           `${e.name}() has a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total`,
         );
-      this.use("fn.per_unit.counter");
+      this.use(x.rateFormGauge ? "fn.per_unit.gauge" : "fn.per_unit.counter");
       const k = PER_UNIT[e.name]!;
       const node: PNode = k === 1 ? x.rateForm : { k: "binary", op: "*", lhs: { k: "num", value: k }, rhs: x.rateForm };
       return { node, groups: x.groups };
@@ -274,6 +324,8 @@ class Lowerer {
     // diff: each point minus the previous one, one rollup interval earlier. monotonic_diff keeps only increases.
     if ((e.name === "diff" || e.name === "monotonic_diff") && e.args.length === 1) {
       const x = this.expr(exprArg(0), env);
+      // Datadog diffs each series before space aggregation; that commutes only with sum/avg (and linear arithmetic).
+      if (!linearInSeries(x.node)) this.manual(`fn.${e.name}.agg`, `${e.name}() over max/min/count or non-linear functions isn't exact`);
       const step = this.interval;
       const shifted = mapSelectors(x.node, (sel) => {
         if (sel.offset === undefined || sel.offset === 0) return { ...sel, offset: step };
@@ -469,7 +521,15 @@ class Lowerer {
       this.use("time.fill.zero.single");
       return { node: { k: "binary", op: "or", lhs: node, rhs: { k: "call", fn: "vector", args: [{ k: "num", value: 0 }] } }, groups: by };
     }
-    if (windowed) return { node, groups: by, windowed: true };
+    if (windowed) {
+      this.sawWindowed = true;
+      return { node, groups: by, windowed: true };
+    }
+    if (kind === "gauge" && !counterMode && !explicitRollup && !runningTotal && (agg === "sum" || agg === "avg")) {
+      const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
+      const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
+      return { node, groups: by, rateForm, rateFormGauge: true };
+    }
     if ((runningTotal || (kind === "counter" && counterMode !== null && !explicitRollup)) && (agg === "sum" || agg === "avg")) {
       const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
       const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
@@ -487,9 +547,13 @@ class Lowerer {
     }
     if (s.type === "and") {
       const out = s.items.flatMap((i) => this.scope(i));
-      const eqLabels = out.filter((m) => m.op === "=" || m.op === "=~").map((m) => m.label);
-      if (new Set(eqLabels).size !== eqLabels.length)
+      const isVar = (m: PMatcher) => /^\^\(\$[^)]+\)\$$/.test(m.value);
+      const positives = out.filter((m) => m.op === "=" || m.op === "=~");
+      const literals = positives.filter((m) => !isVar(m)).map((m) => m.label);
+      if (new Set(literals).size !== literals.length)
         this.manual("scope.same-key", "the same tag key appears twice in one scope; Datadog's meaning is ambiguous here", s);
+      const labels = positives.map((m) => m.label);
+      if (new Set(labels).size !== labels.length) this.use("scope.same-key.var");
       return out;
     }
     if (s.type === "var") return this.variable(s.name, s.negated);
@@ -546,7 +610,9 @@ class Lowerer {
   }
 
   variable(name: string, negated: boolean): PMatcher[] {
-    const def = this.ctx.variables?.[name];
+    const raw = this.ctx.variables?.[name];
+    // A variable with an empty prefix ("") is free-form, the same as no prefix.
+    const def = raw && raw.tag !== null && raw.tag.trim() === "" ? { tag: null } : raw;
     if (negated && (!def || def.tag === null))
       this.manual("scope.var.negated", `negated free-form template variable $${name}: its value is a whole tag, which no matcher can exclude`);
     if (!def || def.tag === null) {
@@ -576,14 +642,37 @@ class Lowerer {
       status = worst(status, "exact-under");
       if (!assumptions.includes(a)) assumptions.push(a);
     }
-    if (!node) return { status: "manual", promql: null, rules: this.rules, assumptions: [], findings: this.findings };
+    const rules: string[] = [...this.rules];
+    for (const x of this.external) {
+      status = worst(status, x.status);
+      for (const a of x.assumptions) if (!assumptions.includes(a)) assumptions.push(a);
+      for (const id of x.rules) if (!rules.includes(id)) rules.push(id);
+    }
+    if (!node) return { status: "manual", promql: null, rules, assumptions: [], findings: this.findings };
     const promql = render(node);
     const v = validatePromQL(promql);
     if (!v.ok) {
       this.find("manual", "promql.invalid", `emitted PromQL does not parse: ${v.errors.map((x) => x.message).join("; ")}`, { original: promql });
-      return { status: "manual", promql: null, rules: this.rules, assumptions: [], findings: this.findings };
+      return { status: "manual", promql: null, rules, assumptions: [], findings: this.findings };
     }
-    return { status, promql, rules: this.rules, assumptions: assumptions.sort(), findings: this.findings };
+    return { status, promql, rules, assumptions: assumptions.sort(), findings: this.findings };
+  }
+}
+
+/** True if every space aggregation is sum/avg and the arithmetic is linear (± of terms, scaling by constants). */
+function linearInSeries(n: PNode): boolean {
+  switch (n.k) {
+    case "agg":
+      return (n.op === "sum" || n.op === "avg") && n.expr.k === "call" && /_over_time$|^rate$|^increase$/.test(n.expr.fn);
+    case "neg":
+      return linearInSeries(n.expr);
+    case "binary":
+      if (n.op === "+" || n.op === "-") return linearInSeries(n.lhs) && linearInSeries(n.rhs);
+      if (n.op === "*") return (n.lhs.k === "num" && linearInSeries(n.rhs)) || (n.rhs.k === "num" && linearInSeries(n.lhs));
+      if (n.op === "/") return n.rhs.k === "num" && linearInSeries(n.lhs);
+      return false;
+    default:
+      return false;
   }
 }
 
@@ -615,7 +704,7 @@ function run(ctx: TranslateContext, interval: Duration, monitor: boolean, f: (l:
 }
 
 /** A dashboard query or formula. `env` maps formula refs (`query1`) to their parsed queries. */
-export function translateQuery(e: Expr, ctx: TranslateContext = {}, env?: Map<string, Expr>): QueryTranslation {
+export function translateQuery(e: Expr, ctx: TranslateContext = {}, env?: FormulaEnv): QueryTranslation {
   const { node: _n, ...r } = run(ctx, ctx.interval ?? "$__interval", false, (l) => l.expr(e, env).node);
   return r;
 }
@@ -641,8 +730,11 @@ export function translateMonitor(
     if (mq.windowSeconds % 60 !== 0) l.manual("monitor.window.width", "monitor window must be whole minutes");
     // sum(last_W):q.as_count(): the window total is increase over the whole window (no 1m subquery).
     if (mq.timeAgg === "sum" && !mq.change) l.monitorSumWindow = mq.windowSeconds;
+    l.monitorWindow = mq.windowSeconds;
     const lowered = l.expr(mq.query);
     let expr: PNode;
+    if (!lowered.windowed && l.sawWindowed)
+      l.manual("monitor.as_count", "sum(last_W) with .as_count() inside a function: the window total can't be taken from per-bucket values");
     if (lowered.windowed) {
       l.use("monitor.sum.as_count");
       expr = lowered.node;

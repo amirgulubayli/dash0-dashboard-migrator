@@ -128,6 +128,28 @@ export interface Mappings {
   origin: Map<string, string>;
 }
 
+/**
+ * Datadog's declared metric kinds from the GENERATED mappings/datadog/_kinds.json (scripts/build-dd-kinds.mjs,
+ * from integrations-core metadata.csv). For metrics without a curated entry only: curated tables always win.
+ * Returns an empty table if the file is absent.
+ */
+export function loadDdKinds(dir: string): Record<string, DatadogKind> {
+  let doc: { version?: number; kinds?: Record<string, string> };
+  try {
+    doc = JSON.parse(readFileSync(join(dir, "datadog", "_kinds.json"), "utf8"));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw new MappingError(`datadog/_kinds.json: ${(e as Error).message}`);
+  }
+  if (doc.version !== 1 || typeof doc.kinds !== "object" || doc.kinds === null) throw new MappingError("datadog/_kinds.json: expected {version: 1, kinds: {...}}");
+  const out: Record<string, DatadogKind> = {};
+  for (const [k, v] of Object.entries(doc.kinds)) {
+    if (!DD_KINDS.includes(v as DatadogKind)) throw new MappingError(`datadog/_kinds.json: ${k}: unknown kind '${v}'`);
+    out[k] = v as DatadogKind;
+  }
+  return out;
+}
+
 /** Reads mappings/tags.yaml and every mappings/datadog/*.yaml. Duplicate metric names across files are an error. */
 export function loadMappings(dir: string): Mappings {
   const metrics = new Map<string, MetricMapping>();
