@@ -6,3 +6,9 @@ out/
 !.env.example
 .agentsync/
 *.log
+
+# local research artifacts (corpus survey)
+__pycache__/
+.venv/
+integrations-core*
+Dash0_Hackathon_Challenge.pdf
