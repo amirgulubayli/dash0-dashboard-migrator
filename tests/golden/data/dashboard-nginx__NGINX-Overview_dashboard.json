@@ -46,34 +46,18 @@
     "kind": "panel",
     "title": "Dropped connections, last 15m",
     "widget_type": "query_value",
-    "status": "bounded",
-    "promql": [
-      "sum (increase({otel_metric_name=\"nginx.net.conn_dropped_per_s\"}[$__rate_interval]))"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.kind-metadata",
-      "scope.all",
-      "time.unmapped.counter",
-      "time.as_count.counter",
-      "space.agg",
-      "widget.query_value",
-      "panel.conditional-format",
+      "widget.unknown",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [
-      "A.kind-metadata",
-      "A.otel-counter",
-      "A.align",
-      "A.boundary",
-      "A.style"
-    ],
+    "assumptions": [],
     "findings": [
-      "exact-under metric.unmapped",
-      "exact-under panel.conditional-format",
-      "exact-under widget.query_value"
+      "manual metric.derived"
     ]
   },
   {
@@ -253,12 +237,12 @@
     "widget_type": "query_value",
     "status": "bounded",
     "promql": [
-      "avg (rate({otel_metric_name=\"nginx.net.request_per_s\"}[$__rate_interval]))"
+      "avg (rate({otel_metric_name=\"nginx.requests\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.metric.approximate",
       "scope.all",
-      "time.unmapped.counter",
       "time.ddrate.plain",
       "space.agg",
       "widget.query_value",
@@ -269,14 +253,12 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.kind-metadata",
-      "A.otel-counter",
       "A.align",
       "A.boundary",
       "A.style"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under panel.conditional-format",
       "exact-under widget.query_value"
     ]
@@ -349,12 +331,13 @@
     "widget_type": "timeseries",
     "status": "exact-under",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"nginx.net.reading\"}[$__interval]))",
-      "sum (avg_over_time({otel_metric_name=\"nginx.net.writing\"}[$__interval]))",
-      "sum (avg_over_time({otel_metric_name=\"nginx.net.waiting\"}[$__interval]))"
+      "sum (avg_over_time({otel_metric_name=\"nginx.connections_current\", state=\"reading\"}[$__interval]))",
+      "sum (avg_over_time({otel_metric_name=\"nginx.connections_current\", state=\"writing\"}[$__interval]))",
+      "sum (avg_over_time({otel_metric_name=\"nginx.connections_current\", state=\"waiting\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.labels",
       "time.rollup.default",
       "space.agg",
       "widget.timeseries",
@@ -366,11 +349,9 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
       "exact-under scope.var.free-form"
     ]
   },
@@ -419,32 +400,18 @@
     "kind": "panel",
     "title": "Dropped connections per second",
     "widget_type": "timeseries",
-    "status": "bounded",
-    "promql": [
-      "sum (rate({otel_metric_name=\"nginx.net.conn_dropped_per_s\"}[$__rate_interval]))"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.unmapped.counter",
-      "time.ddrate.plain",
-      "space.agg",
-      "widget.timeseries",
-      "panel.markers",
+      "widget.unknown",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [
-      "A.kind-metadata",
-      "A.otel-counter",
-      "A.var-default",
-      "A.style"
-    ],
+    "assumptions": [],
     "findings": [
-      "exact-under metric.unmapped",
-      "exact-under panel.markers",
-      "exact-under scope.var.free-form"
+      "manual metric.derived"
     ]
   },
   {
@@ -454,10 +421,11 @@
     "widget_type": "timeseries",
     "status": "exact-under",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"nginx.net.connections\"}[$__interval]))"
+      "sum (avg_over_time({otel_metric_name=\"nginx.connections_current\", state=\"active\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.labels",
       "time.rollup.default",
       "space.agg",
       "widget.timeseries",
@@ -469,11 +437,9 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
       "exact-under scope.var.free-form"
     ]
   },

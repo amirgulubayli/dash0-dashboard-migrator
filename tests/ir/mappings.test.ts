@@ -41,7 +41,8 @@ describe("the shipped mapping tables", () => {
   };
 
   it("load without errors: 271 redisdb metrics and the core tags", () => {
-    expect(m.metrics.size).toBe(271);
+    // Count redisdb rows only: other integration tables (postgresql, nginx, ...) add their own rows.
+    expect([...m.metrics.keys()].filter((k) => k.startsWith("redis.")).length).toBe(271);
     expect(m.tags.get("service")?.label).toBe("service_name");
   });
 
