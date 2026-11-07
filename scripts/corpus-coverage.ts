@@ -33,9 +33,11 @@ if (!root || !existsSync(root)) {
   process.exit(2);
 }
 
-const maps = loadMappings("mappings");
-const ddKind = ddKindLookup(loadDdKinds("mappings"), maps);
-const attributes = loadLogAttributes("mappings/log-attributes.yaml");
+// Resolved from this file, so the script works from any working directory.
+const mappingsDir = join(import.meta.dirname, "..", "mappings");
+const maps = loadMappings(mappingsDir);
+const ddKind = ddKindLookup(loadDdKinds(mappingsDir), maps);
+const attributes = loadLogAttributes(join(mappingsDir, "log-attributes.yaml"));
 
 type Kind =
   | "metric formula / query"
@@ -337,7 +339,7 @@ if (flag("--report")) {
   out.push("");
   out.push(`## Pipeline level: \`dd2dash0 migrate\` over the same folder (${rep.summary.dashboards} dashboards, ${rep.summary.alerts} monitors)`);
   out.push("");
-  out.push("Every panel and alert the T8 pipeline emits. A panel is one widget request, so a widget with several requests counts several times. `unsupported` = widget type with no Dash0 panel (a Markdown placeholder holds the original).");
+  out.push("Every panel and alert the T8 pipeline emits. T8 emits one panel per dashboard widget (including notes, images and other widgets without queries), so this counts widgets, not queries; the query-level tables above count queries. `unsupported` = widget type with no Dash0 panel (a Markdown placeholder holds the original).");
   out.push("");
   out.push("| Item | Total | exact | exact-under | bounded | manual | unsupported | Translated |");
   out.push("|---|---:|---:|---:|---:|---:|---:|---:|");
