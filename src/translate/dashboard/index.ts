@@ -16,9 +16,12 @@ export type { PanelResult } from "./panels.js";
 
 export const ROW_SCALE = 3;
 
-const SCALAR_KINDS = new Set<string>(["stat", "toplist", "table"]);
+/** Scalar widgets whose log queries have no verified window form yet: Dash0's TimeSeriesTable display of a
+ *  [$__range] query is unprobed. Stat panels use the window form (log.scalar.window + calculation last-number,
+ *  probe:range-var). */
+const SCALAR_PENDING_KINDS = new Set<string>(["toplist", "table"]);
 
-/** A log query in a scalar widget: manual, with the reason, until T12's window form (log.scalar.window) is merged. */
+/** A log query in a toplist/table widget: manual, with the reason, until the TimeSeriesTable display is probed. */
 const scalarLogPending: TranslateLog = (q, t) => ({
   status: "manual",
   promql: null,
@@ -28,7 +31,7 @@ const scalarLogPending: TranslateLog = (q, t) => ({
     {
       status: "manual",
       code: "query.datasource",
-      message: "log query in a scalar widget: Datadog evaluates it over the whole timeframe, and the per-interval form would show a per-bucket value; it needs the window form (log.scalar.window)",
+      message: "log query in a toplist/table widget: Datadog evaluates it over the whole timeframe; the per-interval form would show a per-bucket value, and how a TimeSeriesTable shows the window form ([$__range]) is not probed yet",
       itemKind: "query",
       itemId: t.where,
       ...(q.search?.query !== undefined && { original: q.search.query }),
@@ -83,10 +86,17 @@ export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: 
     return k;
   };
   const convert = (p: Panel, itemId: string): { key: string; layout: Layout | null } => {
-    // Scalar widgets (stat, toplist, table) evaluate a log query over the whole timeframe in Datadog; T12's
-    // per-interval increase(...[$__interval]) would show a per-bucket value. Until the window form lands
-    // (log.scalar.window, PR #26), their log queries fail closed (Ali's review of #19).
-    const logFor = translateLog && SCALAR_KINDS.has(p.kind) ? scalarLogPending : translateLog;
+    // Scalar widgets evaluate a log query over the whole timeframe in Datadog; T12's per-interval
+    // increase(...[$__interval]) would show a per-bucket value (Ali's review of #19). Stat panels get T12's
+    // window form ([$__range], log.scalar.window) and calculation last-number; toplist/table fail closed
+    // until the TimeSeriesTable display of a [$__range] query is probed.
+    const logFor: TranslateLog | undefined = !translateLog
+      ? undefined
+      : p.kind === "stat"
+        ? (lq, t) => translateLog(lq, { ...t, scalar: true })
+        : SCALAR_PENDING_KINDS.has(p.kind)
+          ? scalarLogPending
+          : translateLog;
     const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId, logFor);
     const r = toPersesPanel(p, itemId, q);
     const k = key(p.id);

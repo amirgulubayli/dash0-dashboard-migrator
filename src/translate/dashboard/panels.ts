@@ -112,8 +112,17 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
     }
     case "stat": {
       const agg = p.requests[0]?.queries[0]?.aggregator;
-      let calculation = agg ? CALC[agg] : undefined;
-      if (calculation) under("widget.query_value", ["A.align", "A.boundary"], `aggregator ${agg} -> StatChart calculation ${calculation}`);
+      // A log query in the window form ([$__range], log.scalar.window) already is the whole-timeframe value:
+      // the panel shows the value at the end of the range (A.log-range), whatever the Datadog aggregator.
+      const logWindow = q.rules.includes("log.scalar.window");
+      // last-number is only right for the window form: a stat that also shows a metric query fails closed.
+      if (logWindow && !p.requests.every((r) => r.queries.every((x) => x.dataSource === "logs"))) {
+        return placeholder("arith.scalar-log-mixed", "This stat panel mixes a whole-timeframe log count with a metric query; one StatChart calculation can't show both as Datadog does.");
+      }
+      let calculation = logWindow ? "last-number" : agg ? CALC[agg] : undefined;
+      if (logWindow) {
+        /* rule and assumptions come from T12 with the query */
+      } else if (calculation) under("widget.query_value", ["A.align", "A.boundary"], `aggregator ${agg} -> StatChart calculation ${calculation}`);
       else {
         calculation = "mean";
         under("widget.query_value.default-agg", ["A.agg-default"], agg ? `aggregator '${agg}' has no StatChart calculation; mean used` : "no aggregator given; Datadog's avg assumed", agg);
