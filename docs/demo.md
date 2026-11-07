@@ -72,6 +72,31 @@ npx tsx --env-file=.env src/cli.ts serve --out out/demo
 
 Informational only: compare 2–3 panel values side by side. Small gaps are expected, because the Agent and the collector sample Redis at different moments (maths.md §9.1, e_D).
 
+## 5b. The incident (both alerts fire)
+`scripts/demo/incident.ts` causes a real `high_mem` incident on the demo Redis, so the Datadog monitor and the Dash0 rule migrated from it both fire. `dd2dash0 watch` records both, and the console's Incident view and `dd2dash0 proof` show them.
+
+It only ever writes and deletes keys named `dd2dash0:flood:*`, each with a TTL (default 1 h). It refuses to run when:
+- `maxmemory` is 0 (it would fill the host instead);
+- the eviction policy is `allkeys-*` and `--allow-eviction` isn't given (that would evict the load generator's keys).
+
+Run it where the demo Redis is reachable (Ali's stack), with `REDIS_URL` or `--url`:
+```bash
+npx tsx scripts/demo/incident.ts status                    # memory used / max, policy, flood keys
+npx tsx scripts/demo/incident.ts flood --dry-run           # what it would write
+npx tsx scripts/demo/incident.ts flood                     # fill to 95% of maxmemory (high_mem: critical 90, warning 70)
+npx tsx scripts/demo/incident.ts reset                     # delete the flood keys; both alerts recover
+```
+Meanwhile, from the applied plan, run each of these in its own terminal:
+```bash
+dd2dash0 watch <plan> --until-recovered
+```
+```bash
+dd2dash0 review <plan>
+```
+Then open **Incident** in the console. When the watch is done, `dd2dash0 proof <plan>` writes the proof card.
+
+**Host scope.** Ali's bundle labels every metric `host.name=dash0-live-redis`, the same name as the Datadog Agent's host. Another collector also sends a small `redis.memory.used` series with `host_name="docker-desktop"` to the same org. If it's still running, the unscoped rule averages it in and Dash0 reads far lower than Datadog. Stop that collector, or scope the demo monitor to `host:dash0-live-redis`.
+
 ## 6. Reset
 ```bash
 npx tsx --env-file=.env scripts/demo/reset-dash0.ts --out out/demo          # lists what it would delete
