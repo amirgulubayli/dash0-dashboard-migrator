@@ -9,7 +9,7 @@ A browser app for reviewing a Datadog-to-Dash0 migration. It reads the `report.j
 Hard rules. Do not break these:
 
 - **Browser only.** No backend, no login.
-- **No AI and no network calls.** The only fetch is the same-origin `/report.json` from the public folder.
+- **No AI and no network calls except same-origin ones.** `/report.json`; and, only when the console is served by `dd2dash0 review`, `GET /api/plan` and `POST /api/review` (`src/lib/cli-server.ts`). On any other host `/api/plan` fails and the console falls back to downloading `review.json`.
 - **No translation logic.** Translation must be deterministic and lives in the CLI. The app only displays and reviews.
 - **Parsing only in `src/lib/report.ts`.** It is the only file that knows `report.json` field names. If the CLI renames a field, fix it there and nowhere else.
 - **Every number shown is computed from the loaded file.** Never hard-code counts.
@@ -30,6 +30,10 @@ npx bun run lint
 ```
 
 `npx bun run shots` takes 1920x1080 screenshots into `shots/` and checks for horizontal overflow at 1920 and 1440. It needs the dev server running; set `SHOTS_URL` if the URL differs. It also needs Playwright's Chromium (`npx playwright install chromium`).
+
+### 2.1 Served by the CLI
+
+`npx bun run build` writes a static single-page build to `.output/public/` (`index.html` shell, SPA mode in `vite.config.ts`). `dd2dash0 review <plan dir> --console console/.output/public` serves it next to the plan's `report.json`. The Review page then shows **Save to dd2dash0**: it POSTs `review.json` with `plan_sha256` (only when the loaded report is the plan's own report) and shows what the CLI accepted or refused. Download still works.
 
 ## 3. Data contract
 

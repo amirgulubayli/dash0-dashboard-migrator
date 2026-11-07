@@ -358,10 +358,32 @@ function countVer(items: ReportItem[], key: "imported" | "returns_data"): number
   return vals.length ? vals.filter(Boolean).length : null;
 }
 
+/** A link target the console may render: only absolute https: URLs (never javascript:, data:, relative paths). */
+export function safeHttpsUrl(u: unknown): string | undefined {
+  if (typeof u !== "string" || !u) return undefined;
+  try {
+    return new URL(u).protocol === "https:" ? u : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export type ImportState = "imported" | "failed" | "pending";
+
+/** Import state of one item, from the data only (verification.imported, dash0.import_status). */
+export function importState(item: ReportItem): ImportState {
+  const s = (item.dash0?.import_status ?? "").toLowerCase();
+  if (/fail|error|reject/.test(s)) return "failed";
+  if (item.verification?.imported === true || /^(imported|created|updated|ok|unchanged)$/.test(s))
+    return "imported";
+  return "pending";
+}
+
 export function parseReport(text: string): ParseResult {
   let raw: unknown;
   try {
-    raw = JSON.parse(text);
+    // Editors on Windows may save a UTF-8 byte order mark; JSON.parse rejects it.
+    raw = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
   } catch (e) {
     return { ok: false, error: `This file is not valid JSON (${(e as Error).message}).` };
   }
@@ -380,6 +402,18 @@ export function parseReport(text: string): ParseResult {
       : undefined;
     if (!isObj(v) || !id || !status) {
       warnings.push(`Item ${idx + 1} skipped: missing id or status.`);
+      return;
+    }
+    if (
+      !(STATUSES as string[]).includes(status) &&
+      !claimInStatus(status) &&
+      status !== "exact-under"
+    ) {
+      // Never drop or hide an item: an unknown status counts as "can't migrate automatically", with a warning.
+      warnings.push(
+        `Item ${id} has an unknown status '${status}': shown as "can't migrate automatically".`,
+      );
+      items.push(parseItem(v, id, "unsupported"));
       return;
     }
     items.push(parseItem(v, id, status));

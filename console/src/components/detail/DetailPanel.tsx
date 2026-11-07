@@ -6,7 +6,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CodeBlock, CopyButton } from "@/components/CodeBlock";
 import { StatusBadge, ReviewBadge, NA } from "@/components/status-ui";
 import { useReport } from "@/lib/report-store";
-import { displayTitle, fidelityLabel, noSamplesYet, type ReportItem } from "@/lib/report";
+import {
+  displayTitle,
+  fidelityLabel,
+  importState,
+  noSamplesYet,
+  safeHttpsUrl,
+  type ImportState,
+  type ReportItem,
+} from "@/lib/report";
+
+// Wording approved by Henry (hub #684): the verdict follows the import state in the data.
+const EXACT_VERDICT: Record<ImportState, string> = {
+  pending: "Exact: will be imported without review.",
+  imported: "Exact: imported without review.",
+  failed: "Exact, but the import failed: see the apply log.",
+};
 import { metaFor, COPY } from "@/lib/status";
 import { explainCode } from "@/lib/reason-codes";
 import {
@@ -93,7 +108,7 @@ export function DecisionControl({
       <p className="text-sm text-muted-foreground">
         {item.kind === "group"
           ? "Layout groups are not reviewed."
-          : "Exact translations are imported without review."}
+          : EXACT_VERDICT[importState(item)]}
       </p>
     );
   }
@@ -299,11 +314,20 @@ export function DetailPanel({ item, className }: { item: ReportItem; className?:
             </div>
           )}
           {noSamplesYet(item) && <p className="mt-2 text-xs text-body">{COPY.noSamples}</p>}
-          {item.dash0?.url && (
-            <a href={item.dash0.url} target="_blank" rel="noreferrer" className="text-xs underline">
+          {safeHttpsUrl(item.dash0?.url) ? (
+            <a
+              href={safeHttpsUrl(item.dash0?.url)}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs underline"
+            >
               Open in Dash0
             </a>
-          )}
+          ) : item.dash0?.url ? (
+            <span className="text-xs text-muted-foreground break-all">
+              Dash0 link (not https, not opened): {item.dash0.url}
+            </span>
+          ) : null}
         </section>
       </div>
     </div>
