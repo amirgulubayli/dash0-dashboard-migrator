@@ -83,7 +83,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   const attributes = existsSync(logAttributesFile) ? loadLogAttributes(logAttributesFile) : null;
   const translateLog: TranslateLog | undefined = attributes ? (q, t) => translateLogQuery(q, { attributes, variables: t.variables, where: t.where, ...(t.scalar && { interval: "$__range" as const }) }) : undefined;
 
-  const dashboards = ingested.dashboards.map((d) => ({ source: d, out: toPerses(d, translate, translateLog) }));
+  const dashboards = ingested.dashboards.map((d) => ({ source: d, out: toPerses(d, translate, translateLog, attributes ?? undefined) }));
   const convert = o.alertConverter ?? defaultAlertConverter(attributes);
   const alerts = ingested.alerts.map((alert) => ({ alert, conversion: convert(alert, alertCtx) }));
 

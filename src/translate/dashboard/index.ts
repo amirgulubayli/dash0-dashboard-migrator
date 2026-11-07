@@ -8,11 +8,15 @@
 import { worst, isGroup, type Dashboard, type Finding, type Layout, type Panel, type Status } from "../../ir/index.js";
 import { dash0Id, type DashboardDefinition, type GridItem, type GridLayout, type PersesPanel } from "../../targets/dash0/index.js";
 import { toPersesPanel, type PanelResult } from "./panels.js";
+import { translateLogStream } from "./logtable.js";
+import type { LogAttributes } from "../logs/index.js";
 import { translateRequests, type TranslateExpr, type TranslateLog, type TranslateOptions } from "./queries.js";
 
 export { translateRequests } from "./queries.js";
 export type { TranslateExpr, TranslateLog, TranslateOptions, ExprTranslation, PanelQuery, RequestTranslation } from "./queries.js";
 export type { PanelResult } from "./panels.js";
+export { translateLogStream } from "./logtable.js";
+export type { AttributeFilter, LogTableSpec, LogTableTranslation } from "./logtable.js";
 
 export const ROW_SCALE = 3;
 
@@ -50,8 +54,11 @@ export interface DashboardTranslation {
   findings: Finding[];
 }
 
-/** `translateLog` (T12) is optional: without it, log queries fail closed as before. */
-export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: TranslateLog): DashboardTranslation {
+/**
+ * `translateLog` (T12) is optional: without it, log queries fail closed as before. `logAttributes`
+ * (mappings/log-attributes.yaml) turns log streams into LogTable panels; without it they stay placeholders.
+ */
+export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: TranslateLog, logAttributes?: LogAttributes): DashboardTranslation {
   const dashItem = `dd-dash-${d.source.id}`;
   const findings: Finding[] = [];
 
@@ -98,7 +105,8 @@ export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: 
           ? scalarLogPending
           : translateLog;
     const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId, logFor);
-    const r = toPersesPanel(p, itemId, q);
+    const logs = p.kind === "logs" && logAttributes ? translateLogStream(p, logAttributes, variables, itemId) : undefined;
+    const r = toPersesPanel(p, itemId, q, logs);
     const k = key(p.id);
     panels[k] = r.panel;
     results.push(r);
