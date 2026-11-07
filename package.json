@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@lezer/lr": "^1.4.12",
-    "@prometheus-io/lezer-promql": "^0.316.0"
+    "@prometheus-io/lezer-promql": "^0.316.0",
+    "yaml": "^2.6.1"
   }
 }
