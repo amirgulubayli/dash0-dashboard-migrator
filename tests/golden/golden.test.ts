@@ -57,10 +57,13 @@ export function project(i: RawItem): GoldenItem {
   };
 }
 
-/** Golden file name: the dashboard title (panels) or the monitor id (alerts). */
-export function slug(i: Pick<RawItem, "kind" | "id" | "dashboard">): string {
+/**
+ * Golden file name: the SOURCE dashboard id (panels) or the monitor id (alerts). Not the title: two dashboards can share a
+ * title, and their goldens must not merge into one file.
+ */
+export function slug(i: Pick<RawItem, "kind" | "id">): string {
   if (i.kind === "alert") return i.id.replace(/^dd-monitor-/, "monitor-");
-  return i.dashboard.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return i.id.split("/")[0]!.replace(/^dd-dash-/, "dashboard-").replace(/[^A-Za-z0-9_.-]+/g, "-");
 }
 
 describe("golden translations of the pinned fixtures", async () => {
@@ -82,6 +85,14 @@ describe("golden translations of the pinned fixtures", async () => {
     mkdirSync(DATA, { recursive: true });
     for (const [s, items] of actual) writeFileSync(join(DATA, `${s}.json`), JSON.stringify(items, null, 2) + "\n");
   }
+
+  it("goldens are keyed by source id: two dashboards with the same title do not share a file", () => {
+    const a = { kind: "panel" as const, id: "dd-dash-abc-123/w-1" };
+    const b = { kind: "panel" as const, id: "dd-dash-def-456/w-1" };
+    expect(slug(a)).toBe("dashboard-abc-123");
+    expect(slug(b)).not.toBe(slug(a));
+    expect(slug({ kind: "alert", id: "dd-monitor-redisdb__high_mem" })).toBe("monitor-redisdb__high_mem");
+  });
 
   it("every fixture produced items", () => {
     expect([...actual.keys()].length).toBeGreaterThanOrEqual(10);
