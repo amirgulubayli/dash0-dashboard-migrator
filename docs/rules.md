@@ -7,7 +7,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 69 | 42 | 17 | 37 | 165 |
+| implemented | 69 | 42 | 18 | 38 | 167 |
 | planned | 17 | 27 | 3 | 15 | 62 |
 
 ## Pipeline order
@@ -23,7 +23,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 7 | `time` Time aggregation | postfix or rollup call | no | 26 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
 | 9 | `function` Functions | function call | yes | 32 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
-| 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 8 | Formulas over named queries, constants, division. |
+| 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 9 | Formulas over named queries, constants, division. |
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
@@ -31,7 +31,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 15 | `panel` Panel options | panel attribute | no | 5 | Units, markers and visual options on a panel a widget rule produced. |
 | 16 | `layout` Layout and groups | widget position or group | no | 8 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
-| 18 | `logs` Log queries | log query or search term | yes | 24 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
+| 18 | `logs` Log queries | log query or search term | yes | 25 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
 | 19 | `validate` Validate | emitted artefact | no | 3 | Every output parses and passes preflight before it may be emitted. |
 | 20 | `canonical` Canonical form and hash | emitted artefact | no | 3 | One spelling per meaning, so the output hash is a function of the input only. |
 | 21 | `emit` Import and report | emitted artefact or run | no | 6 | Idempotent single-item import, read-back, and a certificate for every source item. |
@@ -190,7 +190,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 115 | `fn.cutoff` | cutoff_min(q, n) / cutoff_max(q, n) | q >= n / q <= n | exact | unit | — | T4 | implemented |
 | 120 | `fn.count_not_null` | count_not_null(q) | count(q) | exact | unit | — | T4 | implemented |
 | 125 | `fn.count_nonzero` | count_nonzero(q) | count(q != 0) | exact | unit | — | T4 | implemented |
-| 127 | `fn.default_zero.grouped` | default_zero(q) on a grouped dashboard query | q or 0 * q[$__range] @ end() | exact-under(A.at-range) | unit | probe:at-modifier | T4 | implemented |
+| 127 | `fn.default_zero.grouped` | default_zero(q) on a grouped dashboard query | q or 0 * q[$__range] @ end() | exact-under(A.at-range) | unit | probe:at-modifier, probe:range-var | T4 | implemented |
 | 128 | `fn.default_zero.grouped.monitor` | default_zero(q) on a grouped monitor query | q or 0 * q over the evaluation window | exact-under(A.monitor-rollup-60s) | unit | — | T4 | implemented |
 | 130 | `fn.default_zero.single` | default_zero(q) on a single-series query | q or vector(0) | exact | unit | — | T4 | implemented |
 | 131 | `fn.exclude_null` | exclude_null(q) | label!="" on every selector for each group-by label (drops the N/A group) | exact | unit | — | T4 | implemented |
@@ -198,7 +198,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 133 | `fn.round` | round(q) | round(x) | exact | unit | — | T4 | implemented |
 | 134 | `fn.max_min.scalar` | max(q, n) / min(q, n) | clamp_min(x, n) / clamp_max(x, n) | exact | unit | — | T4 | implemented |
 | 135 | `fn.max_min.series` | max(a, b) / min(a, b) of two queries with the same group-by | a >= b or b / a <= b or b (pointwise) | exact-under(A.both-present) | unit | — | T4 | implemented |
-| 140 | `fn.top.window` | top(q, N, 'mean'\|'max'\|'min'\|'sum', 'desc'\|'asc') | x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc) | exact-under(A.top-uniform) | — | probe:at-modifier | T4 | planned |
+| 140 | `fn.top.window` | top(q, N, 'mean'\|'max'\|'min'\|'sum', 'desc'\|'asc') | x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc) | exact-under(A.top-uniform) | — | probe:at-modifier, probe:range-var | T4 | planned |
 | 145 | `fn.top` | top(q, N, method, order) / topN / bottomN | topk(N, q) / bottomk(N, q) | exact-under(A.top-stable) | unit | — | T4 | implemented |
 | 150 | `fn.histogram.quantile` | pXX:metric on a distribution | histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w]))) | bounded(ε) | — | — | T4 | planned |
 | 160 | `fn.per_unit.kind` | per_second / per_minute / per_hour / derivative on a metric that is neither a counter nor a growing gauge | no output; deriv() is a least-squares slope, not Datadog's point difference | manual | unit | — | T4 | implemented |
@@ -224,10 +224,12 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 40 | `arith.neg` | unary minus | -x | exact | unit | — | T4 | implemented |
 | 45 | `arith.div-zero` | division by the constant 0 | no output: Datadog drops the point, PromQL gives ±Inf/NaN | manual | unit | — | T4 | implemented |
 | 50 | `arith.group-mismatch` | arithmetic between queries with different groupings | no output | manual | unit | — | T4 | implemented |
+| 52 | `arith.scalar-log-mixed` | a scalar log count (over [$__range]) combined with a per-interval value (a metric, or a log time series) | no output: the two cover different windows | manual | unit | — | T4 | implemented |
 | 55 | `arith.group-subset` | formula where one side's groups are a subset of the other's | a / on(<common>) group_left b | exact-under(A.nonzero-denominator) | — | probe:dd-formula-join | T4 | planned |
 | 60 | `formula.ref.unknown` | formula references a query that does not exist | no output | manual | unit | — | T4 | implemented |
 
 - `arith.group-mismatch`: Planned arith.group-subset (on(...) group_left) waits on probe:dd-formula-join.
+- `arith.scalar-log-mixed`: Raised by T4 when a formula references a query carrying log.scalar.window next to anything evaluated per [$__interval].
 
 ## Monitor query (`monitor`)
 
@@ -383,6 +385,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 160 | `log.indexes` | indexes other than '*' | all logs (Dash0 has no indexes) | exact-under(A.all-indexes) | unit | — | T12 | implemented |
 | 170 | `log.monitor.count` | logs(Q).rollup(count).by(g).last(W) op T | sum by (g) (increase(...[W])) op $__threshold | bounded(ε) | unit, proof:T3 | probe:log-labels | T12 | implemented |
 | 175 | `log.monitor.formula` | formula("...").last(W) over log queries | the formula over windowed counts | bounded(ε) | unit, proof:T3 | — | T12 | implemented |
+| 180 | `log.scalar.window` | scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe) | the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value | bounded(ε) | unit | probe:range-var | T12 | implemented |
 | 200 | `logs.rate` | log count shown as a rate | sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m])) | bounded(ε) | proof:T3 | probe:log-labels | T12 | planned |
 | 220 | `logs.measure` | avg / sum / percentile over @attr | no output: dash0.logs only counts | manual | — | — | T12 | planned |
 | 230 | `logs.stream` | log_stream / list_stream widget | placeholder until the LogTable schema comes from T0 | manual | — | — | T12 | planned |
@@ -393,6 +396,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 - `log.or.inclusion-exclusion`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `log.monitor.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `log.monitor.formula`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `log.scalar.window`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed, rule arith.scalar-log-mixed). EPS_RATE gets relatively tighter over a long range: the uncovered edge stays under one scrape interval while the window total grows with the range.
 - `logs.rate`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 
 ## Validate (`validate`)
@@ -448,13 +452,14 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.at-range` | the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live) | 1 |
 | `A.monotonic` | the gauge only increases between resets (a running total), so its change per second is rate() | 1 |
 | `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
-| `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 5 |
+| `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 6 |
 | `A.log-source` | logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent | 1 |
 | `A.log-attr-default` | a log attribute without a table entry keeps its name in OTel (dots become underscores in the label) | 1 |
 | `A.log-fulltext` | Datadog's free-text match of a word equals a case-insensitive substring match on the log body | 1 |
 | `A.group-limit` | the number of groups stays within the widget's group limit, so Datadog shows every group too | 1 |
 | `A.severity-map` | the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level) | 1 |
 | `A.all-indexes` | every Datadog log index is queried (Dash0 has no indexes) | 1 |
+| `A.log-range` | the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (calculation last-number), so a scalar covers the same timeframe Datadog aggregates over | 1 |
 | `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
@@ -481,7 +486,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | Probe | Question | How | Rules waiting |
 |---|---|---|---|
 | `probe:anchored` (open) | Does Dash0 accept increase(x[1m] anchored)? | maths.md §11 probe 1: run it in the Dash0 query API | `time.as_count.counter.anchored` |
-| `probe:at-modifier` (yes) | Does Dash0 accept the @ end() modifier and the $__range variable in panel queries? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted; 935/935 queries with the new constructs accepted (hub #278) | `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist` |
+| `probe:at-modifier` (yes) | Does Dash0 accept the @ end() modifier in queries? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted by the query API; 935/935 queries with the new constructs accepted (hub #278). That test did NOT show that a dashboard substitutes $__range: see probe:range-var. | `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist` |
+| `probe:range-var` (yes) | Does a Dash0 dashboard substitute $__range with its visible time range in panel queries (and a stat panel with calculation last-number show the value at the end of that range)? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), visual check on a throwaway dashboard (the query API does not substitute variables, so only a rendered panel can answer): a StatChart (calculation last-number) over sum(increase({otel_metric_name="dash0.logs", service_name="frontend"}[$__range])) equalled the same query over a fixed [5m] with the picker at 5m (about 3k) and over a fixed [1h] with the picker at 1h (about 32k). 15m was not read. Import also accepted calculation last-number, and it rendered the last value. | `fn.default_zero.grouped`, `fn.top.window`, `log.scalar.window` |
 | `probe:lt-threshold` (open) | How does Dash0 compare $__threshold for `<` expressions (is higher always worse)? | maths.md §11 probe 5, T0 check-rule export | `monitor.cmp.lt` |
 | `probe:threshold-label` (open) | Does Dash0 expose which threshold fired (failed / degraded) as a label usable in annotation templates? | T0: fire a test rule and read its notification payload | `alert.msg.conditional.label` |
 | `probe:statchart-calculation` (open) | Which StatChart `calculation` names does Dash0 accept (mean, max, min, sum, last)? | T0: export a StatChart with each calculation | `widget.query_value`, `widget.alert_value` |
@@ -561,6 +567,7 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `log.group_by.limit` (exact-under(A.top-stable), implemented, T12)
 - `log.group_by.multi-limit` (exact-under(A.group-limit), implemented, T12)
 - `log.indexes` (exact-under(A.all-indexes), implemented, T12)
+- `log.scalar.window` (bounded(ε), implemented, T12)
 
 ## Implemented ahead of an open probe
 

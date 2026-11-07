@@ -6,6 +6,7 @@ import type { DatadogLogQuery, LogTranslateContext } from "../../src/translate/l
 import { translateQuery } from "../../src/translate/query/index.js";
 import type { FormulaEnv } from "../../src/translate/query/index.js";
 import { validatePromQL } from "../../src/validate/promql.js";
+import { CATALOG } from "../../src/rules/index.js";
 
 const attributes = loadLogAttributes("mappings/log-attributes.yaml");
 const CTX: LogTranslateContext = { attributes, variables: { Host: { tag: "host" }, User: { tag: "@usr.name" }, scope: { tag: null } } };
@@ -145,6 +146,85 @@ describe("formulas mixing log and metric queries", () => {
     const f = parseFormula("query1 * 2");
     if (!f.ok) throw new Error();
     expect(translateQuery(f.value, {}, new Map([["query1", logRef(bad)]]))).toMatchObject({ status: "manual", promql: null });
+  });
+});
+
+describe("scalar form (interval $__range): query_value, top list, table", () => {
+  const SCALAR: LogTranslateContext = { ...CTX, interval: "$__range" };
+  const S = (m = "") => `{otel_metric_name="dash0.logs"${m}}[$__range]`;
+  const sq = (search: string, extra: Partial<DatadogLogQuery> = {}) => {
+    const r = translateLogQuery({ search: { query: search }, compute: { aggregation: "count" }, ...extra }, SCALAR);
+    r.rules.forEach((x) => used.add(x));
+    return r;
+  };
+
+  it("a count is taken over the whole range, not one chart step", () => {
+    const r = sq("service:checkout status:error");
+    expect(r.promql).toBe(`sum (increase(${S(', otel_log_severity_range="ERROR", service_name="checkout"')}))`);
+    expect(r.rules).toContain("log.scalar.window");
+    expect(r.status).toBe("bounded");
+    expect(r.assumptions).toEqual(expect.arrayContaining(["A.log-count", "A.log-range"]));
+  });
+  it("compute.interval (a time-series setting) is ignored for a scalar", () => {
+    const r = sq("service:checkout", { compute: { aggregation: "count", interval: 300000 } });
+    expect(r.promql).toBe(`sum (increase(${S(', service_name="checkout"')}))`);
+    // ... but still applies to the time-series form of the same query
+    const series = translateLogQuery({ search: { query: "service:checkout" }, compute: { aggregation: "count", interval: 300000 } }, CTX);
+    expect(series.promql).toContain("[5m]");
+    expect(series.rules).not.toContain("log.scalar.window");
+  });
+  it("cardinality counts distinct values over the whole range (Total Chargebacks)", () => {
+    const r = sq("source:adyen @evt.name:CHARGEBACK", { compute: { aggregation: "cardinality", metric: "@pspReference" } });
+    expect(r.promql).toBe(`count (sum by (pspReference) (increase(${S(', evt_name="CHARGEBACK", source="adyen"')})) > 0)`);
+    expect(r.rules).toEqual(expect.arrayContaining(["log.cardinality", "log.scalar.window"]));
+  });
+  it("a top list ranks and counts over the same range", () => {
+    const r = sq("service:a", { group_by: [{ facet: "@usr.name", limit: 10, sort: { order: "desc" } }] });
+    expect(r.promql).toBe(`topk(10, sum by (usr_name) (increase(${S(', service_name="a"')})))`);
+  });
+  it("an OR across keys keeps the range in every term", () => {
+    const r = sq("service:a OR host:b");
+    expect(r.promql).toBe(`sum (increase(${S(', service_name="a"')})) + sum (increase(${S(', host_name="b"')})) - sum (increase(${S(', host_name="b", service_name="a"')}))`);
+  });
+  it("monitors keep their own window", () => {
+    const m = translateLogMonitor('logs("service:a").index("*").rollup("count").last("5m") > 10', {}, SCALAR);
+    expect(m.promql).toContain("[5m]");
+    expect(m.promql).not.toContain("$__range");
+    expect(m.rules).not.toContain("log.scalar.window");
+  });
+  it("a ratio of two scalar log counts is the ratio of the window totals", () => {
+    const a = sq("service:api status:error");
+    const b = sq("service:api");
+    const f = parseFormula("100 * a / b");
+    if (!f.ok) throw new Error();
+    const r = translateQuery(f.value, {}, new Map([["a", logRef(a)], ["b", logRef(b)]]));
+    expect(r.promql).toBe(`100 * sum (increase(${S(', otel_log_severity_range="ERROR", service_name="api"')})) / sum (increase(${S(', service_name="api"')}))`);
+    expect(r.status).toBe("bounded");
+  });
+  it("fails closed when a scalar log count meets a per-interval value (metric or time-series log)", () => {
+    const a = sq("service:api status:error");
+    const metric = parseQuery("sum:redis.net.commands{*}");
+    if (!metric.ok) throw new Error();
+    const f = parseFormula("a / b");
+    if (!f.ok) throw new Error();
+    for (const per of [metric.value, logRef(translateLogQuery({ search: { query: "service:api" }, compute: { aggregation: "count" } }, CTX))]) {
+      for (const env of [new Map([["a", logRef(a)], ["b", per]]), new Map([["b", logRef(a)], ["a", per]])] as FormulaEnv[]) {
+        const r = translateQuery(f.value, {}, env);
+        expect(r).toMatchObject({ status: "manual", promql: null });
+        expect(r.findings.some((x) => x.code === "log.scalar.mixed")).toBe(true);
+      }
+    }
+  });
+  it("the finding codes the scalar form raises resolve to catalog rows", () => {
+    const codes = new Set(CATALOG.map((r) => r.findingCode ?? r.id));
+    expect(codes.has("log.scalar.mixed")).toBe(true);
+    expect(CATALOG.find((r) => r.id === "log.scalar.window")).toMatchObject({ status: "bounded", state: "implemented" });
+  });
+  it("every emitted scalar query parses", () => {
+    for (const s of ["", "service:a", "@http.status_code:>=500", "service:a OR host:b"]) {
+      const r = sq(s);
+      expect(validatePromQL(r.promql!).ok, r.promql!).toBe(true);
+    }
   });
 });
 

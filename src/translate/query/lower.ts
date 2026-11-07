@@ -46,6 +46,16 @@ class Lowerer {
   sawWindowed = false;
   /** Set by translateMonitor: the evaluation window W in seconds. */
   monitorWindow?: number;
+  /**
+   * A formula may not combine a scalar log query (one count over [$__range], T12 rule log.scalar.window) with a
+   * per-bucket one (a metric, or a log time series): the two cover different windows, so the result would mean nothing.
+   */
+  sawScalarLog = false;
+  sawPerBucket = false;
+  private checkWindows(): void {
+    if (this.sawScalarLog && this.sawPerBucket)
+      this.manual("log.scalar.mixed", "a scalar log count (over the whole range) is combined with a per-interval value; the windows differ, so there is no faithful translation");
+  }
 
   constructor(
     readonly ctx: TranslateContext,
@@ -143,6 +153,9 @@ class Lowerer {
       for (const f of ref.findings) if (!this.findings.some((x) => x.code === f.code && x.message === f.message)) this.findings.push(f);
       this.manual("formula.ref.manual", "the formula uses a query that could not be translated");
     }
+    if (ref.rules.includes("log.scalar.window")) this.sawScalarLog = true;
+    else this.sawPerBucket = true;
+    this.checkWindows();
     this.external.push({ status: ref.status, rules: ref.rules, assumptions: ref.assumptions });
     for (const f of ref.findings) if (!this.findings.some((x) => x.code === f.code && x.message === f.message)) this.findings.push(f);
     return { node: ref.node, groups: ref.groups };
@@ -360,6 +373,8 @@ class Lowerer {
   // ---------- metric query ----------
 
   metric(m: MetricQuery, calls: { name: string; args: import("../../parse/index.js").Arg[] }[]): Lowered {
+    this.sawPerBucket = true;
+    this.checkWindows();
     if (m.valueFilter) this.manual("query.value-filter", "distribution value filters (v: ...) have no PromQL equivalent");
 
     let mapping: MetricMapping | undefined = this.ctx.metric?.(m.metric);
