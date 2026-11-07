@@ -96,3 +96,27 @@ describe("status lattice", () => {
     expect(["exact", "exact-under", "bounded", "manual"].map((s) => reportLabel(s as never))).toEqual(["exact", "approximate", "approximate", "manual"]);
   });
 });
+
+describe("adapters for T4's TranslateContext", async () => {
+  const { metricLookup, tagLookup, metricAvailability } = await import("../../src/ir/index.js");
+  const m = loadMappings(join(root, "mappings"));
+  const metric = metricLookup(m);
+  it("returns T4's {otel, kind} shape plus labels, ddKind and transform", () => {
+    expect(metric("redis.mem.used")).toMatchObject({ otel: "redis.memory.used", kind: "gauge", ddKind: "gauge", transform: "none", status: "exact" });
+    expect(metric("redis.cpu.sys")).toMatchObject({ otel: "redis.cpu.time", kind: "counter", labels: { state: "sys" }, ddKind: "rate", transform: "rate" });
+    expect(metric("redis.keys.evicted")).toMatchObject({ kind: "counter", ddKind: "gauge", transform: "none" });
+  });
+  it("is undefined for unmapped, no-equivalent and derived metrics, and says which", () => {
+    for (const [dd, why] of [["nope.metric", "unmapped"], ["redis.info.latency_ms", "no_equivalent"], ["redis.expires.percent", "derived"]] as const) {
+      expect(metric(dd)).toBeUndefined();
+      expect(metricAvailability(m, dd)).toBe(why);
+    }
+    expect(metricAvailability(m, "redis.mem.used")).toBe("mapped");
+  });
+  it("maps tags to Dash0 labels", () => {
+    const tag = tagLookup(m);
+    expect(tag("service")).toBe("service_name");
+    expect(tag("env")).toBe("deployment_environment_name");
+    expect(tag("no_such_tag")).toBeUndefined();
+  });
+});
