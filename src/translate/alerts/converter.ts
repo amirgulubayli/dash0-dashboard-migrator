@@ -4,7 +4,7 @@
 import type { Alert, Finding, Status } from "../../ir/index.js";
 import type { MonitorQuery } from "../../parse/index.js";
 import { translateAlert } from "./translate.js";
-import type { CheckRule, MonitorTranslationLike } from "./types.js";
+import type { CheckRule, LogMonitorTranslationLike, MonitorTranslationLike } from "./types.js";
 
 /** The parts of T4's TranslateContext T6 uses; the rest is passed through to translateMonitor untouched. */
 export interface ConverterContext {
@@ -30,10 +30,17 @@ export interface AlertConversion {
 
 export type T4MonitorTranslator<C> = (mq: MonitorQuery, t: { critical?: number; warning?: number }, ctx: C) => MonitorTranslationLike;
 
-export function makeAlertConverter<C extends ConverterContext>(translateMonitor: T4MonitorTranslator<C>, opts: { keepManual?: boolean } = {}) {
+export type T12LogMonitorTranslator<C> = (query: string, t: { critical?: number; warning?: number; variables?: unknown[] }, ctx: C) => LogMonitorTranslationLike;
+
+export function makeAlertConverter<C extends ConverterContext>(
+  translateMonitor: T4MonitorTranslator<C>,
+  opts: { keepManual?: boolean; translateLogMonitor?: T12LogMonitorTranslator<C> } = {},
+) {
   return (alert: Alert, ctx: C): AlertConversion => {
+    const logMon = opts.translateLogMonitor;
     const r = translateAlert(alert, {
       translateMonitor: (mq, t) => translateMonitor(mq, t, ctx),
+      ...(logMon && { translateLogMonitor: (q: string, t: { critical?: number; warning?: number; variables?: unknown[] }) => logMon(q, t, ctx) }),
       ...(ctx.tag && { tag: ctx.tag }),
       ...(ctx.channels && { channels: ctx.channels }),
       ...(opts.keepManual && { keepManual: true }),
