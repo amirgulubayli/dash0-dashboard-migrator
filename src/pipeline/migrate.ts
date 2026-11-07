@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { ingestDatadog, type IngestOptions } from "../sources/datadog/index.js";
 import { loadMappings, metricAvailability, metricLookup, tagLookup } from "../ir/index.js";
 import { translateQuery, type TranslateContext } from "../translate/query/index.js";
-import { toPerses, type DashboardTranslation, type TranslateExpr } from "../translate/dashboard/index.js";
+import { toPerses, type DashboardTranslation, type TranslateExpr, type TranslateLog } from "../translate/dashboard/index.js";
+import { loadLogAttributes, translateLogQuery } from "../translate/logs/index.js";
+import { existsSync } from "node:fs";
 import { canonicalJson, importAll, sha256, type Dash0Config, type DashboardDefinition, type Manifest, type PrometheusAlertRule } from "../targets/dash0/index.js";
 import { makeAlertConverter, type AlertConversion, type ConverterContext } from "../translate/alerts/index.js";
 import { translateMonitor } from "../translate/query/index.js";
@@ -49,7 +51,12 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   };
   const translate: TranslateExpr = (e, t) => translateQuery(e, { ...base, variables: t.variables, where: t.where }, t.env);
 
-  const dashboards = ingested.dashboards.map((d) => ({ source: d, out: toPerses(d, translate) }));
+  // T12: log queries -> dash0.logs PromQL, when the log-attribute table is present.
+  const logAttributesFile = join(o.mappingsDir, "log-attributes.yaml");
+  const attributes = existsSync(logAttributesFile) ? loadLogAttributes(logAttributesFile) : null;
+  const translateLog: TranslateLog | undefined = attributes ? (q, t) => translateLogQuery(q, { attributes, variables: t.variables, where: t.where }) : undefined;
+
+  const dashboards = ingested.dashboards.map((d) => ({ source: d, out: toPerses(d, translate, translateLog) }));
   const convert = o.alertConverter ?? defaultAlertConverter;
   const alerts = ingested.alerts.map((alert) => ({ alert, conversion: convert(alert, base) }));
 
@@ -67,7 +74,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
     });
   }
 
-  const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f))];
+  const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...(attributes ? [logAttributesFile] : []), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f))];
   const inputHash = sha256(canonicalJson({ dashboards: ingested.dashboards.map((d) => d.original), alerts: ingested.alerts.map((a) => a.original) }));
   const report = buildReport({
     version: o.version,
