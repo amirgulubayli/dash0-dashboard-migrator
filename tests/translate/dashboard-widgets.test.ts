@@ -23,6 +23,9 @@ const metricQ = (name: string, query: string, extra: object = {}) => ({ data_sou
 const widget = (id: number, definition: object) => ({ id, layout: { x: 0, y: 0, width: 4, height: 2 }, definition });
 const sunburst = (id: number, title: string, queries: object[]) => widget(id, { type: "sunburst", title, requests: [{ response_format: "scalar", queries, formulas: queries.map((q) => ({ formula: (q as { name: string }).name })) }] });
 
+const table = (id: number, title: string, queries: object[], extra: object = {}) =>
+  widget(id, { type: "query_table", title, requests: [{ response_format: "scalar", queries, formulas: queries.map((q) => ({ formula: (q as { name: string }).name })), ...extra }] });
+
 const DASH = {
   title: "Widgets",
   layout_type: "ordered",
@@ -36,6 +39,11 @@ const DASH = {
     sunburst(7, "Two levels", [logQ("q", "status:error", [{ facet: "service" }, { facet: "status" }])]),
     sunburst(8, "No grouping", [metricQ("c", "sum:redis.net.commands{*}")]),
     sunburst(9, "Logs and metrics", [logQ("e", "status:error", [{ facet: "service" }]), metricQ("c", "sum:redis.net.commands{*} by {host}")]),
+    table(11, "Two metric columns", [metricQ("a", "avg:redis.mem.used{*} by {host}"), metricQ("b", "max:redis.mem.used{*} by {host}")]),
+    table(12, "Different grouping", [metricQ("a", "avg:redis.mem.used{*} by {host}"), metricQ("b", "avg:redis.mem.used{*} by {env}")]),
+    table(13, "With conditional formats", [metricQ("a", "avg:redis.mem.used{*} by {host}"), metricQ("b", "max:redis.mem.used{*} by {host}")], { conditional_formats: [{ comparator: ">", value: 1, palette: "white_on_red" }] }),
+    table(14, "Log and metric columns", [logQ("e", "status:error", [{ facet: "host" }]), metricQ("c", "sum:redis.net.commands{*} by {host}")]),
+    table(15, "Other data source column", [metricQ("a", "avg:redis.mem.used{*} by {host}"), { data_source: "events", name: "e", search: { query: "x" }, group_by: [{ facet: "host" }] }]),
     sunburst(10, "Events", [{ data_source: "events", name: "q", search: { query: "x" }, group_by: [{ facet: "tag" }] }]),
   ],
 };
@@ -96,6 +104,30 @@ describe("image and sunburst widgets", () => {
     const mixed = p("Logs and metrics");
     expect(mixed).toMatchObject({ placeholder: true, status: "manual" });
     expect(mixed.rules).toContain("arith.scalar-log-mixed");
+  });
+
+  it("a multi-column table whose columns all group by the same labels is one TimeSeriesTable, one query per column", () => {
+    const e = p("Two metric columns");
+    expect(e.placeholder).toBe(false);
+    expect(e.status).toBe("exact-under");
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
+    expect(e.promql).toHaveLength(2);
+    expect(e.rules).toContain("widget.query_table.columns");
+    expect(e.assumptions).toContain("A.table-columns");
+  });
+
+  it("a table that would not join per group stays manual: different grouping, conditional formats, another data source", () => {
+    for (const t of ["Different grouping", "With conditional formats", "Other data source column"]) {
+      const e = p(t);
+      expect(e, t).toMatchObject({ placeholder: true, status: "manual" });
+      expect(e.rules, t).toContain("widget.query_table.complex");
+    }
+  });
+
+  it("a table mixing a whole-timeframe log column with a metric column fails closed", () => {
+    const e = p("Log and metric columns");
+    expect(e).toMatchObject({ placeholder: true, status: "manual" });
+    expect(e.rules).toContain("arith.scalar-log-mixed");
   });
 
   it("every emitted query parses and the dashboard passes T7 preflight", () => {

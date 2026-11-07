@@ -51,6 +51,7 @@ export const ASSUMPTIONS = {
   "A.row-height": "one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export)",
   "A.var-values": "a label's values in Dash0 are the same set as the matching tag's values in Datadog",
   "A.table-single-query": "the table has one query, default sorting and no conditional formats",
+  "A.table-columns": "every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats",
   "A.top-uniform": "every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie",
   "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
   "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",

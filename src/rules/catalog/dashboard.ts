@@ -32,6 +32,10 @@ export const DASHBOARD_RULES: RuleDef[] = [
     note: "T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.",
   }),
   w("widget.query_table", 40, "exact-under", "query_table", "TimeSeriesTable", { assumptions: ["A.table-single-query"] }),
+  w("widget.query_table.columns", 41, "exact-under", "query_table with several metric or log columns that all group by the same labels, no conditional formats", "TimeSeriesTable with one query per column", {
+    assumptions: ["A.table-columns"],
+    note: "Probed on a rendered table: several queries with the same group-by show as one row per group with one value column each. Column headers are Dash0 defaults.",
+  }),
   w("widget.query_table.complex", 45, "manual", "query_table with several queries, custom sort or conditional formats", PLACEHOLDER, { findingCode: "widget.unsupported" }),
   w("widget.note", 50, "exact-under", "note / free_text", "Markdown with the same text", { assumptions: ["A.style"] }),
   w("widget.image", 60, "exact-under", "image", "Markdown ![](url)", { assumptions: ["A.style"] }),
