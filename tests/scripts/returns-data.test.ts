@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { classify, likelyCause, prepare, runQuery, summarize, type Env, type ItemResult, type Outcome } from "../../scripts/returns-data.js";
+import { classify, likelyCause, parseDuration, prepare, runQuery, summarize, type Env, type ItemResult, type Outcome } from "../../scripts/returns-data.js";
 
-const env: Env = { base: "https://api.example/", token: "t0ken", dataset: "default" };
+const env: Env = { base: "https://api.example/", token: "t0ken", dataset: "default", rangeSeconds: 3600, step: 60, now: () => 1_000_000 };
+const matrix = (...series: unknown[][][]) => ({ status: "success", data: { resultType: "matrix", result: series.map((values) => ({ metric: {}, values })) } });
 const noSleep = async () => {};
 const json = (status: number, body: unknown) => ({ status, json: async () => body }) as Response;
 
@@ -24,28 +25,33 @@ describe("prepare: placeholders -> concrete values", () => {
   });
 });
 
-describe("runQuery", () => {
-  it("series -> returns true; empty -> false; sends the token and dataset", async () => {
+describe("runQuery (range query over the window)", () => {
+  it("asks query_range for [now - range, now] at the step, with the token and dataset", async () => {
     let url = "";
     let auth = "";
     const f = (async (u: string, init?: RequestInit) => {
       url = u;
       auth = String((init?.headers as Record<string, string>).Authorization);
-      return json(200, { status: "success", data: { resultType: "vector", result: [{}, {}] } });
+      return json(200, matrix([[1, "1"], [2, "1"]], [[1, "2"]]));
     }) as unknown as typeof fetch;
     expect(await runQuery("up", env, f, noSleep)).toEqual({ returns: true, series: 2 });
-    expect(url).toContain("https://api.example/api/prometheus/api/v1/query?dataset=default&query=up");
+    expect(url).toContain("https://api.example/api/prometheus/api/v1/query_range?dataset=default&query=up");
+    expect(url).toContain("&start=996400&end=1000000&step=60");
     expect(auth).toBe("Bearer t0ken");
-    const empty = (async () => json(200, { status: "success", data: { resultType: "vector", result: [] } })) as unknown as typeof fetch;
-    expect(await runQuery("up", env, empty, noSleep)).toEqual({ returns: false, series: 0 });
   });
-  it("a scalar result counts as data", async () => {
-    const f = (async () => json(200, { status: "success", data: { resultType: "scalar", result: [1, "3"] } })) as unknown as typeof fetch;
-    expect(await runQuery("scalar(x)", env, f, noSleep)).toEqual({ returns: true, series: 1 });
+  it("no series, or only series without points, is 'no data'", async () => {
+    const none = (async () => json(200, matrix())) as unknown as typeof fetch;
+    expect(await runQuery("up", env, none, noSleep)).toEqual({ returns: false, series: 0 });
+    const hollow = (async () => json(200, matrix([], []))) as unknown as typeof fetch;
+    expect(await runQuery("up", env, hollow, noSleep)).toEqual({ returns: false, series: 0 });
+  });
+  it("a metric that stopped long ago but is inside the window still counts (the point of a range query)", async () => {
+    const f = (async () => json(200, matrix([[996_500, "1"]]))) as unknown as typeof fetch;
+    expect(await runQuery("old_metric", env, f, noSleep)).toEqual({ returns: true, series: 1 });
   });
   it("retries 429 then succeeds", async () => {
     let calls = 0;
-    const f = (async () => (++calls < 3 ? json(429, {}) : json(200, { status: "success", data: { resultType: "vector", result: [{}] } }))) as unknown as typeof fetch;
+    const f = (async () => (++calls < 3 ? json(429, {}) : json(200, matrix([[1, "1"]])))) as unknown as typeof fetch;
     expect(await runQuery("x", env, f, noSleep)).toEqual({ returns: true, series: 1 });
     expect(calls).toBe(3);
   });
@@ -65,6 +71,17 @@ describe("runQuery", () => {
   });
 });
 
+describe("parseDuration", () => {
+  it("parses s, m, h, d and rejects anything else", () => {
+    expect(parseDuration("90s")).toBe(90);
+    expect(parseDuration("15m")).toBe(900);
+    expect(parseDuration("1h")).toBe(3600);
+    expect(parseDuration("2d")).toBe(172800);
+    expect(() => parseDuration("1w")).toThrow(/bad duration/);
+    expect(() => parseDuration("")).toThrow(/bad duration/);
+  });
+});
+
 describe("classify and summarize", () => {
   const yes: Outcome = { returns: true, series: 1 };
   const no: Outcome = { returns: false, series: 0 };
@@ -80,6 +97,12 @@ describe("classify and summarize", () => {
     expect(likelyCause(["metric.unmapped"], "none")).toContain("mapping table");
     expect(likelyCause([], "partial")).toContain("no series matched");
     expect(likelyCause(["metric.unmapped"], "all")).toBeUndefined();
+    expect(likelyCause(["metric.approximate"], "none")).toContain("approximate");
+    expect(likelyCause(["tag.unmapped"], "none")).toContain("label");
+    expect(likelyCause(["label.default"], "partial")).toContain("dots become underscores");
+    const both = likelyCause(["metric.unmapped", "tag.unmapped"], "none")!;
+    expect(both).toContain("mapping table");
+    expect(both).toContain("label");
   });
   it("counts results by category", () => {
     const item = (returnsData: ItemResult["returnsData"]): ItemResult => ({ id: "i", kind: "panel", title: "", dashboard: "", status: "bounded", returnsData, queries: [] });
