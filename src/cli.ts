@@ -13,6 +13,7 @@ import { runApply } from "./pipeline/apply.js";
 import { terminalReview } from "./pipeline/review-terminal.js";
 import { findConsoleDir, startReviewServer } from "./serve/review.js";
 import { createInterface } from "node:readline/promises";
+import { datadogEnv, durationMs, findDatadogMonitor, plannedAlerts, runWatch, type WatchedAlert } from "./pipeline/watch.js";
 
 export const VERSION = "0.2.0";
 
@@ -22,6 +23,7 @@ Usage:
   dd2dash0 plan  (--input <dir> | --api) [--config dd2dash0.yaml] [--out plan] [options]   translate, import nothing
   dd2dash0 review <plan dir> [--terminal] [--port 4318] [--reviewer <name>]                 decide what gets imported
   dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run]
+  dd2dash0 watch <plan dir> [--alert <name>] [--dd-monitor <name>=<id>,...] [--every 5s] [--max 30m] [--until-recovered]
   dd2dash0 migrate --from datadog (--input <dir> | --api) [options]                        one-shot: translate + import all
   dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
 
@@ -40,6 +42,11 @@ plan writes a plan directory (report.json, report.md, events.jsonl, dash0/ paylo
 (review.json from the console) binds to the plan's hash; apply imports only what was approved and refuses on a
 changed plan, a review of another plan, a changed Datadog source, or approximate panels with no decision.
 Exit codes (plan, apply): 0 ok, 1 some imports failed, 2 refused, 3 usage or config error.
+
+watch polls each Datadog monitor and the Dash0 check rule migrated from it, writes <plan>/watch/timeline.json
+and parity.json, and passes when both fire at the same severity within 2 x the rule interval + the poll interval.
+The Dash0 state is computed from the rule's own query and thresholds (labelled "computed").
+Exit codes (watch): 0 parity passed, 1 failed or no incident seen, 3 usage, config or API error.
 
 migrate writes <out>/report.json, report.md, events.jsonl and (unless --no-import) <out>/dash0/.
 serve replays <out>'s run in the browser; with ELEVENLABS_AGENT_ID + ELEVENLABS_API_KEY set, an ElevenLabs
@@ -63,6 +70,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
   if (cmd === "plan") return runPlanCmd(rest);
   if (cmd === "review") return runReviewCmd(rest);
   if (cmd === "apply") return runApplyCmd(rest);
+  if (cmd === "watch") return runWatchCmd(rest);
   if (cmd === "migrate") return runMigrate(rest);
   if (cmd === "serve") return runServe(rest);
   console.error(`unknown command: ${cmd} (try --help)`);
@@ -283,6 +291,49 @@ async function runReviewCmd(args: string[]): Promise<number> {
   } catch (e) {
     console.error(`dd2dash0 review: ${(e as Error).message}`);
     return EXIT.refused;
+  }
+}
+
+async function runWatchCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--alert", "--dd-monitor", "--every", "--max"], ["--until-recovered"]);
+  if (typeof r === "string" || r._.length !== 1) {
+    console.error(`${typeof r === "string" ? r : "usage: dd2dash0 watch <plan dir> [--alert <name>]"}\n\n${USAGE}`);
+    return EXIT.usage;
+  }
+  const planDir = resolve(r._[0]!);
+  try {
+    const everyMs = durationMs(r.v["--every"] ?? "5s");
+    const maxMs = durationMs(r.v["--max"] ?? "30m");
+    if (everyMs < 1000) throw new Error("--every must be at least 1s");
+    const dd = datadogEnv();
+    const dash0 = configFromEnv();
+    const ids = new Map(
+      (r.v["--dd-monitor"] ?? "")
+        .split(",")
+        .filter(Boolean)
+        .map((kv) => {
+          const [k, v] = kv.split("=");
+          if (!k || !v || !/^\d+$/.test(v)) throw new Error(`--dd-monitor expects <name>=<numeric id>, got '${kv}'`);
+          return [k, v] as const;
+        }),
+    );
+    const planned = plannedAlerts(planDir, r.v["--alert"] ? [r.v["--alert"]] : []);
+    if (!planned.length) throw new Error(`no check rule in ${planDir} matches ${r.v["--alert"] ? `'${r.v["--alert"]}'` : "anything"}`);
+    const alerts: WatchedAlert[] = [];
+    for (const a of planned) {
+      const given = [...ids].find(([k]) => a.alertId.includes(k) || a.title.includes(k))?.[1];
+      const id = given ?? a.ddMonitorId ?? (await findDatadogMonitor(dd, a.title));
+      if (!id) throw new Error(`no Datadog monitor id for '${a.title}': pass --dd-monitor ${a.alertId.replace(/^dd-monitor-/, "")}=<id>`);
+      alerts.push({ ...a, ddMonitorId: id });
+    }
+    const signal = { stopped: false };
+    process.once("SIGINT", () => (signal.stopped = true));
+    const res = await runWatch({ planDir, alerts, dd, dash0, everyMs, maxMs, untilRecovered: r.b.has("--until-recovered"), print: (l) => console.log(l), signal });
+    console.log(`  timeline: ${res.files.timeline}\n  parity:   ${res.files.parity}`);
+    return res.apiError ? EXIT.usage : res.ok ? EXIT.ok : EXIT.failed;
+  } catch (e) {
+    console.error(`dd2dash0 watch: ${(e as Error).message}`);
+    return EXIT.usage;
   }
 }
 

@@ -11,7 +11,7 @@ export const PLAN_SCHEMA = "dd2dash0.plan/v1";
 
 /** Written next to the plan by later steps; never part of the lock. */
 const EXCLUDED_FILES = new Set([LOCK_FILE, "review.json"]);
-const EXCLUDED_DIRS = new Set(["apply"]);
+const EXCLUDED_DIRS = new Set(["apply", "watch"]);
 
 export interface PlanLock {
   schema: typeof PLAN_SCHEMA;
