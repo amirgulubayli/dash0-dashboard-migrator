@@ -115,7 +115,7 @@ describe("gates", () => {
 describe("boundary: no model in the translation path", () => {
   const files = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? files(join(dir, n)) : [join(dir, n)]));
 
-  it("nothing under src/ imports tools/ (the loop, Jev) or the Anthropic SDK", () => {
+  it("nothing under src/ imports tools/ (the loop) or the Anthropic SDK", () => {
     const offenders = files(join(ROOT, "src"))
       .filter((f) => f.endsWith(".ts"))
       .filter((f) => /from\s+["'][^"']*(tools\/improve|@anthropic-ai\/sdk)/.test(readFileSync(f, "utf8")));
