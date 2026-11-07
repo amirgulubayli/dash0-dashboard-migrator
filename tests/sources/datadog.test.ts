@@ -114,6 +114,15 @@ describe("folder robustness", () => {
       ["source.unreadable", "other.json"],
     ]);
   });
+  it("a leading UTF-8 byte order mark is stripped: the file ingests like its twin without one (Henry's stress run)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "t2-"));
+    const body = readFileSync(join(FIX, "dashboards", "redisdb__overview.json"), "utf8");
+    writeFileSync(join(dir, "bom.json"), "﻿" + body);
+    writeFileSync(join(dir, "bom.yaml"), "﻿" + stringify({ id: "y-1", title: "Y", widgets: [] }));
+    const r = ingestFolder(dir);
+    expect(r.findings.filter((f) => f.code === "source.unreadable")).toEqual([]);
+    expect(r.dashboards.map((d) => d.title).sort()).toEqual([JSON.parse(body).title, "Y"].sort());
+  });
   it("an API export's id wins over the file name", () => {
     const dir = mkdtempSync(join(tmpdir(), "t2-"));
     writeFileSync(join(dir, "x.json"), JSON.stringify({ id: "abc-def-ghi", title: "T", widgets: [] }));

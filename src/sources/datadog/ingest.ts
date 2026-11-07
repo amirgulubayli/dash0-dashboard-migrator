@@ -76,7 +76,9 @@ const YAML_EXT = /\.ya?ml$/i;
  * several documents in one file are errors rather than a silent choice, because JSON.parse would keep the last key
  * and we would drop the other documents.
  */
-export function parseExport(file: string, text: string): unknown {
+export function parseExport(file: string, raw: string): unknown {
+  // A leading UTF-8 byte order mark (editors on Windows add one) is not content: JSON.parse rejects it.
+  const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
   if (!YAML_EXT.test(file)) {
     try {
       return JSON.parse(text);
