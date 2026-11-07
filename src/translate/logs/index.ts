@@ -7,18 +7,20 @@ import type { Finding, Status } from "../../ir/index.js";
 import { worst } from "../../ir/index.js";
 import { parseLogSearch, type LogNode, type LogValue } from "../../parse/logsearch/index.js";
 import { render, type Duration, type PMatcher, type PNode } from "../query/promql.js";
+import { ASSUMPTIONS } from "../query/rules.js";
 import { validatePromQL } from "../../validate/promql.js";
 
 // ---------------- rules (data) ----------------
 
+// Assumptions shared with T4 reuse T4's exact text, so the catalog has one wording per id.
 export const LOG_ASSUMPTIONS = {
   "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
   "A.log-source": "logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent",
   "A.log-attr-default": "a log attribute without a table entry keeps its name in OTel (dots become underscores in the label)",
   "A.log-fulltext": "Datadog's free-text match of a word equals a case-insensitive substring match on the log body",
-  "A.var-regex": "the dashboard substitutes the variable as a regex of escaped literal values (a single value, or (a|b) for several)",
-  "A.var-default": "a template variable without a facet is left at its default '*', so dropping it filters nothing",
-  "A.top-stable": "the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same groups as PromQL's per-step topk",
+  "A.var-regex": ASSUMPTIONS["A.var-regex"],
+  "A.var-default": ASSUMPTIONS["A.var-default"],
+  "A.top-stable": ASSUMPTIONS["A.top-stable"],
   "A.group-limit": "the number of groups stays within the widget's group limit, so Datadog shows every group too",
   "A.severity-map": "the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level)",
   "A.all-indexes": "every Datadog log index is queried (Dash0 has no indexes)",
