@@ -1,6 +1,7 @@
 // T10: remove what the last demo run imported into Dash0, and nothing else. Reads the import manifest that
-// `dd2dash0 migrate` writes (<out>/dash0/import-manifest.json) and deletes only items it imported whose id starts
-// with "dd-". The org is shared: anything not in that manifest is never touched.
+// `dd2dash0 migrate` writes (<out>/dash0/import-manifest.json) and deletes only items that run imported: dashboards
+// by their dd-<datadog id> origin, check rules by their UUIDv5 id (T6, version nibble 5). The org is shared: anything
+// not in that manifest is never touched.
 //
 //   npx tsx --env-file=.env scripts/demo/reset-dash0.ts [--out out/demo]          # lists what it would delete
 //   npx tsx --env-file=.env scripts/demo/reset-dash0.ts [--out out/demo] --yes    # deletes
@@ -13,9 +14,11 @@ interface ManifestItem {
   action: string;
 }
 
+const OURS = { dashboard: /^dd-[A-Za-z0-9_-]+$/, "check-rule": /^(dd-[a-z0-9-]+|[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/ } as const;
+
 export function deletable(manifest: { dryRun?: boolean; results?: ManifestItem[] }): ManifestItem[] {
   if (manifest.dryRun) return [];
-  return (manifest.results ?? []).filter((r) => r.action === "imported" && /^dd-[a-z0-9-]+$/.test(r.id));
+  return (manifest.results ?? []).filter((r) => r.action === "imported" && OURS[r.kind]?.test(r.id));
 }
 
 export function deletePath(item: ManifestItem): string {
@@ -32,7 +35,7 @@ async function main() {
   if (!existsSync(path)) throw new Error(`no manifest at ${path}; run 'dd2dash0 migrate ... --out ${out}' first`);
   const items = deletable(JSON.parse(readFileSync(path, "utf8")));
   if (items.length === 0) {
-    console.log(`nothing to delete (manifest ${path} has no imported dd-* items)`);
+    console.log(`nothing to delete (manifest ${path} lists no items this tool imported)`);
     return;
   }
   for (const i of items) console.log(`${yes ? "deleting" : "would delete"} ${i.kind} ${i.id} "${i.name}"`);

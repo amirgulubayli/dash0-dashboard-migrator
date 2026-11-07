@@ -16,15 +16,15 @@ What it shows:
 | Datadog `DD_API_KEY` / `DD_APP_KEY`, sent privately (never on the hub) | Ali → Michael |
 | A Dash0 auth token in `thinc_bavarian_big_ben` with import + read rights | Michael (Settings → Auth Tokens) |
 
-## 1. Build the demo branch
+## 1. Check out the integration branch
+Since the merge train (Sat ~19:40), everything the demo needs is merged. Run it from `feature/datadog-to-dash0`, not a demo branch:
 ```bash
-scripts/demo/build-demo-branch.sh
+git fetch origin && git switch --detach origin/feature/datadog-to-dash0
+npm install && npm run typecheck && npx vitest run
 ```
-This merges every open PR head into the local branch `demo/dry-run` in the worktree `../demo`, wires T6 into T8's alert hook, and runs the typecheck and tests. The merged SHAs go to `../demo/out/demo/manifest.json`. On a conflict it stops and names the branches.
+To preview still-open PRs live on top of it, `scripts/demo/build-demo-branch.sh` builds the throwaway branch `demo/dry-run` in `../demo` from the integration branch plus the open PR heads. It stops on a merge conflict and names the branches. The demo itself never depends on it.
 
-Known red tests until T8 switches to T6 themselves: four tests in `tests/cli/migrate.test.ts` and `serve.test.ts`. They expect the interim converter's output (status `bounded`, codes `monitor.option.<key>`, ids `dd-<id>`). They don't block the demo.
-
-Then, in `../demo`: `cp .env.example .env` and fill in `DD_API_KEY`, `DD_APP_KEY`, `DASH0_API_URL`, `DASH0_AUTH_TOKEN`. Never paste them into chat or the hub.
+Then create `.env` from `.env.example` and fill in `DD_API_KEY`, `DD_APP_KEY`, `DASH0_API_URL` and `DASH0_AUTH_TOKEN`. Never paste them into chat or the hub.
 
 ## 2. Seed Datadog (idempotent)
 ```bash
@@ -77,14 +77,15 @@ Informational only: compare 2–3 panel values side by side. Small gaps are expe
 npx tsx --env-file=.env scripts/demo/reset-dash0.ts --out out/demo          # lists what it would delete
 npx tsx --env-file=.env scripts/demo/reset-dash0.ts --out out/demo --yes    # deletes only those
 ```
-It deletes only items the last run imported whose id starts with `dd-`, read from `out/demo/dash0/import-manifest.json`. Nothing else in the shared org is touched.
+It deletes only items the last run imported, read from `out/demo/dash0/import-manifest.json`: dashboards by their `dd-…` origin, and check rules by their UUIDv5 id. Nothing else in the shared org is touched.
 
 ## 7. When something fails
 | Symptom | First check |
 |---|---|
-| Check-rule import 400 `id` | Dash0 rejects `id` in the import body (hub #210); T7's id scheme is being changed. Dashboards still import |
-| Check-rule import 400 template | The description must parse as a Go template. T6 escapes Mustache; is T6 wired (step 1 says "wiring T6")? |
+| Check-rule import 400 `id` | The id must be a UUID: T6 sends UUIDv5 of the Datadog monitor id, and Import Check Rule upserts by it (Ali's probe). A `dd-…` id means an old build |
+| Check-rule import 400 template | The description must parse as a Go template. T6 escapes Mustache; check the rule's annotations in `out/demo/dash0/check-rules/` |
 | Datadog panels empty | `agent status` on Ali's machine: is the redisdb check OK? Template variables default `*` |
 | Dash0 panels empty, data arriving | Compare the panel's PromQL metric names with what the collector sends. Post a mismatch in `dash0-promql` |
 | Read-back "mismatch" on dashboards | Known (hub #210): T7's normaliser differs from what Dash0 returns. Not a demo blocker |
-| Merge conflict building the branch | Ask the two PR owners; don't resolve it inside the demo branch |
+| Merge conflict building the preview branch | Ask the two PR owners; don't resolve it inside the demo branch. The demo from §1 is unaffected |
+| A deleted dashboard still "reads back" | Dash0's DELETE is a soft delete: GET by origin still returns it, with `dash0.com/deleted-at`. Not yet tested: whether re-importing to that origin brings it back |

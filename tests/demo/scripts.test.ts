@@ -36,13 +36,15 @@ describe("reset-dash0", () => {
     results: [
       { kind: "dashboard" as const, id: "dd-abc-def", name: "Redis", action: "imported" },
       { kind: "check-rule" as const, id: "dd-monitor-123", name: "high mem", action: "imported" },
+      { kind: "check-rule" as const, id: "3e643081-f9f9-5867-88b2-d6c8a6b05f30", name: "uuidv5 rule", action: "imported" },
+      { kind: "check-rule" as const, id: "3e643081-f9f9-4867-88b2-d6c8a6b05f30", name: "v4, not ours", action: "imported" },
       { kind: "dashboard" as const, id: "dd-x", name: "rejected", action: "rejected-preflight" },
       { kind: "dashboard" as const, id: "someone-elses", name: "other", action: "imported" },
     ],
   };
 
-  it("deletes only imported dd-* items from the manifest", () => {
-    expect(deletable(m).map((r) => r.id)).toEqual(["dd-abc-def", "dd-monitor-123"]);
+  it("deletes only imported dd-* dashboards and dd-* / UUIDv5 check rules from the manifest", () => {
+    expect(deletable(m).map((r) => r.id)).toEqual(["dd-abc-def", "dd-monitor-123", "3e643081-f9f9-5867-88b2-d6c8a6b05f30"]);
     expect(deletable({ ...m, dryRun: true })).toEqual([]);
   });
 

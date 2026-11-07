@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# T10: build the throwaway demo branch `demo/dry-run` that merges every open PR head, so the live demo runs the
-# whole pipeline before the PRs are merged. Never pushed, never a PR; rebuild it whenever a PR moves.
+# T10 (optional since the merge train): build the throwaway branch `demo/dry-run` = the integration branch plus the
+# heads of still-open PRs, to preview them live before they merge. The demo itself runs from feature/datadog-to-dash0
+# (docs/demo.md §1). Never pushed, never a PR; rebuild it whenever a PR moves.
 #
 #   scripts/demo/build-demo-branch.sh            # worktree next to this one: ../demo
 #   DEMO_DIR=/path scripts/demo/build-demo-branch.sh
@@ -10,8 +11,8 @@
 set -euo pipefail
 
 BASE="${BASE:-feature/datadog-to-dash0}"
-# Order matters: the catalog before T6, T4 before T8 (T8 is stacked on T5, T7, T2 and T4).
-DEFAULT_HEADS="michael/claude/rule-catalog ali/claude/query-promql amir/claude/dash0-target amir/claude/datadog-ingest amir/claude/dashboard-perses amir/claude/cli-report michael/claude/monitor-check-rule michael/claude/demo-scripts"
+# Open PRs at Sat 20:40 (#16 #17 #18 #19 #20 #22 #12). Order matters: #22 is stacked on #19. Merged heads are skipped.
+DEFAULT_HEADS="michael/claude/catalog-pending-rows michael/claude/yaml-ingest michael/claude/notification-channels amir/claude/logs-wiring michael/claude/t5-layout michael/claude/t6-log-alerts michael/claude/demo-scripts"
 HEADS="${HEADS:-$DEFAULT_HEADS}"
 BRANCH="demo/dry-run"
 
@@ -71,25 +72,6 @@ for head in $HEADS; do
   first=0
 done
 printf '\n  ]\n}\n' >> "$manifest"
-
-# Wire T6 into T8's AlertConverter hook until T8 does it itself (hub #195). Skipped when T8 already uses T6.
-if [ -f src/pipeline/migrate.ts ] && [ -f src/translate/alerts/converter.ts ] && grep -q "o.alertConverter ?? interimAlertConverter" src/pipeline/migrate.ts; then
-  echo "== wiring T6 (makeAlertConverter) into T8's AlertConverter hook"
-  node - <<'EOF'
-const fs = require("node:fs");
-const p = "src/pipeline/migrate.ts";
-let s = fs.readFileSync(p, "utf8");
-s = s.replace("const convert = o.alertConverter ?? interimAlertConverter;", "const convert = o.alertConverter ?? (makeAlertConverter(translateMonitor) as unknown as AlertConverter);");
-s = s.replace(/^(import \{ translateQuery)(, type TranslateContext \} from "\.\.\/translate\/query\/index\.js";)$/m, "$1, translateMonitor$2");
-s = s.replace(/^(import \{ interimAlertConverter.*)$/m, '$1\nimport { makeAlertConverter } from "../translate/alerts/index.js";');
-if (!s.includes("makeAlertConverter(translateMonitor)") || !s.includes("translateMonitor, type TranslateContext") || !s.includes('from "../translate/alerts/index.js"')) {
-  console.error("warning: migrate.ts changed shape; T6 not wired, the interim converter stays");
-  process.exit(0);
-}
-fs.writeFileSync(p, s);
-EOF
-  if ! git diff --quiet src/pipeline/migrate.ts; then git commit --quiet -am "demo: use T6 for alerts (makeAlertConverter)"; fi
-fi
 
 echo "== npm install"
 npm install --no-audit --no-fund --silent
