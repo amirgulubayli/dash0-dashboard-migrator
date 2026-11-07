@@ -11,8 +11,10 @@ Translation is **deterministic**: a Datadog query parser, rule tables and metric
 
 ## Quick start (planned CLI)
 ```bash
-npm install
+npm ci                    # installs exactly package-lock.json and never rewrites it
 cp .env.example .env      # Datadog EU API + app key, Dash0 API URL + auth token
-npx tsx src/cli.ts migrate --from datadog --input ./exports --dry-run
+npx tsx src/cli.ts migrate --from datadog --input fixtures/datadog --dry-run
 npx tsx src/cli.ts migrate --from datadog --api
 ```
+
+**No AI in the translation path.** `migrate` is rules and mapping tables only and makes no network calls except the Datadog API read (`--api`) and the Dash0 import. The optional voice narrator for `serve` (`@elevenlabs/client`, in `optionalDependencies`) is never loaded by `migrate`; `npm ci --omit=optional` leaves it out entirely.

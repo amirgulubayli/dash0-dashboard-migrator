@@ -15,13 +15,7 @@ const ROOT = join(import.meta.dirname, "..", "..");
  * Ids T5/T8 emit that are requested from T17 but not yet in the catalog (hub, Amir -> Michael). Each entry must be
  * removed once its row lands; the second test fails as a reminder when that happens.
  */
-const PENDING_ROWS = new Set([
-  "widget.toplist.unranked",
-  "widget.query_value.default-agg",
-  "widget.query_value.multi",
-  "layout.clamped",
-  "query.empty",
-]);
+const PENDING_ROWS = new Set<string>([]);
 
 describe("catalog conformance (fixtures, both modes)", async () => {
   const known = new Set<string>([

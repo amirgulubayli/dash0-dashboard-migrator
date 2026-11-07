@@ -6,7 +6,6 @@ import { section } from "./build.js";
 
 const P04 = "plan 04 §2; docs/research/kb/06_TRANSLATION_RULES.md §8";
 const classify = section("classify", "T6", "implemented", P04);
-const classifyPlan = section("classify", "T6", "planned", P04);
 const alert = section("alert", "T6", "implemented", P04);
 const alertPlan = section("alert", "T6", "planned", P04);
 const msg = section("message", "T6", "implemented", "plan 04 §2.5");
@@ -15,10 +14,10 @@ const msgPlan = section("message", "T6", "planned", "plan 04 §2.5");
 export const ALERT_RULES: RuleDef[] = [
   // ---------- classify ----------
   classify("classify.monitor.metric", 10, "exact", 'monitor type "metric alert" or "query alert"', "goes through the query stages and the monitor stage"),
-  classifyPlan("classify.monitor.log", 20, "exact", 'monitor type "log alert"', "goes through the logs stage (log.monitor.count)", {
-    note: "Until T12 lands, log alerts take classify.monitor.other.",
+  classify("classify.monitor.log", 20, "exact", 'monitor type "log alert", with the log-attribute table loaded', "goes through the logs stage (T12 translateLogMonitor: log.monitor.count, log.monitor.formula), then the shared alert and message stages", {
+    note: "Without mappings/log-attributes.yaml, log alerts take classify.monitor.other.",
   }),
-  classify("classify.monitor.other", 999, "manual", "composite, service check, event, synthetics, SLO, process, log (until T12) and any other monitor", "no rule; original kept", {
+  classify("classify.monitor.other", 999, "manual", "composite, service check, event, synthetics, SLO, process, log alert without a log-attribute table, and any other monitor", "no rule; original kept", {
     fallback: true,
     findingCode: "monitor.type",
   }),
@@ -57,7 +56,7 @@ export const ALERT_RULES: RuleDef[] = [
   alert("alert.opt.on_missing_data.resolve", 150, "exact", "on_missing_data: resolve", "expression unchanged: with no samples a PromQL comparison returns nothing, so the alert resolves"),
 
   // ---------- alert: notification and metadata options ----------
-  alert("alert.opt.notification", 200, "exact-under", "renotify_*, escalation_message, notify_audit, include_tags, notification_preset_name, notify_by, locked, restricted_roles, silenced", "not emitted; listed in the report as manual setup", {
+  alert("alert.opt.notification", 200, "exact-under", "renotify_*, escalation_message, notify_audit, include_tags, enable_logs_sample, groupby_simple_monitor, notification_preset_name, notify_by, locked, restricted_roles, silenced", "not emitted; listed in the report as manual setup", {
     assumptions: ["A.notify-manual"],
     findingCode: "monitor.option",
   }),

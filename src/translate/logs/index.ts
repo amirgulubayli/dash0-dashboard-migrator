@@ -26,6 +26,7 @@ export const LOG_ASSUMPTIONS = {
   "A.group-limit": "the number of groups stays within the widget's group limit, so Datadog shows every group too",
   "A.severity-map": "the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level)",
   "A.all-indexes": "every Datadog log index is queried (Dash0 has no indexes)",
+  "A.log-range": "the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (calculation last-number), so a scalar covers the same timeframe Datadog aggregates over",
 } as const;
 export type LogAssumptionId = keyof typeof LOG_ASSUMPTIONS;
 
@@ -57,6 +58,7 @@ export const LOG_RULES = {
   "log.monitor.formula": r("bounded", ["A.log-count"], "formula(\"...\").last(W) over log queries -> the formula over windowed counts"),
   "log.indexes": r("exact-under", ["A.all-indexes"], "indexes other than '*' -> all logs (Dash0 has no indexes)"),
   "log.monitor.count": r("bounded", ["A.log-count"], "logs(Q).rollup(count).by(g).last(W) op T -> sum by (g) (increase(...[W])) op $__threshold"),
+  "log.scalar.window": r("bounded", ["A.log-count", "A.log-range"], "scalar log query (query_value, top list, table): the same count over [$__range] instead of one [$__interval] bucket; the panel must show the last value"),
 } as const satisfies Record<string, LogRule>;
 export type LogRuleId = keyof typeof LOG_RULES;
 
@@ -87,8 +89,13 @@ export interface LogTranslateContext {
   attributes: LogAttributes;
   /** Dashboard template variables: name -> the facet or tag it filters (Datadog `prefix`), or null. */
   variables?: Record<string, { tag: string | null }>;
-  /** Default bucket width: seconds or "$__interval" (default). */
-  interval?: number | "$__interval";
+  /**
+   * Default bucket width: seconds or "$__interval" (default, one value per chart step: right for time series).
+   * "$__range" is the SCALAR form for query_value, top list and table widgets: Datadog aggregates a scalar over the
+   * whole timeframe, so the count is taken over the dashboard's visible range and the panel must show the last
+   * value (T5: calculation last-number). It ignores compute.interval, which only applies to time series.
+   */
+  interval?: number | "$__interval" | "$__range";
   /** Item id copied into every finding. */
   where?: string;
 }
@@ -289,7 +296,9 @@ class LogLowerer {
       for (const label of groups) if (!matchers.some((m) => m.label === label && m.op === "!=" && m.value === "")) matchers.push({ label, op: "!=", value: "" });
     }
 
-    const width: Duration = window ?? (q.compute?.interval ? Math.round(q.compute.interval / 1000) : (this.ctx.interval ?? "$__interval"));
+    const scalar = window === undefined && this.ctx.interval === "$__range";
+    if (scalar) this.use("log.scalar.window");
+    const width: Duration = window ?? (scalar ? "$__range" : q.compute?.interval ? Math.round(q.compute.interval / 1000) : (this.ctx.interval ?? "$__interval"));
     const sel: PNode = { k: "selector", matchers, range: width };
     const inc: PNode = { k: "call", fn: "increase", args: [sel] };
 

@@ -1,0 +1,948 @@
+[
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-8450562588885112/w-2247473858319746",
+    "kind": "panel",
+    "title": "note",
+    "widget_type": "note",
+    "status": "exact-under",
+    "promql": [],
+    "rules": [
+      "widget.note",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.style"
+    ],
+    "findings": [
+      "exact-under widget.note"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-8450562588885112/w-6131621647457690",
+    "kind": "panel",
+    "title": "note",
+    "widget_type": "note",
+    "status": "exact-under",
+    "promql": [],
+    "rules": [
+      "widget.note",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.style"
+    ],
+    "findings": [
+      "exact-under widget.note"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-7975775563990214/w-8300711807334560",
+    "kind": "panel",
+    "title": "Max connections in use",
+    "widget_type": "query_value",
+    "status": "exact-under",
+    "promql": [
+      "max (avg_over_time({otel_metric_name=\"postgresql.percent_usage_connections\"}[$__interval])) * 100"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "arith.number",
+      "widget.query_value",
+      "panel.conditional-format",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default",
+      "A.style"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under panel.conditional-format",
+      "exact-under scope.var.free-form",
+      "exact-under widget.query_value"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-7975775563990214/w-2633722480504268",
+    "kind": "panel",
+    "title": "Rows fetched / returned",
+    "widget_type": "query_value",
+    "status": "exact-under",
+    "promql": [
+      "sum (avg_over_time({otel_metric_name=\"postgresql.rows_fetched\"}[$__interval])) / (sum (avg_over_time({otel_metric_name=\"postgresql.rows_fetched\"}[$__interval])) + sum (avg_over_time({otel_metric_name=\"postgresql.rows_returned\"}[$__interval]))) * 100"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "arith.same-groups",
+      "arith.div",
+      "arith.number",
+      "widget.query_value",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.nonzero-denominator",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under widget.query_value"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2888659938423792/w-4243914035569716",
+    "kind": "panel",
+    "title": "Dead rows",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "sum (avg_over_time({otel_metric_name=\"postgresql.dead_rows\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2888659938423792/w-8205880511151828",
+    "kind": "panel",
+    "title": "Resources by table",
+    "widget_type": "query_table",
+    "status": "manual",
+    "promql": [],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.query_table.complex",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2888659938423792/w-4074635349618514",
+    "kind": "panel",
+    "title": "Temp bytes",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "sum (avg_over_time({otel_metric_name=\"postgresql.temp_bytes\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2888659938423792/w-3455888496260404",
+    "kind": "panel",
+    "title": "Most frequently scanned indexes",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "avg by (index) (avg_over_time({otel_metric_name=\"postgresql.index_scans\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2888659938423792/w-2446150695357200",
+    "kind": "panel",
+    "title": "Least frequently scanned indexes",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "avg by (index) (avg_over_time({otel_metric_name=\"postgresql.index_scans\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2888659938423792/w-1804222491021348",
+    "kind": "panel",
+    "title": "Tables with most disk usage (top 5)",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.total_size\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2888659938423792/w-1541414885015292",
+    "kind": "panel",
+    "title": "Tables with most live rows",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.live_rows\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-3404772226023224/w-5279028267799090",
+    "kind": "panel",
+    "title": "Locks by lock mode",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "topk(5, sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.locks\"}[$__interval])))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "fn.top",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.top-stable",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-3404772226023224/w-7502615221382420",
+    "kind": "panel",
+    "title": "Locks by lock mode",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.locks\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-3404772226023224/w-7487114663198344",
+    "kind": "panel",
+    "title": "Deadlocks count",
+    "widget_type": "timeseries",
+    "status": "bounded",
+    "promql": [
+      "max by (db) (increase({otel_metric_name=\"postgresql.deadlocks.count\"}[$__rate_interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.unmapped.counter",
+      "time.as_count.counter",
+      "space.agg",
+      "label.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.kind-metadata",
+      "A.otel-counter",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2399955077694968/w-3906600369706580",
+    "kind": "panel",
+    "title": "Inserted",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_inserted\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2399955077694968/w-7149220964544692",
+    "kind": "panel",
+    "title": "Updated",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_updated\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2399955077694968/w-7182284193407168",
+    "kind": "panel",
+    "title": "Actions",
+    "widget_type": "query_table",
+    "status": "manual",
+    "promql": [],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.query_table.complex",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2399955077694968/w-1990358978286900",
+    "kind": "panel",
+    "title": "Deleted",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_deleted\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2399955077694968/w-51205630932036",
+    "kind": "panel",
+    "title": "Heap-only updates",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_hot_updated\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1113650335908058/w-2360245042300150",
+    "kind": "panel",
+    "title": "Connections per database",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg by (db) (max_over_time({otel_metric_name=\"postgresql.connections\"}[$__interval]))",
+      "min by (db) (avg_over_time({otel_metric_name=\"postgresql.max_connections\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.explicit",
+      "space.agg",
+      "label.default",
+      "time.rollup.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1113650335908058/w-2702068970439250",
+    "kind": "panel",
+    "title": "Most connected databases",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "max by (db) (avg_over_time({otel_metric_name=\"postgresql.connections\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1113650335908058/w-3286749819274530",
+    "kind": "panel",
+    "title": "note",
+    "widget_type": "note",
+    "status": "exact-under",
+    "promql": [],
+    "rules": [
+      "widget.note",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.style"
+    ],
+    "findings": [
+      "exact-under widget.note"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1487264123152382/w-3403862571191142",
+    "kind": "panel",
+    "title": "Sequential scans vs index scans",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.index_scans\"}[$__interval]))",
+      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.seq_scans\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1487264123152382/w-1998962873985110",
+    "kind": "panel",
+    "title": "Top table scans",
+    "widget_type": "query_table",
+    "status": "manual",
+    "promql": [],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.query_table.complex",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1487264123152382/w-7413284956808278",
+    "kind": "panel",
+    "title": "Sequential scans vs. week before",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "sum (avg_over_time({otel_metric_name=\"postgresql.seq_scans\"}[$__interval]))",
+      "sum (avg_over_time({otel_metric_name=\"postgresql.seq_scans\"}[$__interval] offset 1w))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "map.timeshift",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1487264123152382/w-1887563582446124",
+    "kind": "panel",
+    "title": "Top function calls",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "avg by (function) (avg_over_time({otel_metric_name=\"postgresql.function.calls\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "label.default",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.tag-default",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under tag.unmapped",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2160806546189426/w-1609850131661798",
+    "kind": "panel",
+    "title": "Number of hosts with replication delay",
+    "widget_type": "timeseries",
+    "status": "exact-under",
+    "promql": [
+      "count (sum by (host_name) (avg_over_time({otel_metric_name=\"postgresql.replication_delay_bytes\"}[$__interval])) != 0) or vector(0)"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "fn.count_nonzero",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-2160806546189426/w-3885088604074464",
+    "kind": "panel",
+    "title": "Max replication delay",
+    "widget_type": "toplist",
+    "status": "exact-under",
+    "promql": [
+      "max by (host_name) (avg_over_time({otel_metric_name=\"postgresql.replication_delay\"}[$__interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.rollup.default",
+      "space.agg",
+      "widget.toplist.unranked",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.kind-metadata",
+      "A.var-default",
+      "A.top-unlimited"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form",
+      "exact-under widget.toplist.unranked"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-4453639639662026/w-2628267937704802",
+    "kind": "panel",
+    "title": "Scheduled vs requested checkpoints",
+    "widget_type": "timeseries",
+    "status": "bounded",
+    "promql": [
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoints_timed\"}[$__rate_interval]))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoints_requested\"}[$__rate_interval]))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoints_requested\"}[$__rate_interval]))"
+    ],
+    "rules": [
+      "select.metric.kind-metadata",
+      "time.unmapped.counter",
+      "time.as_count.counter",
+      "space.agg",
+      "widget.timeseries",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [
+      "A.kind-metadata",
+      "A.otel-counter",
+      "A.var-default"
+    ],
+    "findings": [
+      "exact-under metric.unmapped",
+      "exact-under scope.var.free-form"
+    ]
+  },
+  {
+    "id": "dd-dash-postgres__postgresql_screenboard_dashboard/w-1127561260333130/w-8685226852632656",
+    "kind": "panel",
+    "title": "log_stream",
+    "widget_type": "log_stream",
+    "status": "manual",
+    "promql": [],
+    "rules": [
+      "widget.logs",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item"
+    ],
+    "assumptions": [],
+    "findings": [
+      "manual query.datasource"
+    ]
+  }
+]

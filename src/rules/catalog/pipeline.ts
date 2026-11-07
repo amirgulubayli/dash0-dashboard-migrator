@@ -3,6 +3,7 @@ import type { RuleDef } from "../types.js";
 import { EPS_RATE, section } from "./build.js";
 
 const ingest = section("ingest", "T2", "planned", "plan 00; dash0-migrator skill (key facts)");
+const ingestImpl = section("ingest", "T2", "implemented", "T2 src/sources/datadog (PR #7, merged)");
 const logs = section("logs", "T12", "planned", "plan 01 §1; maths.md §8");
 const log = section("logs", "T12", "implemented", "T12 src/translate/logs (PR #13); docs/research/dash0.md (dash0.logs labels, LIVE)");
 const validate = section("validate", "T4", "implemented", "dash0-migrator rule 3");
@@ -33,12 +34,14 @@ export const T12_TABLE_IDS = [
   "log.monitor.formula",
   "log.indexes",
   "log.monitor.count",
+  "log.scalar.window",
 ] as const;
 
 export const PIPELINE_RULES: RuleDef[] = [
   // ---------- ingest ----------
   ingest("ingest.monitor.unwrap", 10, "exact", "integrations-core monitor file {version, definition: {...}}", "the definition object"),
   ingest("ingest.numbers", 20, "exact", 'numbers stored as strings ("90", "0")', "numbers"),
+  ingestImpl("source.unreadable", 40, "manual", "a source file that can't be read or parsed (broken JSON/YAML, empty file, several YAML documents)", "nothing from that file is migrated; the file and the parser's message are reported"),
   ingest("ingest.keep-raw", 30, "exact", "every source item", "raw JSON kept next to its IR node (rule 4), sha256 → certificate.sourceHash"),
 
   // ---------- logs ----------
@@ -69,9 +72,20 @@ export const PIPELINE_RULES: RuleDef[] = [
   log("log.indexes", 160, "exact-under", "indexes other than '*'", "all logs (Dash0 has no indexes)", { assumptions: ["A.all-indexes"] }),
   log("log.monitor.count", 170, "bounded", "logs(Q).rollup(count).by(g).last(W) op T", "sum by (g) (increase(...[W])) op $__threshold", { assumptions: ["A.log-count"], epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["unit", "proof:T3"] }),
   log("log.monitor.formula", 175, "bounded", 'formula("...").last(W) over log queries', "the formula over windowed counts", { assumptions: ["A.log-count"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
+  log("log.scalar.window", 180, "bounded", "scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe)", "the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value", {
+    assumptions: ["A.log-count", "A.log-range"],
+    epsilon: EPS_RATE,
+    requires: ["probe:range-var"],
+    evidence: ["unit"],
+    note: "T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed, rule arith.scalar-log-mixed). EPS_RATE gets relatively tighter over a long range: the uncovered edge stays under one scrape interval while the window total grows with the range.",
+  }),
   // Still planned: not in T12 yet.
   logs("logs.rate", 200, "bounded", "log count shown as a rate", 'sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m]))', { epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["proof:T3"] }),
-  logs("logs.measure", 220, "manual", "avg / sum / percentile over @attr", "no output: dash0.logs only counts", { findingCode: "query.datasource" }),
+  log("log.or.cross-key", 185, "manual", "OR across different keys (or with free text) beyond what inclusion-exclusion covers: more than 3 branches, or outside a count", "no output: not a matcher set"),
+  log("log.measure", 190, "manual", "avg / sum / min / max / percentile of a log measure (@attr)", "no output: dash0.logs only counts log records", {
+    note: "Ali is checking whether Dash0's signal-to-metrics can derive such a metric without guessing (hub #285).",
+  }),
+  log("log.monitor.shape", 195, "manual", "log monitor or log formula monitor whose query shape has no rule", "no output; the original monitor query is kept"),
   logs("logs.stream", 230, "manual", "log_stream / list_stream widget", "placeholder until the LogTable schema comes from T0"),
   logs("logs.unparsed", 999, "manual", "log search the log-search parser does not accept", "no output; original kept", { fallback: true, findingCode: "query.parse_error" }),
 
