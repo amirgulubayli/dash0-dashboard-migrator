@@ -7,3 +7,15 @@ const REASON_LABELS: Record<string, string> = {
   "widget.note": "Text note kept", "metric.approximate": "Approximate metric", "scope.var.free-form": "Filter dropped", "widget.query_value": "Stat panel", "panel.style": "Styling not kept", "metric.no_equivalent": "No metric", "widget.unsupported": "No chart type", "query.datasource": "Logs not wired yet", "monitor.option": "Notifications by hand", "alert.msg.conditional": "Message not conditional", "alert.defaults": "Default schedule",
 };
 export const reasonLabel = (code: string) => REASON_LABELS[code] ?? code;
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+type Breakdown = ReturnType<typeof import("./report").widgetBreakdown>;
+/** "27 metric widgets: 11 exact if a condition holds, 10 approximate, 6 can't migrate automatically" (all from the file). */
+export const metricWidgetsLine = (c: Breakdown) =>
+  `${plural(c.metrics, "metric widget", "metric widgets")}: ${[
+    ...(c.exact > 0 ? [`${c.exact} exact`] : []),
+    `${c.exactIf} exact if a condition holds`,
+    `${c.differences} approximate`,
+    `${c.manual} can't migrate automatically`,
+  ].join(", ")}`;
+/** "7 text notes copied, 2 log panels", kept apart from the metric widget counts. */
+export const textAndLogsLine = (c: Breakdown) => `${plural(c.notesCopied, "text note", "text notes")} copied, ${plural(c.logPanels, "log panel", "log panels")}`;

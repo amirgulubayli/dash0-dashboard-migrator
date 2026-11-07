@@ -3,6 +3,7 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 import { classesFor, NA } from "@/components/status-ui";
 import { useReport } from "@/lib/report-store";
 import { widgetBreakdown } from "@/lib/report";
+import { metricWidgetsLine, textAndLogsLine } from "@/lib/presentation";
 import { STATUS_META, metaFor } from "@/lib/status";
 import { explainCode } from "@/lib/reason-codes";
 import { cn } from "@/lib/utils";
@@ -44,7 +45,8 @@ function Overview() {
     <section className="px-8 pt-7 pb-6">
       <div className="section-label mb-3">Migration report · {report.run.source ?? "source not recorded"}</div>
       <h2 className="text-4xl font-semibold leading-tight">{widgets} widgets assessed. Every translation accounted for.</h2>
-      <p className="mt-2 text-sm text-body">{report.items.filter((i) => i.kind === "group").length} layout groups, reported separately. {counts.checkRules} monitor, translated as a Dash0 check rule.</p>
+      <p className="mt-2 text-sm text-body">{metricWidgetsLine(counts)}.</p>
+      <p className="mt-1 text-sm text-body">{textAndLogsLine(counts)}. {report.items.filter((i) => i.kind === "group").length > 0 && `${report.items.filter((i) => i.kind === "group").length} layout groups, reported separately. `}{counts.checkRules} monitor, translated as a Dash0 check rule.</p>
       <div className="mt-5 flex flex-wrap gap-2">{["Deterministic rules", "No AI in translation", "Every item accounted for", "Report fingerprinted"].map((label) => <span className="console-chip" key={label}>✓ {label}</span>)}</div>
     </section>
     <section className="mx-8 border-t border-rule py-6">

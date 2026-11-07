@@ -293,9 +293,12 @@ export function widgetBreakdown(items: ReportItem[]) {
   const metrics = items.filter(isMetricWidget);
   return {
     metrics: metrics.length,
+    exact: metrics.filter((i) => i.status === "exact" && i.claim !== "exact-under").length,
+    exactIf: metrics.filter((i) => i.status === "exact" && i.claim === "exact-under").length,
     differences: metrics.filter((i) => i.status === "approximate").length,
     manual: metrics.filter((i) => ["unsupported", "no_data", "failed"].includes(i.status)).length,
     notesCopied: items.filter((i) => i.kind === "widget" && isTextNote(i) && i.status === "exact").length,
+    logPanels: items.filter((i) => i.kind === "widget" && isLogPanel(i)).length,
     logsUnsupported: items.filter((i) => i.kind === "widget" && isLogPanel(i) && i.status === "unsupported").length,
     checkRules: items.filter((i) => i.kind === "monitor").length,
   };

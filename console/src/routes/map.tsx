@@ -9,6 +9,7 @@ import { metaFor } from "@/lib/status";
 import { Button } from "@/components/ui/button";
 import { STATUSES, widgetBreakdown } from "@/lib/report";
 import { importPlan } from "@/lib/review";
+import { metricWidgetsLine, textAndLogsLine } from "@/lib/presentation";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/map")({
@@ -38,7 +39,7 @@ function MapPage() {
         <div className="flex flex-wrap items-center gap-3"><span className="font-mono text-xs">{pending} decisions pending</span>{liveUrl ? <Button asChild variant="outline"><a href={liveUrl} target="_blank" rel="noreferrer"><ExternalLink />Open live dashboard in Dash0</a></Button> : <Button variant="outline" disabled><ExternalLink />Not imported yet</Button>}</div>
       </div>
       <div className="mt-5 grid grid-cols-[minmax(0,62fr)_minmax(0,38fr)] gap-6">
-        <div><div className="grid grid-cols-3 divide-x divide-border">{[{ value: counts.metrics, label: "metric widgets" }, { value: counts.differences, label: "translated with known differences" }, { value: counts.manual, label: "can't migrate automatically" }].map((n) => <div key={n.label} className="min-w-0 px-4 first:pl-0"><div className="console-number">{n.value}</div><p className="mt-2 font-mono text-[10px] uppercase leading-4">{n.label}</p></div>)}</div><p className="mt-3 font-mono text-[11px] text-muted-foreground">{counts.notesCopied} text notes copied · {counts.logsUnsupported} log panels unsupported · {counts.checkRules} check rule</p></div>
+        <div><div className="grid grid-cols-3 divide-x divide-border">{[{ value: counts.metrics, label: "metric widgets" }, { value: counts.differences, label: "translated with known differences" }, { value: counts.manual, label: "can't migrate automatically" }].map((n) => <div key={n.label} className="min-w-0 px-4 first:pl-0"><div className="console-number">{n.value}</div><p className="mt-2 font-mono text-[10px] uppercase leading-4">{n.label}</p></div>)}</div><p className="mt-3 font-mono text-[11px] text-muted-foreground">{metricWidgetsLine(counts)}</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{textAndLogsLine(counts)} · {counts.checkRules} check rule</p></div>
         <div className="flex flex-wrap content-center items-start gap-2" aria-label="Status legend">{STATUSES.map((status) => <StatusBadge key={status} status={status} />)}{report.items.some((i) => i.claim === "exact-under") && <StatusBadge status="exact" conditional />}</div>
       </div>
     </header>

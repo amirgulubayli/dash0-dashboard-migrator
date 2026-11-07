@@ -109,3 +109,21 @@ describe("reason codes in the real CLI report", () => {
     expect(explainCode("something.new")).toBeUndefined();
   });
 });
+
+import { widgetBreakdown } from "@/lib/report";
+import { metricWidgetsLine, textAndLogsLine } from "@/lib/presentation";
+
+describe("counts lines", () => {
+  it("keep text notes and log panels out of the metric widget counts, computed from the file", () => {
+    const rep = load();
+    const b = widgetBreakdown(rep.items);
+    expect(metricWidgetsLine(b)).toBe("27 metric widgets: 11 exact if a condition holds, 10 approximate, 6 can't migrate automatically");
+    expect(textAndLogsLine(b)).toBe("7 text notes copied, 2 log panels");
+    expect(b.metrics + b.notesCopied + b.logPanels).toBe(rep.summary.widgets.total); // 27 + 7 + 2 = 36 panels
+  });
+  it("adds a plain exact count only when there are plain exact widgets", () => {
+    const b = { metrics: 3, exact: 2, exactIf: 0, differences: 1, manual: 0, notesCopied: 1, logPanels: 0, logsUnsupported: 0, checkRules: 0 };
+    expect(metricWidgetsLine(b)).toBe("3 metric widgets: 2 exact, 0 exact if a condition holds, 1 approximate, 0 can't migrate automatically");
+    expect(textAndLogsLine(b)).toBe("1 text note copied, 0 log panels");
+  });
+});

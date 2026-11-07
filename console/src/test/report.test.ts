@@ -9,7 +9,7 @@ describe("Report normalization", () => {
     expect(result.report.summary.widgets.total).toBe(36);
     expect(result.report.summary.groups.total).toBe(7);
     expect(result.report.summary.monitors.total).toBe(1);
-    expect(widgetBreakdown(result.report.items)).toEqual({ metrics: 27, differences: 21, manual: 6, notesCopied: 7, logsUnsupported: 2, checkRules: 1 });
+    expect(widgetBreakdown(result.report.items)).toEqual({ metrics: 27, exact: 0, exactIf: 0, differences: 21, manual: 6, notesCopied: 7, logPanels: 2, logsUnsupported: 2, checkRules: 1 });
   });
   it.each([["exact", "exact"], ["exact-under", "exact"], ["bounded", "approximate"], ["manual", "unsupported"]])("maps %s to %s when status is missing", (claim, status) => {
     const result = parseReport(JSON.stringify({ items: [{ id: "widget-1", claim, condition: "maxmemory stays constant" }] }));
