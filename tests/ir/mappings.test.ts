@@ -120,3 +120,25 @@ describe("adapters for T4's TranslateContext", async () => {
     expect(tag("no_such_tag")).toBeUndefined();
   });
 });
+
+describe("follow-ups from the PR #4 review", async () => {
+  const { metricLookup, metricAvailability } = await import("../../src/ir/index.js");
+  const table = parseMetricTable(
+    `version: 1\nintegration: t\nmetrics:\n` +
+      `  a.scaled:\n    otel: "x"\n    ddKind: gauge\n    otelKind: gauge\n    status: exact\n    scale: 1000\n` +
+      `  a.summed:\n    otel: "y"\n    ddKind: gauge\n    otelKind: gauge\n    status: exact\n    sumBy: [db]\n` +
+      `  a.plain:\n    otel: "z"\n    ddKind: gauge\n    otelKind: gauge\n    status: exact\n`,
+  );
+  const m = { metrics: table.metrics, tags: new Map(), origin: new Map() };
+  it("entries with scale or sumBy fail closed until a translator applies them", () => {
+    expect(metricAvailability(m, "a.scaled")).toBe("needs_transform");
+    expect(metricAvailability(m, "a.summed")).toBe("needs_transform");
+    expect(metricLookup(m)("a.scaled")).toBeUndefined();
+    expect(metricLookup(m)("a.summed")).toBeUndefined();
+    expect(metricLookup(m)("a.plain")).toMatchObject({ otel: "z" });
+  });
+  it("Variable.tagKey accepts null for free-form variables like $scope", () => {
+    const v: import("../../src/ir/index.js").Variable = { name: "scope", tagKey: null, default: "*" };
+    expect(v.tagKey).toBeNull();
+  });
+});

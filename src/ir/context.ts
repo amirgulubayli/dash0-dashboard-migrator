@@ -21,21 +21,27 @@ export interface MetricLookup {
   note?: string;
 }
 
-/** Why a metric has no lookup, so the caller can emit the right finding code. */
-export type MetricAvailability = "mapped" | "unmapped" | "no_equivalent" | "derived";
+/**
+ * Why a metric has no lookup, so the caller can emit the right finding code.
+ * needs_transform: the entry sets `scale` or `sumBy`, which no translator applies yet. It fails closed (manual)
+ * instead of silently emitting the wrong unit or un-summed series (Ali's review of PR #4).
+ */
+export type MetricAvailability = "mapped" | "unmapped" | "no_equivalent" | "derived" | "needs_transform";
 
 export function metricAvailability(m: Mappings, dd: string): MetricAvailability {
   const e = m.metrics.get(dd);
   if (!e) return "unmapped";
-  if (e.otel !== null) return "mapped";
-  return e.derived ? "derived" : "no_equivalent";
+  if (e.otel === null) return e.derived ? "derived" : "no_equivalent";
+  if (e.scale !== undefined || e.sumBy.length > 0) return "needs_transform";
+  return "mapped";
 }
 
 /** ctx.metric for T4. undefined unless availability is "mapped" (check metricAvailability for the reason). */
 export function metricLookup(m: Mappings): (dd: string) => MetricLookup | undefined {
   return (dd) => {
-    const e = m.metrics.get(dd);
-    if (!e || e.otel === null || e.otelKind === null || e.status === "none") return undefined;
+    if (metricAvailability(m, dd) !== "mapped") return undefined;
+    const e = m.metrics.get(dd)!;
+    if (e.otel === null || e.otelKind === null || e.status === "none") return undefined;
     const kind: TranslatorKind = e.otelKind === "counter" ? "counter" : e.otelKind === "histogram" ? "histogram" : "gauge";
     return {
       otel: e.otel,
