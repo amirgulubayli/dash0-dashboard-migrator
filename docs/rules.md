@@ -8,7 +8,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
 | implemented | 68 | 42 | 17 | 37 | 164 |
-| planned | 18 | 22 | 2 | 14 | 56 |
+| planned | 18 | 25 | 3 | 15 | 61 |
 
 ## Pipeline order
 
@@ -27,9 +27,9 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
 | 13 | `message` Message → annotations | template token | yes | 13 | Deterministic Mustache token rewrite into Go-template annotations. |
-| 14 | `widget` Widget → panel | widget | yes | 16 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
+| 14 | `widget` Widget → panel | widget | yes | 20 | One mapper per Datadog widget type; anything else becomes a Markdown placeholder with the original. |
 | 15 | `panel` Panel options | panel attribute | no | 4 | Units, markers and visual options on a panel a widget rule produced. |
-| 16 | `layout` Layout and groups | widget position or group | no | 6 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
+| 16 | `layout` Layout and groups | widget position or group | no | 7 | 12-column Datadog grid → 24-column Perses grid; groups → titled sections. |
 | 17 | `variable` Template variables | template variable | yes | 4 | Datadog template variables → Perses / Dash0 variables or pinned defaults. |
 | 18 | `logs` Log queries | log query or search term | yes | 24 | Datadog log search and log widgets/monitors → dash0.logs counts (plan 01 §1). |
 | 19 | `validate` Validate | emitted artefact | no | 3 | Every output parses and passes preflight before it may be emitted. |
@@ -301,7 +301,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 |---|---|---|---|---|---|---|---|---|
 | 10 | `widget.timeseries` | timeseries | TimeSeriesChart, one query per Datadog query/formula | exact | — | — | T5 | planned |
 | 20 | `widget.query_value` | query_value with aggregator avg\|max\|min\|sum\|last | StatChart with the matching calculation | exact-under(A.align, A.boundary) | — | probe:statchart-calculation | T5 | planned |
+| 21 | `widget.query_value.default-agg` | query_value with no aggregator, or one StatChart has no calculation for | StatChart with calculation mean (Datadog's default avg) | exact-under(A.agg-default) | — | — | T5 | planned |
+| 22 | `widget.query_value.multi` | query_value with more than one query | StatChart; Dash0 shows the first query | exact-under(A.stat-first) | — | — | T5 | planned |
 | 30 | `widget.toplist` | toplist | TimeSeriesTable sorted by value, limited to N (uses fn.top.window for the ranking) | exact-under(A.top-uniform) | — | probe:at-modifier | T5 | planned |
+| 31 | `widget.toplist.unranked` | toplist while fn.top.window is not shipped | TimeSeriesTable of every series, without the top-N limit and ranking | exact-under(A.top-unlimited) | — | — | T5 | planned |
 | 40 | `widget.query_table` | query_table | TimeSeriesTable | exact-under(A.table-single-query) | — | — | T5 | planned |
 | 45 | `widget.query_table.complex` | query_table with several queries, custom sort or conditional formats | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 50 | `widget.note` | note / free_text | Markdown with the same text | exact-under(A.style) | — | — | T5 | planned |
@@ -314,9 +317,13 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 160 | `widget.treemap` | treemap | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 170 | `widget.scatterplot` | scatterplot | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 180 | `widget.unsupported` | hostmap, service_map, manage_status, check_status, slo, trace_service, geomap, funnel, iframe, event_stream, event_timeline, split_graph | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
+| 190 | `query.empty` | widget with no query to translate | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 | 999 (fallback) | `widget.unknown` | any other widget type | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 
+- `widget.query_value.default-agg`: T5 panels.ts. With an explicit aggregator that has no StatChart calculation the finding message names it.
+- `widget.toplist.unranked`: T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.
 - `widget.alert_graph`: Reuses the monitor's query translation; status = worst(this, that query).
+- `query.empty`: Emitted by T5 queries.ts; the id is also the finding code.
 
 ## Panel options (`panel`)
 
@@ -337,6 +344,9 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 40 | `layout.group` | group widget | its own Grid layout with display.title; children recurse | exact | — | — | T5 | planned |
 | 50 | `layout.group.collapsed` | group collapsed / expanded | display.collapse.open | exact | — | probe:collapse | T5 | planned |
 | 60 | `layout.powerpack` | powerpack | inlined like a group, title kept | exact-under(A.style) | — | — | T5 | planned |
+| 70 | `layout.clamped` | panel whose doubled x + width passes column 24 | x = min(x, 23), width = 24 − x | bounded(ε) | — | — | T5 | planned |
+
+- `layout.clamped`: ε: geometry only: the panel loses at most x + width − 24 of its columns; its queries and data are unchanged.
 
 ## Template variables (`variable`)
 
@@ -460,6 +470,9 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.var-values` | a label's values in Dash0 are the same set as the matching tag's values in Datadog | 1 |
 | `A.table-single-query` | the table has one query, default sorting and no conditional formats | 1 |
 | `A.top-uniform` | every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie | 2 |
+| `A.top-unlimited` | showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships | 1 |
+| `A.agg-default` | a query_value request without an aggregator uses Datadog's default, avg | 1 |
+| `A.stat-first` | only the first query of a multi-query stat panel matters | 1 |
 
 ## Open probes
 
@@ -516,7 +529,10 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `alert.msg.truncate` (exact-under(A.msg-length), implemented, T6)
 - `alert.msg.unknown-token` (exact-under(A.msg-verbatim), implemented, T6)
 - `widget.query_value` (exact-under(A.align, A.boundary), planned, T5)
+- `widget.query_value.default-agg` (exact-under(A.agg-default), planned, T5)
+- `widget.query_value.multi` (exact-under(A.stat-first), planned, T5)
 - `widget.toplist` (exact-under(A.top-uniform), planned, T5)
+- `widget.toplist.unranked` (exact-under(A.top-unlimited), planned, T5)
 - `widget.query_table` (exact-under(A.table-single-query), planned, T5)
 - `widget.note` (exact-under(A.style), planned, T5)
 - `widget.image` (exact-under(A.style), planned, T5)
@@ -529,6 +545,7 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `layout.ordered.height` (exact-under(A.row-height), planned, T5)
 - `layout.free` (exact-under(A.style), planned, T5)
 - `layout.powerpack` (exact-under(A.style), planned, T5)
+- `layout.clamped` (bounded(ε), planned, T5)
 - `variable.list` (exact-under(A.var-values), planned, T5)
 - `variable.pinned` (exact-under(A.var-default), planned, T5)
 - `log.match.reserved.approx` (exact-under(A.log-source), implemented, T12)
