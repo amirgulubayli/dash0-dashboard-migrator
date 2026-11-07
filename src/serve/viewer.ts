@@ -19,7 +19,8 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16p
 section.dash{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
 section.dash h2{font-size:14px;margin:0 0 8px}
 .items{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:6px;padding:4px 8px;cursor:pointer;background:var(--card);max-width:100%;font:inherit;color:inherit;text-align:left}
+.chip{border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer;background:var(--card);max-width:100%;font:inherit;color:inherit;text-align:left;display:inline-flex;align-items:center;gap:6px}
+.chip::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--c)}
 .chip small{color:var(--muted)}
 .s-exact{--c:var(--exact)}.s-exact-under{--c:var(--under)}.s-bounded{--c:var(--bounded)}.s-manual{--c:var(--manual)}.s-unsupported{--c:var(--unsupported)}
 aside{display:flex;flex-direction:column;gap:12px}
