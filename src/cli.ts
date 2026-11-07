@@ -17,7 +17,7 @@ Usage:
   dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
 
 Options:
-  --input <dir>        folder of exported Datadog JSON (dashboards and monitors, any depth)
+  --input <dir>        folder of exported Datadog JSON or YAML (dashboards and monitors, any depth)
   --api                read from the Datadog API (DD_SITE, default datadoghq.eu; DD_API_KEY, DD_APP_KEY)
   --dry-run            translate and write the Dash0 payloads to <out>/dash0, import nothing
   --no-import          translate and report only
