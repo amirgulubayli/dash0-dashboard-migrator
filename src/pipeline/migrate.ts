@@ -1,13 +1,13 @@
 // The whole run: ingest -> translate (T4) -> dashboards (T5) / alerts (T6, interim) -> import (T7) -> report (T8).
 // Pure up to the import step; the only network I/O is ingest --api and the Dash0 import.
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ingestDatadog, type IngestOptions } from "../sources/datadog/index.js";
 import { ddKindLookup, loadDdKinds, loadMappings, metricAvailability, metricLookup, tagLookup } from "../ir/index.js";
 import { translateQuery, type TranslateContext } from "../translate/query/index.js";
 import { toPerses, type DashboardTranslation, type TranslateExpr } from "../translate/dashboard/index.js";
 import { canonicalJson, importAll, sha256, type Dash0Config, type DashboardDefinition, type Manifest, type PrometheusAlertRule } from "../targets/dash0/index.js";
-import { makeAlertConverter, type AlertConversion, type ConverterContext } from "../translate/alerts/index.js";
+import { makeAlertConverter, parseChannelMap, type AlertConversion, type ChannelLookup, type ConverterContext } from "../translate/alerts/index.js";
 import { translateMonitor } from "../translate/query/index.js";
 import type { Alert } from "../ir/index.js";
 
@@ -29,7 +29,25 @@ export interface MigrateOptions {
   enableRules?: boolean;
   dash0?: Dash0Config;
   alertConverter?: AlertConverter;
+  /**
+   * Datadog handle -> existing Dash0 notification channel id (T6 parseChannelMap format). Default:
+   * <mappingsDir>/notification-channels.yaml when it exists. Mapped handles are bound on the check rule; the rest
+   * stay manual actions in the report. No channel is ever created.
+   */
+  channelsFile?: string;
   version: string;
+}
+
+export const CHANNELS_FILE = "notification-channels.yaml";
+
+/** The channel map to use: the explicit file (must exist), else the mappings folder's file if present, else none. */
+export function loadChannels(mappingsDir: string, file?: string): { file: string; lookup: ChannelLookup } | null {
+  const path = file ?? join(mappingsDir, CHANNELS_FILE);
+  if (!existsSync(path)) {
+    if (file !== undefined) throw new Error(`notification channel map not found: ${file}`);
+    return null;
+  }
+  return { file: path, lookup: parseChannelMap(readFileSync(path, "utf8"), path) };
 }
 
 export interface MigrateResult {
@@ -50,11 +68,13 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
     // unmapped metric is time.kind-unknown and stays manual.
     ddKind: ddKindLookup(loadDdKinds(o.mappingsDir), mappings),
   };
+  const channels = loadChannels(o.mappingsDir, o.channelsFile);
+  const alertCtx: T6Context = { ...base, ...(channels && { channels: channels.lookup }) };
   const translate: TranslateExpr = (e, t) => translateQuery(e, { ...base, variables: t.variables, where: t.where }, t.env);
 
   const dashboards = ingested.dashboards.map((d) => ({ source: d, out: toPerses(d, translate) }));
   const convert = o.alertConverter ?? defaultAlertConverter;
-  const alerts = ingested.alerts.map((alert) => ({ alert, conversion: convert(alert, base) }));
+  const alerts = ingested.alerts.map((alert) => ({ alert, conversion: convert(alert, alertCtx) }));
 
   let manifest: Manifest | null = null;
   if (o.mode !== "none") {
@@ -71,7 +91,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   }
 
   const kindsFile = join(o.mappingsDir, "datadog", "_kinds.json");
-  const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f)), ...(existsSync(kindsFile) ? [kindsFile] : [])];
+  const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f)), ...(existsSync(kindsFile) ? [kindsFile] : []), ...(channels ? [channels.file] : [])];
   const inputHash = sha256(canonicalJson({ dashboards: ingested.dashboards.map((d) => d.original), alerts: ingested.alerts.map((a) => a.original) }));
   const report = buildReport({
     version: o.version,
