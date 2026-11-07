@@ -43,7 +43,7 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       status: placeholder ? "manual" : status,
       promql: queries.map((x) => x.promql),
       rules,
-      assumptions: [...(q?.assumptions ?? [])],
+      assumptions,
       findings,
       panel: {
         kind: "Panel",
@@ -62,60 +62,98 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
       },
     };
   };
-  const placeholder = (reason: string) => result("Markdown", { text: placeholderText(p, itemId, reason) }, true);
+  const placeholder = (rule: string, reason: string) => {
+    rules.push(rule);
+    return result("Markdown", { text: placeholderText(p, itemId, reason) }, true);
+  };
+  /** A rule whose claim is exact-under: cite it, record its assumptions, and report it (catalog axiom D6). */
+  const under = (rule: string, assumptionIds: string[], message: string, original?: string) => {
+    rules.push(rule);
+    for (const a of assumptionIds) if (!assumptions.includes(a)) assumptions.push(a);
+    status = worst(status, "exact-under");
+    findings.push({ status: "exact-under", code: rule, message, itemKind: "panel", itemId, ruleId: rule, assumptions: assumptionIds.map((a) => ASSUMPTION_TEXT[a] ?? a), ...(original !== undefined ? { original } : {}) });
+  };
+  const assumptions: string[] = [...(q?.assumptions ?? [])];
 
+  // Rule ids and claims follow the T17 catalog (src/rules/catalog/dashboard.ts, PR #8).
   switch (p.kind) {
     case "markdown":
-      rules.push("panel.note");
+      under("widget.note", ["A.style"], "note text kept; its colour, font size and alignment are not migrated");
       return result("Markdown", { text: String(p.options.text ?? "") });
     case "unsupported":
-      // T2 already emitted widget.unsupported for this panel.
-      return placeholder(`Dash0 has no panel for the Datadog '${p.sourceType}' widget.`);
+      // T2 already emitted the widget.unsupported finding for this panel.
+      return placeholder(unsupportedRule(p.sourceType), `Dash0 has no panel for the Datadog '${p.sourceType}' widget.`);
     case "logs":
-      note("manual", "logs.not_translated", "log widgets are not translated yet (log search -> dash0.logs / LogTable is plan 01 T12)", p.requests[0]?.queries[0]?.expr);
-      return placeholder("Log widgets are not migrated yet.");
+      note("manual", "query.datasource", "log widgets are not migrated by this panel mapper yet (T12 translates log queries; LogTable integration is pending)", p.requests[0]?.queries[0]?.expr);
+      return placeholder("widget.logs", "Log widgets are not migrated yet.");
   }
 
   // Query-backed panels: with no PromQL at all, show a placeholder instead of an empty chart.
-  if (!q || q.queries.length === 0) return placeholder("None of its queries could be translated to PromQL (see the findings).");
+  if (!q || q.queries.length === 0) return placeholder("widget.unknown", "None of its queries could be translated to PromQL (see the findings).");
 
+  const styleLost: string[] = [];
   switch (p.kind) {
     case "timeseries": {
-      rules.push("panel.timeseries");
+      rules.push("widget.timeseries");
       const types = (p.options.displayTypes as string[] | undefined) ?? [];
       const spec: Record<string, unknown> = {};
       if (types.length && types.every((t) => t === "bars")) spec.visual = { display: "bar" };
-      else if (types.some((t) => t === "area" || t === "bars")) note("bounded", "panel.style", `display types ${[...new Set(types)].join(", ")} drawn as lines`);
+      else if (types.some((t) => t === "area" || t === "bars")) styleLost.push(`display types ${[...new Set(types)].join(", ")} drawn as lines`);
       if (p.options.showLegend === true) spec.legend = { position: "bottom" };
+      if (styleLost.length) under("panel.style", ["A.style"], styleLost.join("; "));
       return result("TimeSeriesChart", spec);
     }
     case "stat": {
-      rules.push("panel.stat");
       const agg = p.requests[0]?.queries[0]?.aggregator;
       let calculation = agg ? CALC[agg] : undefined;
-      if (!calculation) {
+      if (calculation) under("widget.query_value", ["A.align", "A.boundary"], `aggregator ${agg} -> StatChart calculation ${calculation}`);
+      else {
         calculation = "mean";
-        note("exact-under", "panel.stat.aggregator", agg ? `aggregator '${agg}' has no StatChart calculation; mean used` : "no aggregator given; Datadog's avg assumed", agg);
+        under("widget.query_value.default-agg", ["A.agg-default"], agg ? `aggregator '${agg}' has no StatChart calculation; mean used` : "no aggregator given; Datadog's avg assumed", agg);
       }
-      if (q.queries.length > 1) note("bounded", "panel.stat.multi", `${q.queries.length} queries on one stat panel; Dash0 shows the first`);
+      if (q.queries.length > 1) under("widget.query_value.multi", ["A.stat-first"], `${q.queries.length} queries on one stat panel; Dash0 shows the first`);
       const spec: Record<string, unknown> = { calculation };
       if (typeof p.options.precision === "number") spec.format = { unit: "decimal", decimalPlaces: p.options.precision };
-      if (p.options.conditionalFormats) note("bounded", "panel.conditional_format", "conditional colour formats are not migrated");
+      if (p.options.conditionalFormats) under("panel.style", ["A.style"], "conditional colour formats are not migrated");
       return result("StatChart", spec);
     }
-    case "toplist":
-    case "table": {
-      rules.push(`panel.${p.kind}`);
+    case "toplist": {
       const limits = p.requests.flatMap((r) => r.formulas.map((f) => f.limit).filter((x) => x !== undefined));
-      note(
-        "bounded",
-        `panel.${p.kind}.table`,
-        `Datadog ${p.sourceType} shown as a TimeSeriesTable${limits.length ? `; the top-${limits[0]!.count} limit and ranking are not applied` : ""}`,
-      );
+      under("widget.toplist.unranked", ["A.top-unlimited"], `toplist shown as a TimeSeriesTable of every series${limits.length ? `, without the top-${limits[0]!.count} limit and ranking` : ""}`);
+      return result("TimeSeriesTable", {});
+    }
+    case "table": {
+      const queries = p.requests.reduce((n, r) => n + Math.max(r.formulas.length, r.queries.length), 0);
+      if (queries > 1 || p.options.conditionalFormats) {
+        // Several columns: Datadog joins them per group, a TimeSeriesTable lists series. Catalog: manual.
+        return placeholder("widget.query_table.complex", `This query_table has ${queries} columns; Dash0's TimeSeriesTable can't join them per group.`);
+      }
+      under("widget.query_table", ["A.table-single-query"], "single-query table shown as a TimeSeriesTable");
       return result("TimeSeriesTable", {});
     }
   }
 }
+
+/** Catalog rule for a widget type Dash0 has no panel for (all report the T2 finding code widget.unsupported). */
+function unsupportedRule(type: string): string {
+  if (type === "heatmap" || type === "distribution" || type === "histogram") return "widget.heatmap";
+  if (type === "treemap") return "widget.treemap";
+  if (type === "scatterplot") return "widget.scatterplot";
+  if (KNOWN_UNSUPPORTED.has(type)) return "widget.unsupported";
+  return "widget.unknown";
+}
+const KNOWN_UNSUPPORTED = new Set(["hostmap", "service_map", "manage_status", "check_status", "slo", "trace_service", "geomap", "funnel", "iframe", "event_stream", "event_timeline", "split_graph", "change", "sunburst", "list_stream", "log_stream"]);
+
+/** Assumption wording, from the T17 catalog (src/rules/assumptions.ts). The last three are requested additions. */
+const ASSUMPTION_TEXT: Record<string, string> = {
+  "A.style": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+  "A.align": "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+  "A.boundary": "no sample lies exactly on a bucket boundary (maths.md T8, A3)",
+  "A.table-single-query": "the table has one query, default sorting and no conditional formats",
+  "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
+  "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",
+  "A.stat-first": "only the first query of a multi-query stat panel matters",
+};
 
 function describe(p: Panel, itemId: string): string {
   const qs = p.requests.flatMap((r) => [...r.formulas.map((f) => f.expr), ...r.queries.map((q) => `${q.refId}: ${q.expr}`)]).filter(Boolean);
