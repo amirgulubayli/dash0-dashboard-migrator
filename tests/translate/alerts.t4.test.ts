@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { loadMappings, metricLookup, tagLookup } from "../../src/ir/index.js";
+import { loadMappings, metricAvailability, metricLookup, tagLookup } from "../../src/ir/index.js";
 import { translateAlert, type MonitorTranslator } from "../../src/translate/alerts/index.js";
 import { fixtureMonitors } from "./alerts.helpers.js";
 
@@ -16,7 +16,7 @@ describe.skipIf(!ready)("T6 + T4 end to end", async () => {
   const q = ready ? await import(t4) : null;
   const v = ready ? await import(validator) : null;
   const m = loadMappings(`${root}mappings`);
-  const ctx = { metric: metricLookup(m), tag: tagLookup(m) };
+  const ctx = { metric: metricLookup(m), tag: tagLookup(m), availability: (d: string) => metricAvailability(m, d) };
   const deps = { translateMonitor: ((mq, t) => q.translateMonitor(mq, t, ctx)) as MonitorTranslator, tag: tagLookup(m) };
 
   it("redis high_mem: the evaluator's exact subquery form, {failed: 90, degraded: 70}, firing text kept", () => {
