@@ -106,8 +106,9 @@ export function buildReport(b: BuildInput): Report {
     if (!c.rule) manual_actions.push(`Recreate the monitor "${a.name}" by hand in Dash0 (see findings).`);
     else {
       if (!b.options.enableRules) manual_actions.push("Review and enable the check rule in Dash0 (imported disabled, D-30).");
-      const handles = [...new Set(a.message.match(/@[\w.-]+/g) ?? [])];
-      if (handles.length) manual_actions.push(`Attach Dash0 notification channels for ${handles.join(", ")}.`);
+      // T6 lists the handles the channel map could not bind; mapped ones are already on the rule.
+      const handles = [...new Set(c.channels)];
+      if (handles.length) manual_actions.push(`Attach Dash0 notification channels for ${handles.join(", ")} (no entry in notification-channels.yaml).`);
     }
     items.push({
       id: `dd-monitor-${a.source.id}`,

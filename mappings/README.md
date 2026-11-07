@@ -9,6 +9,7 @@ Schema and loader: `src/ir/mappings.ts`. Format changes need a CONTRACT.
   - A kind change (Datadog `rate` → OTel `counter`) makes the translator insert `rate()` (D-18).
   - `labels` selects series of a shared OTel metric, e.g. `redis.cpu.sys` → `redis.cpu.time{state="sys"}`.
 - `tags.yaml`: Datadog tag → Dash0 PromQL label (OTel attribute, dots → underscores).
+- `notification-channels.yaml`: Datadog `@handle` → an **existing** Dash0 notification channel id, written by the user for their org. It ships empty. T6 binds mapped handles on the check rule, and the report lists unmapped ones as manual actions. `--channels <file>` points at another file. Nothing is ever created in Dash0.
 
 `datadog/redisdb.yaml` is **generated**. Don't edit it by hand. Regenerate from the dash0-team workspace:
 ```
