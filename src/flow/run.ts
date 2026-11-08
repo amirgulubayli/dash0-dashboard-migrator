@@ -3,15 +3,15 @@
 // Every step reuses the existing gated pipeline (plan.lock, review.json, apply's refusals); this file only chains
 // them and draws the terminal UI (src/ui/style.ts).
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Report } from "../report/types.js";
 import { runApply } from "../pipeline/apply.js";
 import { resolveConfig } from "../pipeline/config.js";
 import { runPlan } from "../pipeline/plan.js";
 import { importAll, type PrometheusAlertRule } from "../targets/dash0/index.js";
-import { bar, box, link, Ui, type Out } from "../ui/style.js";
-import { configEnvPath, displayPath, KeyError, KEYS, keysFromText, knownKeys, LABELS, resolveKeys, saveDotEnv, type KeyIO, type KeyName, type Keys } from "./keys.js";
+import { bar, box, link, tildify, Ui, type Out } from "../ui/style.js";
+import { configEnvPath, displayPath, findEnvFiles, KeyError, KEYS, keysFromText, knownKeys, LABELS, resolveKeys, saveDotEnv, type KeyIO, type KeyName, type Keys } from "./keys.js";
 import { openBrowser, webKeys } from "./keys-web.js";
 import { batchedReview } from "./review.js";
 import { decisionsOf, rowsOf, scoreOf, writeRunReport, type RunFacts, type Score } from "./score.js";
@@ -36,6 +36,12 @@ export interface GuidedOptions {
   home?: string;
   /** Terminal UI; default: plain lines through io.print (pipes, tests). */
   ui?: Ui;
+  /** false: the caller already drew the header (the "terminal or browser?" question comes first). */
+  header?: boolean;
+  /** Running inside the browser terminal (web-term.ts): keys are typed on that page, so no separate key page. */
+  inBrowser?: boolean;
+  /** --env <file>: read the keys from this file (any name; other common key names understood). */
+  envFile?: string;
   /** --browser: enter missing keys on the local web page without asking. */
   browser?: boolean;
   /** Open a file or URL for the user (report.html, the key page). Default: the system opener. */
@@ -81,37 +87,59 @@ export async function guided(o: GuidedOptions): Promise<number> {
   const need = { datadog: useApi, dash0: live };
   const interactive = !o.yes && !!io.choose;
 
-  ui.header(o.version, cwd);
+  if (o.header !== false) ui.header(o.version, cwd);
 
   // 1. Keys
   ui.heading("Keys");
   if (!need.datadog && !need.dash0) ui.detail(p.dim("dry run from a folder: no keys needed"));
+  const pasted: KeyName[] = [];
+  // ./name for a file in this folder, ~/… elsewhere.
+  const short = (f: string) => (dirname(f) === cwd ? `./${relative(cwd, f)}` : displayPath(f, o.home));
+  // Keys from a file: the text of a paste, a dropped or picked file, --env, or a file found nearby.
+  const useKeys = (text: string, label?: string): boolean => {
+    let got: Keys = {};
+    let file: string | null = null;
+    try {
+      ({ keys: got, file } = keysFromText(text, cwd, o.home));
+    } catch (e) {
+      ui.detail(p.bad(`could not read that file: ${(e as Error).message}`));
+      return false;
+    }
+    const n = KEYS.filter((k) => got[k]);
+    for (const k of n) {
+      env[k] = got[k];
+      if (!pasted.includes(k)) pasted.push(k);
+    }
+    const picked = /^# dd2dash0-file: (.{1,120})\n/.exec(text)?.[1]; // a file dropped or picked in the browser page
+    const from = label ?? (file ? short(file) : picked ?? "the paste");
+    if (n.length) ui.detail(`found ${n.length} key${n.length === 1 ? "" : "s"} in ${from} ${p.dim("(checking them now)")}`);
+    return n.length > 0;
+  };
+  if (o.envFile) {
+    const path = resolve(cwd, o.envFile);
+    if (!existsSync(path)) {
+      ui.line(`${p.bad("✗")} dd2dash0: --env ${o.envFile}: no such file`);
+      return EXIT.usage;
+    }
+    if (!useKeys(readFileSync(path, "utf8"), short(path))) ui.detail(p.warn(`no dd2dash0 keys in ${short(path)}`));
+  }
   const { keys: known } = knownKeys(env, cwd, o.home);
   const wanted = KEYS.filter((k) => (k.startsWith("DD_") ? need.datadog : need.dash0) && k !== "DD_SITE" && k !== "DASH0_DATASET");
   const missing = wanted.filter((k) => !known[k]);
-  const pasted: KeyName[] = [];
+  const nearby = missing.length && !o.envFile ? findEnvFiles(cwd, o.home).filter((c) => missing.some((k) => c.names.includes(k))) : [];
+  if (missing.length && nearby.length && !interactive && !o.browser)
+    ui.detail(p.dim(`keys found in ${nearby.map((c) => short(c.path)).join(", ")}: add --env "${short(nearby[0]!.path)}" to use them`));
   if (missing.length && (o.browser || (interactive && !o.yes))) {
-    const options = ["Paste your .env, or drag the file into this window", "Type them one by one", "In the browser (a one-time page on this computer)"];
-    const where = o.browser ? 2 : await io.choose!(`${missing.length} key(s) missing. How do you want to add them?`, options, 0);
-    if (where === 0 && io.askBlock) {
+    const files = nearby.map((c) => `Use ${short(c.path)} ${p.dim(`(${c.names.filter((k) => missing.includes(k)).length} of the ${missing.length} missing)`)}`);
+    const options = [...files, o.inBrowser ? "Drop, pick or paste a .env" : "Paste your .env, or drag the file into this window", "Type them one by one"];
+    if (!o.inBrowser) options.push("In the browser (a one-time page on this computer)");
+    const pick = o.browser ? files.length + 2 : await io.choose!(`${missing.length} key(s) missing. How do you want to add them?`, options, 0);
+    const where = pick === null ? null : pick - files.length;
+    if (pick !== null && pick < files.length) {
+      useKeys(readFileSync(nearby[pick]!.path, "utf8"), short(nearby[pick]!.path));
+    } else if (where === 0 && io.askBlock) {
       const text = (await io.askBlock(`  Paste the contents of your .env, or drop the file here ${p.dim("(nothing you paste is shown)")}`)) ?? "";
-      let got: Keys = {};
-      let file: string | null = null;
-      try {
-        ({ keys: got, file } = keysFromText(text, cwd, o.home));
-      } catch (e) {
-        ui.detail(p.bad(`could not read that file: ${(e as Error).message}`));
-      }
-      for (const k of KEYS)
-        if (got[k]) {
-          env[k] = got[k];
-          pasted.push(k);
-        }
-      const where = file ? displayPath(file, o.home) : "the paste";
-      if (pasted.length) ui.detail(`found ${pasted.length} key${pasted.length === 1 ? "" : "s"} in ${where} ${p.dim("(checking them now)")}`);
-      const still = wanted.filter((k) => !env[k] && !known[k]);
-      if (!pasted.length) ui.detail(p.warn("no dd2dash0 keys found in that; asking one by one"));
-      else if (still.length) ui.detail(p.dim(`still missing ${still.map((k) => LABELS[k]).join(", ")}: asked next`));
+      if (!useKeys(text)) ui.detail(p.warn("no dd2dash0 keys found in that; asking one by one"));
     } else if (where === 2) {
       try {
         const r = await webKeys({
@@ -142,6 +170,8 @@ export async function guided(o: GuidedOptions): Promise<number> {
       }
     }
   }
+  const still = wanted.filter((k) => !env[k] && !known[k]);
+  if (pasted.length && still.length) ui.detail(p.dim(`still missing ${still.map((k) => LABELS[k]).join(", ")}: asked next`));
   let keys;
   try {
     keys = await resolveKeys({ need, env, cwd, io, yes: o.yes, pasted, ...(o.home ? { home: o.home } : {}), ...(o.fetch ? { fetch: o.fetch } : {}) });
@@ -247,7 +277,11 @@ export async function guided(o: GuidedOptions): Promise<number> {
     return { rows, score, files: writeRunReport(runDir, score, rows, facts) };
   };
   let out = write();
-  const rel = (f: string) => relative(cwd, f) || f;
+  // Inside the current folder: a short relative path. Elsewhere: the full path with ~, never a chain of ../.
+  const rel = (f: string) => {
+    const r = relative(cwd, f);
+    return r && !r.startsWith("..") && !isAbsolute(r) ? r : tildify(f);
+  };
   for (const l of resultCard(ui, out.score, { live, rulesImported: applied.imported.rules, rulesOn: enabled.size, manualMonitors: review.manualMonitors.length, html: out.files.html, md: out.files.md, rel })) ui.line(l);
 
   // Offer to switch on only the imported rules that are off (default: leave them off).

@@ -38,8 +38,6 @@ export const PLAIN_ASSUMPTIONS: Record<string, string> = {
   "A.histogram-buckets": "Dash0 lets the percentile read the histogram's buckets under its OpenTelemetry name (not yet checked on a live histogram)",
   "A.histogram-samples": "Datadog's distribution and the OpenTelemetry histogram record the same values",
   "A.finite-quantile": "the percentile is below the histogram's largest bucket boundary",
-  "A.ratio-one-instance": "each line on the chart (or the whole query, if it isn't split) covers one database server",
-  "A.ratio-den-constant": "the configured limit (such as the maximum number of connections) doesn't change within one point of the chart",
   "A.both-present": "both values exist at the same moment",
   "A.log-count": "Dash0 receives the same log records Datadog indexed",
   "A.log-source": "the log shipper sets the Datadog 'source' as an attribute",

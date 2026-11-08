@@ -7,7 +7,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 70 | 56 | 16 | 59 | 201 |
+| implemented | 70 | 55 | 16 | 59 | 200 |
 | planned | 16 | 28 | 2 | 11 | 57 |
 
 ## Pipeline order
@@ -17,7 +17,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 1 | `ingest` Ingest and normalise | source item | no | 4 | Read the source JSON, unwrap containers, coerce types, keep the raw original. |
 | 2 | `classify` Classify the item | monitor | yes | 3 | Decide which pipeline a monitor goes through; anything unknown stops here as manual. |
 | 3 | `parse` Parse | query string | yes | 4 | Datadog query / formula / monitor strings → AST (T3). Unparseable text is manual with the original kept. |
-| 4 | `select` Select the metric | metric reference | yes | 14 | Datadog metric → OTel metric through the mapping table. |
+| 4 | `select` Select the metric | metric reference | yes | 13 | Datadog metric → OTel metric through the mapping table. |
 | 5 | `scope` Scope filters | filter term | no | 17 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
 | 7 | `time` Time aggregation | postfix or rollup call | no | 34 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
@@ -76,7 +76,6 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 60 | `metric.no_equivalent` | mapping says the OTel receiver emits no equivalent | no output; placeholder panel | manual | unit | — | T4 | implemented |
 | 62 | `metric.needs_transform` | mapping entry with scale <= 0, or sumBy labels the query filters or groups on, or sumBy under .rollup(min\|max\|count) | no output: no exact rewrite (select.metric.transform covers the rest) | manual | unit | — | T4 | implemented |
 | 64 | `metric.derived` | mapping entry that is an expression over several OTel metrics | no output until select.metric.derived ships | manual | unit | — | T4 | implemented |
-| 65 | `select.metric.ratio` | mapping entry with ratio {num, den} (Datadog metrics), avg/sum/min/max query, rollup avg or sum | sum by (G) (T(num)) / max by (G) (T(den)), T = avg\|sum_over_time | exact-under(A.ratio-one-instance, A.ratio-den-constant, A.sumby-together) | unit | — | T4 | implemented |
 | 66 | `select.metric.transform` | mapping entry with scale k > 0 and/or sumBy labels L | k * agg by (G) (sum without (L) (T(x))); k drops out under a count | exact | unit | — | T4 | implemented |
 | 67 | `select.metric.transform.sumby` | select.metric.transform with sumBy under avg_over_time, rate or increase | sum without (L) (T(x)) inside the space aggregation | exact-under(A.sumby-together) | unit | — | T4 | implemented |
 | 68 | `select.metric.derived` | mapping entry with a derived expression over several OTel metrics | the entry's PromQL expression, status from the entry's own claim | exact-under(A.align) | — | — | T4 | planned |
@@ -85,7 +84,6 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 - `select.metric.approximate`: ε: per mapping entry: the difference stated in the entry's note (e.g. RSS vs used memory). Tried before select.metric.mapped: an entry marked approximate never counts as exact.
 - `select.labels`: Applied together with select.metric.mapped or select.metric.approximate (it refines their selector, it does not replace it).
-- `select.metric.ratio`: Datadog's check computes num/den per instance (postgresql: SUM(numbackends)/MAX(setting)). With one instance per group, sum by (G) of the numerator's split series is that instance's num and max by (G) of the denominator its den. T is linear, so T(sum) = sum(T) (A.sumby-together), and T(n/c) = T(n)/c for a denominator constant in the bucket. Any other rollup, .as_count()/.as_rate(), a count: aggregation or a percentile fails closed (metric.derived).
 - `select.metric.transform`: T(k*y) = k*T(y) for every time aggregation T4 emits (count_over_time: unchanged), agg(k*y) = k*agg(y) for sum/avg/min/max with k > 0 (count: unchanged), and sum without (L) restores Datadog's series before its own aggregation. With sumBy, avg_over_time/rate/increase also apply select.metric.transform.sumby (A.sumby-together); min/max/count rollups fail closed (metric.needs_transform).
 - `select.metric.transform.sumby`: Applied together with select.metric.transform. sum_over_time is linear in any samples, so .rollup(sum) needs no assumption.
 - `select.metric.derived`: Replaces metric.derived. The claim comes from the mapping row, which must carry its own status and test.
@@ -485,13 +483,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.same-key-and` | Datadog applies a literal tag filter and a template variable on the same key together (AND) | 1 |
 | `A.at-range` | the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live) | 1 |
 | `A.monotonic` | the gauge only increases between resets (a running total), so its change per second is rate() | 1 |
-| `A.sumby-together` | the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs) | 2 |
+| `A.sumby-together` | the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs) | 1 |
 | `A.histogram-buckets` | Dash0 exposes the OTel histogram under {otel_metric_name="<otel>"} so that histogram_quantile over sum by (le, ...) (rate(...)) reads its buckets: Dash0's own dashboard-source example queries histogram_quantile(q, sum by (service_name) (rate({otel_metric_name="dash0.spans.duration"}[w]))) with no _bucket suffix (native histogram); not yet checked live on a collector-emitted explicit-bucket histogram | 1 |
 | `A.histogram-samples` | the Datadog distribution and the OTel histogram record the same samples in each window (maths.md §12, A.same-samples for distributions) | 1 |
 | `A.finite-quantile` | the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d) | 1 |
 | `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
-| `A.ratio-one-instance` | each group of the query holds the series of one source instance, so the group's numerator total over its denominator is that instance's ratio (Datadog computes the ratio per instance, then aggregates) | 1 |
-| `A.ratio-den-constant` | the denominator (a configured limit such as max_connections) does not change inside a rollup bucket, so the average or sum of the ratio over the bucket is the average or sum of the numerator divided by it | 1 |
 | `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 6 |
 | `A.log-source` | logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent | 1 |
 | `A.log-attr-default` | a log attribute without a table entry keeps its name in OTel (dots become underscores in the label) | 1 |
@@ -546,7 +542,6 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 Exact-under and bounded claims whose only evidence is a unit test or nothing. These are the next rules to take through the reference evaluator (T16).
 
 - `select.metric.approximate` (bounded(ε), implemented, T4)
-- `select.metric.ratio` (exact-under(A.ratio-one-instance, A.ratio-den-constant, A.sumby-together), implemented, T4)
 - `select.metric.transform.sumby` (exact-under(A.sumby-together), implemented, T4)
 - `select.metric.derived` (exact-under(A.align), planned, T4)
 - `select.metric.kind-metadata` (exact-under(A.kind-metadata), implemented, T4)

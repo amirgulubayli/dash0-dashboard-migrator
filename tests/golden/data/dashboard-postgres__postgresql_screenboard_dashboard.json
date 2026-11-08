@@ -46,38 +46,18 @@
     "kind": "panel",
     "title": "Max connections in use",
     "widget_type": "query_value",
-    "status": "bounded",
-    "promql": [
-      "sum (avg_over_time({otel_metric_name=\"postgresql.backends\"}[$__interval])) / max (avg_over_time({otel_metric_name=\"postgresql.connection.max\"}[$__interval])) * 100"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.ratio",
-      "select.metric.mapped",
-      "select.metric.approximate",
-      "time.rollup.default",
-      "space.agg",
-      "arith.number",
-      "widget.query_value",
-      "panel.conditional-format",
+      "widget.unknown",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.ratio-den-constant",
-      "A.ratio-one-instance",
-      "A.sumby-together",
-      "A.var-default",
-      "A.style"
-    ],
+    "assumptions": [],
     "findings": [
-      "bounded metric.approximate",
-      "exact-under panel.conditional-format",
-      "exact-under scope.var.free-form",
-      "exact-under widget.query_value"
+      "manual metric.derived"
     ]
   },
   {

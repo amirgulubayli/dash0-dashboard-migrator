@@ -40,8 +40,6 @@ export const ASSUMPTIONS = {
     "the Datadog distribution and the OTel histogram record the same samples in each window (maths.md §12, A.same-samples for distributions)",
   "A.finite-quantile":
     "the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d)",
-  "A.ratio-one-instance": "each group of the query holds the series of one source instance, so the group's numerator total over its denominator is that instance's ratio (Datadog computes the ratio per instance, then aggregates)",
-  "A.ratio-den-constant": "the denominator (a configured limit such as max_connections) does not change inside a rollup bucket, so the average or sum of the ratio over the bucket is the average or sum of the numerator divided by it",
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;
@@ -137,10 +135,6 @@ export const RULES = {
   "select.metric.transform.sumby": under(
     ["A.sumby-together"],
     "sumBy under avg_over_time/rate/increase: the sum of the split series' values equals the value of their sum",
-  ),
-  "select.metric.ratio": under(
-    ["A.ratio-one-instance", "A.ratio-den-constant", "A.sumby-together"],
-    "mapping entry with ratio {num, den} (Datadog metrics) -> sum by (G) (T(num)) / max by (G) (T(den)), T = avg|sum_over_time",
   ),
   "time.ddrate.plain": bounded(
     "Datadog RATE metric (stored per second) read from an OTel counter: a plain query -> rate(x[w]) (D-18, maths.md T3b); dashboards use w = $__rate_interval",

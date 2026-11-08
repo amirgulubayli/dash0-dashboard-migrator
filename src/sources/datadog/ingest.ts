@@ -30,9 +30,9 @@ export async function ingestDatadog(opts: IngestOptions): Promise<IngestResult> 
 
 export function ingestFolder(dir: string, only?: IngestOptions["only"]): IngestResult {
   const result: IngestResult = { dashboards: [], alerts: [], findings: [] };
+  const docs: { rel: string; json: unknown; kind: "dashboard" | "monitor" }[] = [];
   for (const file of exportFiles(dir)) {
     const rel = relative(dir, file).replace(/\\/g, "/");
-    const id = basename(file, extname(file));
     const fail = (message: string): void => {
       result.findings.push({ status: "manual", code: "source.unreadable", itemKind: "dashboard", itemId: rel, message });
     };
@@ -43,29 +43,65 @@ export function ingestFolder(dir: string, only?: IngestOptions["only"]): IngestR
       fail(`${rel}: ${e instanceof Error ? e.message : String(e)}`);
       continue;
     }
-    const ref: SourceRef = { vendor: "datadog", id, origin: rel };
     if (isDashboardJson(json)) {
-      if (only === "monitors") continue;
-      const { dashboard, findings } = dashboardFromDatadog(json, withId(ref, json));
-      result.dashboards.push(dashboard);
-      result.findings.push(...findings);
+      if (only !== "monitors") docs.push({ rel, json, kind: "dashboard" });
     } else if (isMonitorJson(json)) {
-      if (only === "dashboards") continue;
-      const { alert, findings } = alertFromDatadog(json, withId(ref, json));
-      result.alerts.push(alert);
-      result.findings.push(...findings);
+      if (only !== "dashboards") docs.push({ rel, json, kind: "monitor" });
     } else {
       fail(`${rel}: neither a Datadog dashboard (widgets) nor a monitor (query + type); skipped`);
+    }
+  }
+  // Ids decide the Dash0 target (dashboard origin, check-rule UUID), so two items must never share one: that would
+  // import one over the other. Ids from the export win; otherwise the path names the item (folderIds).
+  const ids = folderIds(docs.map((d) => ({ rel: d.rel, kind: d.kind, exportId: exportedId(d.json) })));
+  for (const [i, d] of docs.entries()) {
+    const { id } = ids[i]!; // a renamed duplicate carries its full path in the id, and the report shows the source file
+    const ref: SourceRef = { vendor: "datadog", id, origin: d.rel };
+    if (d.kind === "dashboard") {
+      const { dashboard, findings } = dashboardFromDatadog(d.json as Parameters<typeof dashboardFromDatadog>[0], ref);
+      result.dashboards.push(dashboard);
+      result.findings.push(...findings);
+    } else {
+      const { alert, findings } = alertFromDatadog(d.json as Parameters<typeof alertFromDatadog>[0], ref);
+      result.alerts.push(alert);
+      result.findings.push(...findings);
     }
   }
   return result;
 }
 
-/** API exports carry an id; integrations-core assets don't, so the file name is the id. */
-function withId(ref: SourceRef, json: unknown): SourceRef {
+/** API exports carry an id; integrations-core assets don't. */
+function exportedId(json: unknown): string | undefined {
   const j = json as { id?: unknown; definition?: { id?: unknown } };
   const id = j.id ?? j.definition?.id;
-  return typeof id === "string" || typeof id === "number" ? { ...ref, id: String(id) } : ref;
+  return typeof id === "string" || typeof id === "number" ? String(id) : undefined;
+}
+
+/** Folder names that say what a file is, not which one it is. */
+const GENERIC_DIRS = new Set(["assets", "dashboards", "dashboard", "monitors", "monitor", "export", "exports", "datadog"]);
+
+/**
+ * One id per item, unique per kind, the same for the same folder:
+ *   - the export's own id when it has one (API exports);
+ *   - else the path without generic folders, joined by "__": dashboards/redisdb__overview.json -> redisdb__overview,
+ *     redisdb/assets/dashboards/overview.json -> redisdb__overview (integrations-core: 71 files are overview.json);
+ *   - if two items still share an id, the later ones (in path order) take their full path, and say so (clash).
+ */
+export function folderIds(items: { rel: string; kind: string; exportId?: string }[]): { id: string; clash?: string }[] {
+  const base = items.map((it) => {
+    if (it.exportId) return it.exportId;
+    const parts = it.rel.replace(/\.(json|ya?ml)$/i, "").split("/");
+    const name = parts.pop()!;
+    return [...parts.filter((p) => !GENERIC_DIRS.has(p.toLowerCase())), name].join("__");
+  });
+  const seen = new Map<string, number>();
+  return items.map((it, i) => {
+    const key = `${it.kind}\u0000${base[i]}`;
+    const n = seen.get(key) ?? 0;
+    seen.set(key, n + 1);
+    if (n === 0) return { id: base[i]! };
+    return { id: it.rel.replace(/\.(json|ya?ml)$/i, "").replace(/[^A-Za-z0-9_-]+/g, "__"), clash: base[i]! };
+  });
 }
 
 const YAML_EXT = /\.ya?ml$/i;
