@@ -1,0 +1,4586 @@
+{
+  "findings": [
+    {
+      "assumptions": [
+        "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+      ],
+      "code": "variable.pinned",
+      "itemId": "dd-dash-redisdb__overview/var-scope",
+      "itemKind": "variable",
+      "message": "template variable $scope is pinned to '*'; no Dash0 variable is created",
+      "ruleId": "variable.pinned",
+      "status": "exact-under"
+    },
+    {
+      "assumptions": [
+        "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+      ],
+      "code": "variable.pinned",
+      "itemId": "dd-dash-redisdb__overview/var-host",
+      "itemKind": "variable",
+      "message": "template variable $host (tag host) is pinned to '*'; no Dash0 variable is created",
+      "ruleId": "variable.pinned",
+      "status": "exact-under"
+    },
+    {
+      "assumptions": [
+        "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+      ],
+      "code": "variable.pinned",
+      "itemId": "dd-dash-redisdb__overview/var-key",
+      "itemKind": "variable",
+      "message": "template variable $key (tag key) is pinned to '*'; no Dash0 variable is created",
+      "ruleId": "variable.pinned",
+      "status": "exact-under"
+    }
+  ],
+  "items": [
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": null,
+        "rules": [
+          "layout.group"
+        ],
+        "sourceHash": "d4dc12233373ae6c48e70268a3d46e0e1f6a91e125c0f9d0e7b291ec836de752",
+        "status": "exact"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Kept as a titled section of the dashboard.",
+        "technical": "layout.group: exact"
+      },
+      "findings": [],
+      "group": null,
+      "group_id": null,
+      "id": "dd-dash-redisdb__overview/w-0",
+      "kind": "group",
+      "layout": null,
+      "promql": [],
+      "reason_codes": [],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "About Redis",
+      "widget_type": "group"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "966b18109951da2c977d7c06542070cc733fdf2fecd0d25fa1ac50405d94f4a7",
+        "rules": [
+          "widget.note",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "dd6252469b4bf651fc0041da0792b349d858a7c848f1d365256e46d774d91f71",
+        "status": "exact-under"
+      },
+      "condition": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning.",
+        "technical": "widget.note: exact-under(A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "widget.note",
+          "itemId": "dd-dash-redisdb__overview/w-0/w-8013519185925578",
+          "itemKind": "panel",
+          "message": "note text kept; its colour, font size and alignment are not migrated",
+          "ruleId": "widget.note",
+          "status": "exact-under"
+        }
+      ],
+      "group": "About Redis",
+      "group_id": "dd-dash-redisdb__overview/w-0",
+      "id": "dd-dash-redisdb__overview/w-0/w-8013519185925578",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "widget.note"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 2,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "note",
+      "widget_type": "note"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "3888afab525e78b906b960a9531421f29cfc7c2a3ae2edeae23d8f9754de95b0",
+        "rules": [
+          "widget.note",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "038c5388a3794c071c1f1ff642256cc22f65d2ee2fd8913edf38da74db7e606c",
+        "status": "exact-under"
+      },
+      "condition": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning.",
+        "technical": "widget.note: exact-under(A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "widget.note",
+          "itemId": "dd-dash-redisdb__overview/w-0/w-2021637053460700",
+          "itemKind": "panel",
+          "message": "note text kept; its colour, font size and alignment are not migrated",
+          "ruleId": "widget.note",
+          "status": "exact-under"
+        }
+      ],
+      "group": "About Redis",
+      "group_id": "dd-dash-redisdb__overview/w-0",
+      "id": "dd-dash-redisdb__overview/w-0/w-2021637053460700",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "widget.note"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 2,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "note",
+      "widget_type": "note"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": null,
+        "rules": [
+          "layout.group"
+        ],
+        "sourceHash": "6cf98df7083d3029ad9184c81e3872c77561ecff26307e7f9689b362158d231b",
+        "status": "exact"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Kept as a titled section of the dashboard.",
+        "technical": "layout.group: exact"
+      },
+      "findings": [],
+      "group": null,
+      "group_id": null,
+      "id": "dd-dash-redisdb__overview/w-1",
+      "kind": "group",
+      "layout": null,
+      "promql": [],
+      "reason_codes": [],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Overview",
+      "widget_type": "group"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.no-reset",
+          "A.nonzero-denominator",
+          "A.regular-sampling",
+          "A.same-samples",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "db77860a6a5f8079cd2e08fccd323d241d49a3fc7b9984418b8dbdd457dfb47f",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.ddrate.plain.anchored",
+          "space.agg",
+          "arith.same-groups",
+          "arith.div",
+          "arith.number",
+          "widget.query_value",
+          "panel.conditional-format",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "a28b405778bb5ed3bb0dc165b34df3457991234180b4b9c5d85a504cf535e5cc",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the counter does not restart from zero inside the time window (how Datadog treats a restart is not yet checked), the value you divide by is never zero, the data points arrive at an even interval that divides the chart's time step, both tools receive the same data points, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.ddrate.plain.anchored + space.agg + arith.same-groups + arith.div + arith.number + widget.query_value + panel.conditional-format: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+          "itemKind": "query",
+          "message": "redis.stats.keyspace_hits -> redis.keyspace.hits is an approximate mapping: D-18: Datadog submits redis.stats.keyspace_hits as a per-second rate (RATE_KEYS); translate with rate(). Datadog is a per-second rate; apply rate() to the cumulative OTel sum.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+          "itemKind": "query",
+          "message": "redis.stats.keyspace_misses -> redis.keyspace.misses is an approximate mapping: D-18: Datadog submits redis.stats.keyspace_misses as a per-second rate (RATE_KEYS); translate with rate(). Datadog is a per-second rate; apply rate() to the cumulative OTel sum.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+          "itemKind": "panel",
+          "message": "aggregator avg -> StatChart calculation mean",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.conditional-format",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+          "itemKind": "panel",
+          "message": "3 conditional format rule(s) -> StatChart thresholds; values in (89, 90) are no colour in Datadog, yellow in Dash0",
+          "original": "[{\"comparator\":\"<\",\"palette\":\"white_on_red\",\"value\":75},{\"comparator\":\"<=\",\"palette\":\"white_on_yellow\",\"value\":89},{\"comparator\":\">=\",\"palette\":\"white_on_green\",\"value\":90}]",
+          "ruleId": "panel.conditional-format",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Overview",
+      "group_id": "dd-dash-redisdb__overview/w-1",
+      "id": "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+      "kind": "panel",
+      "layout": {
+        "h": 3,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "promql": [
+        "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__interval] anchored))) * 100"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "widget.query_value",
+        "panel.conditional-format"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "(query1 / (query1 + query2)) * 100"
+      ],
+      "source_layout": {
+        "h": 1,
+        "w": 2,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [
+        "avg:redis.stats.keyspace_hits{$scope,$host}",
+        "avg:redis.stats.keyspace_misses{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Hit rate",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "eecbb15b29bfd4d38462b729be9e4e8e48e5cb3fdf791eafe35e88d71be4e600",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.query_value",
+          "panel.conditional-format",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "b2db2e7ed1e321c8683571ba5b8d55291dccfc9b01d9b5556fc0b86934fa3267",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2); no sample lies exactly on a bucket boundary (maths.md T8, A3); fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.query_value + panel.conditional-format: exact-under(A.align, A.boundary, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4413414001262562",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4413414001262562",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4413414001262562",
+          "itemKind": "panel",
+          "message": "aggregator max -> StatChart calculation max",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.conditional-format",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-4413414001262562",
+          "itemKind": "panel",
+          "message": "2 conditional format rule(s) -> StatChart thresholds; a value of exactly 1 is no colour in Datadog, red in Dash0",
+          "original": "[{\"comparator\":\">\",\"palette\":\"white_on_red\",\"value\":1},{\"comparator\":\"<\",\"palette\":\"white_on_green\",\"value\":1}]",
+          "ruleId": "panel.conditional-format",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Overview",
+      "group_id": "dd-dash-redisdb__overview/w-1",
+      "id": "dd-dash-redisdb__overview/w-1/w-4413414001262562",
+      "kind": "panel",
+      "layout": {
+        "h": 3,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.clients.blocked\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form",
+        "widget.query_value",
+        "panel.conditional-format"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 1,
+        "w": 2,
+        "x": 2,
+        "y": 0
+      },
+      "source_queries": [
+        "sum:redis.clients.blocked{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Blocked clients",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "36526ecd69779b74e628faf344503fed00cf2ce92f1907d0dca8f72fc02448fe",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.rollup.default",
+          "space.agg",
+          "widget.query_value",
+          "panel.conditional-format",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "2ecc996ceccdd10c36d36f386e7ead5393db3e523be228aa11c76d6151876af6",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.rollup.default + space.agg + widget.query_value + panel.conditional-format: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-3774440462666086",
+          "itemKind": "query",
+          "message": "redis.keys -> redis.db.keys is an approximate mapping: Sum across db labels to reproduce server total.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-3774440462666086",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-3774440462666086",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-3774440462666086",
+          "itemKind": "panel",
+          "message": "aggregator max -> StatChart calculation max",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.conditional-format",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-3774440462666086",
+          "itemKind": "panel",
+          "message": "1 conditional format rule(s) -> StatChart thresholds; a value of exactly 0 is no colour in Datadog, green in Dash0",
+          "original": "[{\"comparator\":\">\",\"palette\":\"white_on_green\",\"value\":0}]",
+          "ruleId": "panel.conditional-format",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Overview",
+      "group_id": "dd-dash-redisdb__overview/w-1",
+      "id": "dd-dash-redisdb__overview/w-1/w-3774440462666086",
+      "kind": "panel",
+      "layout": {
+        "h": 3,
+        "w": 12,
+        "x": 0,
+        "y": 3
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.db.keys\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "widget.query_value",
+        "panel.conditional-format"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 1,
+        "w": 2,
+        "x": 0,
+        "y": 1
+      },
+      "source_queries": [
+        "sum:redis.keys{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Redis keyspace",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "535fa9d7570cbe586a29137172e2fb1cf66996e397b4a040b391612ecb773bfe",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.query_value",
+          "panel.conditional-format",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "8aeede86e1a7ba7eba0629cebcac52a636ba3ad5534a570b48a22f932a72c541",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2); no sample lies exactly on a bucket boundary (maths.md T8, A3); fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.query_value + panel.conditional-format: exact-under(A.align, A.boundary, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-5886678624997982",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-5886678624997982",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-5886678624997982",
+          "itemKind": "panel",
+          "message": "aggregator avg -> StatChart calculation mean",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.conditional-format",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-5886678624997982",
+          "itemKind": "panel",
+          "message": "2 conditional format rule(s) -> StatChart thresholds; a value of exactly 1073741824 is no colour in Datadog, red in Dash0",
+          "original": "[{\"comparator\":\">\",\"palette\":\"white_on_red\",\"value\":1073741824},{\"comparator\":\"<\",\"palette\":\"white_on_green\",\"value\":1073741824}]",
+          "ruleId": "panel.conditional-format",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Overview",
+      "group_id": "dd-dash-redisdb__overview/w-1",
+      "id": "dd-dash-redisdb__overview/w-1/w-5886678624997982",
+      "kind": "panel",
+      "layout": {
+        "h": 3,
+        "w": 12,
+        "x": 12,
+        "y": 3
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.rdb.changes_since_last_save\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form",
+        "widget.query_value",
+        "panel.conditional-format"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 1,
+        "w": 2,
+        "x": 2,
+        "y": 1
+      },
+      "source_queries": [
+        "sum:redis.rdb.changes_since_last{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Unsaved changes",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "32a43fd0986c9e1fd061ad1234a94e8f98ee05a4aaaebe480892bbea7e0120c5",
+        "rules": [
+          "widget.unknown",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "330de07cda9c94744e134722e3635455ad4861d8f59d7ae7c2f4148668b72c82",
+        "status": "manual"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Not migrated automatically: placeholder panel. The original is kept so a person can rebuild it.",
+        "technical": "widget.unknown: manual [metric.no_equivalent]"
+      },
+      "findings": [
+        {
+          "code": "metric.no_equivalent",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-8493776400619900",
+          "itemKind": "query",
+          "message": "redis.replication.master_link_down_since_seconds: the OTel receiver emits no equivalent metric",
+          "status": "manual"
+        }
+      ],
+      "group": "Overview",
+      "group_id": "dd-dash-redisdb__overview/w-1",
+      "id": "dd-dash-redisdb__overview/w-1/w-8493776400619900",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "manual_actions": [
+        "Rebuild \"Primary link down\" (Datadog query_value) by hand in Dash0; the placeholder panel holds the original query."
+      ],
+      "promql": [],
+      "reason_codes": [
+        "metric.no_equivalent"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 0,
+        "y": 2
+      },
+      "source_queries": [
+        "sum:redis.replication.master_link_down_since_seconds{$scope,$host}"
+      ],
+      "status": "manual",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Primary link down",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "c72081c1e8453e56e73fbf30a048a1af4cc908c17a2f22eeac5bdfa584a1401a",
+        "rules": [
+          "widget.note",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "73df36c8a701ac0c0f978803119fc6e84914157c137031f0f0ac038e12745735",
+        "status": "exact-under"
+      },
+      "condition": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning.",
+        "technical": "widget.note: exact-under(A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "widget.note",
+          "itemId": "dd-dash-redisdb__overview/w-1/w-7896589211182748",
+          "itemKind": "panel",
+          "message": "note text kept; its colour, font size and alignment are not migrated",
+          "ruleId": "widget.note",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Overview",
+      "group_id": "dd-dash-redisdb__overview/w-1",
+      "id": "dd-dash-redisdb__overview/w-1/w-7896589211182748",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "promql": [],
+      "reason_codes": [
+        "widget.note"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 2,
+        "y": 2
+      },
+      "source_queries": [],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "note",
+      "widget_type": "note"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": null,
+        "rules": [
+          "layout.group"
+        ],
+        "sourceHash": "c7d974781fcdeea0962bbf14bb22474eb7c1bf59e15c5594fea54118d81983e4",
+        "status": "exact"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Kept as a titled section of the dashboard.",
+        "technical": "layout.group: exact"
+      },
+      "findings": [],
+      "group": null,
+      "group_id": null,
+      "id": "dd-dash-redisdb__overview/w-2",
+      "kind": "group",
+      "layout": null,
+      "promql": [],
+      "reason_codes": [],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 13,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Performance Metrics",
+      "widget_type": "group"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "86a32606fab6e4d30e7cb871a2066843aa9e62d593acfcb8a425c5db662085f6",
+        "rules": [
+          "widget.unknown",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "c56996cfab4d16ccf760a353247aee157738a6b732dd0b549c45831f1d0ebb59",
+        "status": "manual"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Not migrated automatically: placeholder panel. The original is kept so a person can rebuild it.",
+        "technical": "widget.unknown: manual [metric.no_equivalent]"
+      },
+      "findings": [
+        {
+          "code": "metric.no_equivalent",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-17",
+          "itemKind": "query",
+          "message": "redis.info.latency_ms: the OTel receiver emits no equivalent metric",
+          "status": "manual"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-17",
+      "kind": "panel",
+      "layout": {
+        "h": 12,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "manual_actions": [
+        "Rebuild \"Latency by Host\" (Datadog timeseries) by hand in Dash0; the placeholder panel holds the original query."
+      ],
+      "promql": [],
+      "reason_codes": [
+        "metric.no_equivalent"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query2"
+      ],
+      "source_layout": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [
+        "avg:redis.info.latency_ms{$scope,$host} by {host}"
+      ],
+      "status": "manual",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Latency by Host",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "be3ae7646f48c65c864a8e0b3e8cd38917b2de1618211da75f3a487630952db9",
+        "rules": [
+          "widget.note",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "f035120270ebd0ea718d544facc273e21bb9c745d7cfdd3fca1a1797f8cf19b2",
+        "status": "exact-under"
+      },
+      "condition": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning.",
+        "technical": "widget.note: exact-under(A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "widget.note",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-18",
+          "itemKind": "panel",
+          "message": "note text kept; its colour, font size and alignment are not migrated",
+          "ruleId": "widget.note",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-18",
+      "kind": "panel",
+      "layout": {
+        "h": 12,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "widget.note"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 4,
+        "w": 2,
+        "x": 4,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "note",
+      "widget_type": "note"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "e52c2eb3060ec8fbc2df1d8f1946598c46478218973033a46300aa4c1dd9a322",
+        "rules": [
+          "widget.unknown",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "ba12602e19aa69aa5a0faece9e08f53e56e0cbd340b1bf67270e879b6f364c7c",
+        "status": "manual"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Not migrated automatically: placeholder panel. The original is kept so a person can rebuild it.",
+        "technical": "widget.unknown: manual [metric.no_equivalent]"
+      },
+      "findings": [
+        {
+          "code": "metric.no_equivalent",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-19",
+          "itemKind": "query",
+          "message": "redis.slowlog.micros.95percentile: the OTel receiver emits no equivalent metric",
+          "status": "manual"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-19",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 16,
+        "x": 0,
+        "y": 12
+      },
+      "manual_actions": [
+        "Rebuild \"Slowlog duration\" (Datadog timeseries) by hand in Dash0; the placeholder panel holds the original query."
+      ],
+      "promql": [],
+      "reason_codes": [
+        "metric.no_equivalent"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "top(query1 / 1000, 10, 'mean', 'desc')"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 4,
+        "x": 0,
+        "y": 4
+      },
+      "source_queries": [
+        "sum:redis.slowlog.micros.95percentile{$scope,$host} by {name,command}"
+      ],
+      "status": "manual",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Slowlog duration",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "58f3cd8af6c51233e2c49ff5bcc40548470631df1f8a9febb887c551aec2c7b9",
+        "rules": [
+          "widget.unknown",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "9ea257a4bdae137527e6dfaf45896baa4c1cc958758d43ce85de89bc7e7ec92d",
+        "status": "manual"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Not migrated automatically: placeholder panel. The original is kept so a person can rebuild it.",
+        "technical": "widget.unknown: manual [metric.no_equivalent]"
+      },
+      "findings": [
+        {
+          "code": "metric.no_equivalent",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-8558020471598403",
+          "itemKind": "query",
+          "message": "redis.slowlog.micros.count: the OTel receiver emits no equivalent metric",
+          "status": "manual"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-8558020471598403",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 12
+      },
+      "manual_actions": [
+        "Rebuild \"Slowlog query rates\" (Datadog toplist) by hand in Dash0; the placeholder panel holds the original query."
+      ],
+      "promql": [],
+      "reason_codes": [
+        "metric.no_equivalent"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 4,
+        "y": 4
+      },
+      "source_queries": [
+        "sum:redis.slowlog.micros.count{$host,$scope} by {command,name}"
+      ],
+      "status": "manual",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Slowlog query rates",
+      "widget_type": "toplist"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "531328a02eb5059b13f9f5fbeae2ecd56b2390e501f47d7ea4cf303e24ee76fb",
+        "rules": [
+          "widget.unknown",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "58349d1571a2b890b133fb6da0ea790b00e1fb6f0722202ac7b5c920cf84d626",
+        "status": "manual"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Not migrated automatically: placeholder panel. The original is kept so a person can rebuild it.",
+        "technical": "widget.unknown: manual [metric.no_equivalent]"
+      },
+      "findings": [
+        {
+          "code": "metric.no_equivalent",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-3029111733155793",
+          "itemKind": "query",
+          "message": "redis.replication.delay: the OTel receiver emits no equivalent metric",
+          "status": "manual"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-3029111733155793",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "manual_actions": [
+        "Rebuild \"Average replication delay (offset)\" (Datadog timeseries) by hand in Dash0; the placeholder panel holds the original query."
+      ],
+      "promql": [],
+      "reason_codes": [
+        "metric.no_equivalent"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "source_queries": [
+        "avg:redis.replication.delay{$host,$scope}"
+      ],
+      "status": "manual",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Average replication delay (offset)",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.no-reset",
+          "A.regular-sampling",
+          "A.same-samples",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "1829f0682def11bacded3fb43005dab64c3f74c91d39464e92c28eeab1377c26",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "select.labels",
+          "time.ddrate.plain.anchored",
+          "space.agg",
+          "widget.timeseries",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "497c667457973f95a734e493332a775602c0cf3eff0d2172067cc05692daad46",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the counter does not restart from zero inside the time window (how Datadog treats a restart is not yet checked), the data points arrive at an even interval that divides the chart's time step, both tools receive the same data points and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + select.metric.approximate + select.labels + time.ddrate.plain.anchored + space.agg + widget.timeseries: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+          "itemKind": "query",
+          "message": "redis.cpu.sys -> redis.cpu.time is an approximate mapping: D-18: Datadog submits redis.cpu.sys as a per-second rate (RATE_KEYS); translate with rate(). Same cumulative Redis CPU seconds; select the state=\"sys\" attribute.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+          "itemKind": "query",
+          "message": "redis.cpu.user -> redis.cpu.time is an approximate mapping: D-18: Datadog submits redis.cpu.user as a per-second rate (RATE_KEYS); translate with rate(). Same cumulative Redis CPU seconds; select the state=\"user\" attribute.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "promql": [
+        "avg (rate({otel_metric_name=\"redis.cpu.time\", state=\"sys\"}[$__interval] anchored))",
+        "avg (rate({otel_metric_name=\"redis.cpu.time\", state=\"user\"}[$__interval] anchored))"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1",
+        "query2"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "source_queries": [
+        "avg:redis.cpu.sys{$host,$scope}",
+        "avg:redis.cpu.user{$host,$scope}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Average CPU usage",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.no-reset",
+          "A.nonzero-denominator",
+          "A.regular-sampling",
+          "A.same-samples",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "ddabf87250c497f8203ecb54a9ba8004cf551b7e661ce51de1e9fec1f0426d90",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.ddrate.plain.anchored",
+          "space.agg",
+          "arith.same-groups",
+          "arith.div",
+          "arith.number",
+          "widget.query_value",
+          "panel.conditional-format",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "0d865239ffdfecce32fe2dc30cac52c7cefab81dd0c6ed4399c2630f3bd6194e",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the counter does not restart from zero inside the time window (how Datadog treats a restart is not yet checked), the value you divide by is never zero, the data points arrive at an even interval that divides the chart's time step, both tools receive the same data points, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.ddrate.plain.anchored + space.agg + arith.same-groups + arith.div + arith.number + widget.query_value + panel.conditional-format: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-20",
+          "itemKind": "query",
+          "message": "redis.stats.keyspace_hits -> redis.keyspace.hits is an approximate mapping: D-18: Datadog submits redis.stats.keyspace_hits as a per-second rate (RATE_KEYS); translate with rate(). Datadog is a per-second rate; apply rate() to the cumulative OTel sum.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-20",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-20",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-20",
+          "itemKind": "query",
+          "message": "redis.stats.keyspace_misses -> redis.keyspace.misses is an approximate mapping: D-18: Datadog submits redis.stats.keyspace_misses as a per-second rate (RATE_KEYS); translate with rate(). Datadog is a per-second rate; apply rate() to the cumulative OTel sum.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-20",
+          "itemKind": "panel",
+          "message": "aggregator avg -> StatChart calculation mean",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.conditional-format",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-20",
+          "itemKind": "panel",
+          "message": "2 conditional format rule(s) -> StatChart thresholds",
+          "original": "[{\"comparator\":\"<\",\"palette\":\"black_on_light_yellow\",\"value\":75},{\"comparator\":\">=\",\"palette\":\"black_on_light_green\",\"value\":75}]",
+          "ruleId": "panel.conditional-format",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-20",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 30
+      },
+      "promql": [
+        "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__interval] anchored))) * 100"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "widget.query_value",
+        "panel.conditional-format"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "(query1 / (query1 + query2)) * 100"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 0,
+        "y": 10
+      },
+      "source_queries": [
+        "avg:redis.stats.keyspace_hits{$scope,$host}",
+        "avg:redis.stats.keyspace_misses{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Cache hit rate",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.no-reset",
+          "A.nonzero-denominator",
+          "A.regular-sampling",
+          "A.same-samples",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "fb998d4414417c333553a5b2e476b2e39f50b0fe05b1a5a78ec864a21a32cd88",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.ddrate.plain.anchored",
+          "space.agg",
+          "arith.same-groups",
+          "arith.div",
+          "arith.number",
+          "widget.timeseries",
+          "panel.markers",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "facfb5dd876a3bb0bebed5515c8fc36e1b1b73948e4d3a60c3cf5e498cbb0f84",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the counter does not restart from zero inside the time window (how Datadog treats a restart is not yet checked), the value you divide by is never zero, the data points arrive at an even interval that divides the chart's time step, both tools receive the same data points, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.ddrate.plain.anchored + space.agg + arith.same-groups + arith.div + arith.number + widget.timeseries + panel.markers: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-21",
+          "itemKind": "query",
+          "message": "redis.stats.keyspace_hits -> redis.keyspace.hits is an approximate mapping: D-18: Datadog submits redis.stats.keyspace_hits as a per-second rate (RATE_KEYS); translate with rate(). Datadog is a per-second rate; apply rate() to the cumulative OTel sum.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-21",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-21",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-21",
+          "itemKind": "query",
+          "message": "redis.stats.keyspace_misses -> redis.keyspace.misses is an approximate mapping: D-18: Datadog submits redis.stats.keyspace_misses as a per-second rate (RATE_KEYS); translate with rate(). Datadog is a per-second rate; apply rate() to the cumulative OTel sum.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.markers",
+          "itemId": "dd-dash-redisdb__overview/w-2/w-21",
+          "itemKind": "panel",
+          "message": "2 marker line(s) -> TimeSeriesChart thresholds",
+          "original": "[{\"label\":\"Ideal hit rate\",\"value\":\"y = 100\",\"display_type\":\"ok dashed\"},{\"label\":\"Investigate\",\"value\":\"y = 75\",\"display_type\":\"warning dashed\"}]",
+          "ruleId": "panel.markers",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Performance Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-2",
+      "id": "dd-dash-redisdb__overview/w-2/w-21",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 16,
+        "x": 8,
+        "y": 30
+      },
+      "promql": [
+        "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__interval] anchored))) * 100"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "panel.markers"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "(query1 / (query1 + query2)) * 100"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 4,
+        "x": 2,
+        "y": 10
+      },
+      "source_queries": [
+        "avg:redis.stats.keyspace_hits{$scope,$host}",
+        "avg:redis.stats.keyspace_misses{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Cache hit rate",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": null,
+        "rules": [
+          "layout.group"
+        ],
+        "sourceHash": "db828829b1a45a8b8a23d622452471774c21fc5a3879f35a93effce307116ef7",
+        "status": "exact"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Kept as a titled section of the dashboard.",
+        "technical": "layout.group: exact"
+      },
+      "findings": [],
+      "group": null,
+      "group_id": null,
+      "id": "dd-dash-redisdb__overview/w-3",
+      "kind": "group",
+      "layout": null,
+      "promql": [],
+      "reason_codes": [],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 11,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Memory Metrics",
+      "widget_type": "group"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.nonzero-denominator",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "03abbdcbd98768babfb7169f6f9671b668fd3e0b7033164f7be57e620953c315",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "arith.same-groups",
+          "arith.div",
+          "arith.number",
+          "widget.timeseries",
+          "panel.markers",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "86cd8d2d14d14dd926f2f90d153df0f0610a155d5a44067157c964de1fd7d9fd",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the value you divide by is never zero, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + arith.same-groups + arith.div + arith.number + widget.timeseries + panel.markers: exact-under(A.align, A.boundary, A.nonzero-denominator, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-23",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-23",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.markers",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-23",
+          "itemKind": "panel",
+          "message": "2 marker line(s) -> TimeSeriesChart thresholds",
+          "original": "[{\"label\":\" Max memory reached \",\"value\":\"y = 100\",\"display_type\":\"error dashed\"},{\"label\":\" 80% memory usage \",\"value\":\"y = 80\",\"display_type\":\"warning dashed\"}]",
+          "ruleId": "panel.markers",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Memory Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3",
+      "id": "dd-dash-redisdb__overview/w-3/w-23",
+      "kind": "panel",
+      "layout": {
+        "h": 12,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "promql": [
+        "avg by (host_name) (avg_over_time({otel_metric_name=\"redis.memory.used\"}[$__interval])) / max by (host_name) (avg_over_time({otel_metric_name=\"redis.maxmemory\"}[$__interval])) * 100"
+      ],
+      "reason_codes": [
+        "scope.var.free-form",
+        "panel.markers"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "(query1 / query2) * 100"
+      ],
+      "source_layout": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [
+        "avg:redis.mem.used{$scope,$host} by {host}",
+        "max:redis.mem.maxmemory{$scope,$host} by {host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Percent Used Memory by Host",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "3b7f472c705fee7fb7cc893660b274d461328974d3bd4b8174f6ab012009e7b8",
+        "rules": [
+          "widget.note",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "38fe60af962c16a0c0a8843f968ffdef87db9c97f91528302ec7cf6d3d5e33d3",
+        "status": "exact-under"
+      },
+      "condition": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning.",
+        "technical": "widget.note: exact-under(A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "widget.note",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-24",
+          "itemKind": "panel",
+          "message": "note text kept; its colour, font size and alignment are not migrated",
+          "ruleId": "widget.note",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Memory Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3",
+      "id": "dd-dash-redisdb__overview/w-3/w-24",
+      "kind": "panel",
+      "layout": {
+        "h": 12,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "widget.note"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 4,
+        "w": 2,
+        "x": 4,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "note",
+      "widget_type": "note"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.dd-per-unit",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "dac7791a0048c11738f85f6a9fb892d1c21113d6ec03cd1065e391db8309ec97",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "fn.per_unit.counter",
+          "widget.timeseries",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "7d2088422d5b5a005e56d0898a1acffd428573f661da705c150b1a7f0438c856",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, Datadog computes per-second values from consecutive points of a growing total (documented, not yet checked) and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + fn.per_unit.counter + widget.timeseries: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-25",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-25",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Memory Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3",
+      "id": "dd-dash-redisdb__overview/w-3/w-25",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "promql": [
+        "60 * sum by (host_name) (rate({otel_metric_name=\"redis.keys.evicted\"}[$__rate_interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "per_minute(query2)"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "source_queries": [
+        "sum:redis.keys.evicted{$scope,$host} by {host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Evictions",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "1e18afc3df1f1af2fc81728bf659fb31718ea419e632410108281d4c0de27303",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.timeseries",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "4204f592974d183f83409d67b786fcd6a9743048a966a794fd470ec3636542de",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.timeseries: exact-under(A.align, A.boundary, A.var-default)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-8528925087848645",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-8528925087848645",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Memory Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3",
+      "id": "dd-dash-redisdb__overview/w-3/w-8528925087848645",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.memory.rss\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "source_queries": [
+        "sum:redis.mem.rss{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Total allocated memory",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "b36badefd21c8d6ac76ea217d9c329576db28e1d9f027b565e8bf0800b93da70",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.query_value",
+          "panel.conditional-format",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "7c214ebb54daceb2ecff743fdf25453080c7b1f843325c3853a39f57b4c01278",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2); no sample lies exactly on a bucket boundary (maths.md T8, A3); fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.query_value + panel.conditional-format: exact-under(A.align, A.boundary, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-26",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-26",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-26",
+          "itemKind": "panel",
+          "message": "aggregator avg -> StatChart calculation mean",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.conditional-format",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-26",
+          "itemKind": "panel",
+          "message": "2 conditional format rule(s) -> StatChart thresholds",
+          "original": "[{\"comparator\":\"<\",\"palette\":\"black_on_light_red\",\"value\":1.5},{\"comparator\":\">=\",\"palette\":\"black_on_light_green\",\"value\":1.5}]",
+          "ruleId": "panel.conditional-format",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Memory Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3",
+      "id": "dd-dash-redisdb__overview/w-3/w-26",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 24
+      },
+      "promql": [
+        "avg (avg_over_time({otel_metric_name=\"redis.memory.fragmentation_ratio\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form",
+        "widget.query_value",
+        "panel.conditional-format"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 0,
+        "y": 8
+      },
+      "source_queries": [
+        "avg:redis.mem.fragmentation_ratio{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Fragmentation ratio",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "e02465079d0ea1ad09d0066d0526234c5e7be43c42a9b82e582c9b19855219f1",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.timeseries",
+          "panel.markers",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "4218df7a4b9fd0913a129adc8c077e60241703a0d0dc5521248ad48dc81b993d",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.timeseries + panel.markers: exact-under(A.align, A.boundary, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-27",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-27",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.markers",
+          "itemId": "dd-dash-redisdb__overview/w-3/w-27",
+          "itemKind": "panel",
+          "message": "1 marker line(s) -> TimeSeriesChart thresholds",
+          "original": "[{\"label\":\"Restart Redis\",\"value\":\"y = 1.5\",\"display_type\":\"error dashed\"}]",
+          "ruleId": "panel.markers",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Memory Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3",
+      "id": "dd-dash-redisdb__overview/w-3/w-27",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 16,
+        "x": 8,
+        "y": 24
+      },
+      "promql": [
+        "avg (avg_over_time({otel_metric_name=\"redis.memory.fragmentation_ratio\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form",
+        "panel.markers"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 4,
+        "x": 2,
+        "y": 8
+      },
+      "source_queries": [
+        "avg:redis.mem.fragmentation_ratio{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Fragmentation ratio",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": null,
+        "rules": [
+          "layout.group"
+        ],
+        "sourceHash": "7cdcdbd2a9b567a9267e6e85176fee6e0adbb797f4e1c6e5e818b17b2cf6fbcc",
+        "status": "exact"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Kept as a titled section of the dashboard.",
+        "technical": "layout.group: exact"
+      },
+      "findings": [],
+      "group": null,
+      "group_id": null,
+      "id": "dd-dash-redisdb__overview/w-4",
+      "kind": "group",
+      "layout": null,
+      "promql": [],
+      "reason_codes": [],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Base Activity Metrics",
+      "widget_type": "group"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "5bb7fda1ad71e3fcb824cacb51d76d816bcc031003eccc3936b01bdc5ec4e416",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.timeseries",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "1d23f03e052d492dbc9e5c780ab7d7006ff523661ff03823160adbc0a174d5e0",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.timeseries: exact-under(A.align, A.boundary, A.var-default)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-11",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-11",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Base Activity Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-4",
+      "id": "dd-dash-redisdb__overview/w-4/w-11",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.clients.connected\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [
+        "sum:redis.net.clients{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Connected clients",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "3ff9ac9a4b7e69314a8f77fda0c4944da0f7bd9b1d2cef787bc1d99aa45e6af9",
+        "rules": [
+          "widget.note",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "7b1f84249a541a91ceea5381d04aae24f7f0d70bda996e92b964b23b3e4392af",
+        "status": "exact-under"
+      },
+      "condition": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning.",
+        "technical": "widget.note: exact-under(A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "widget.note",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-12",
+          "itemKind": "panel",
+          "message": "note text kept; its colour, font size and alignment are not migrated",
+          "ruleId": "widget.note",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Base Activity Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-4",
+      "id": "dd-dash-redisdb__overview/w-4/w-12",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "widget.note"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 2,
+        "w": 3,
+        "x": 6,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "note",
+      "widget_type": "note"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "2cca05dcdfe7ac4cf7e4472d6535c21824802b012ca142c9efd9909408e7e706",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.timeseries",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "c35fe86138646155ddc37badd7e8f025bcaabe4aa4c063c9cfb58adb0ff9adff",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.timeseries: exact-under(A.align, A.boundary, A.var-default)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-29",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-29",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Base Activity Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-4",
+      "id": "dd-dash-redisdb__overview/w-4/w-29",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.clients.blocked\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query2"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 3,
+        "x": 9,
+        "y": 0
+      },
+      "source_queries": [
+        "sum:redis.clients.blocked{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Blocked clients",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "305d22e60b078a764f05cefddd278c245b0c7d483b474b4ed79a1ccc515a9a37",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.timeseries",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "43b2462cecca0212e2ce9830b27aca04d63d5c9eee4a09a7fa7de04b40cc5f3e",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.timeseries: exact-under(A.align, A.boundary, A.var-default)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-13",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-13",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Base Activity Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-4",
+      "id": "dd-dash-redisdb__overview/w-4/w-13",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 10,
+        "x": 0,
+        "y": 6
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.slaves.connected\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 5,
+        "x": 0,
+        "y": 2
+      },
+      "source_queries": [
+        "sum:redis.net.slaves{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Connected replicas",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.no-gaps",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "98baf584b92467f76caaf73ebe35c247a3162b1063e40726345b93545c380030",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "fn.diff",
+          "widget.timeseries",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "8c09382f7fd02777b61ba7e8f6609dfa0c83726bfc413a46f29ea3e0447c4349",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, every time bucket has data and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + fn.diff + widget.timeseries: exact-under(A.align, A.boundary, A.no-gaps, A.var-default)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-14",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-14",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Base Activity Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-4",
+      "id": "dd-dash-redisdb__overview/w-4/w-14",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 10,
+        "x": 10,
+        "y": 6
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.connections.rejected\"}[$__interval])) - sum (avg_over_time({otel_metric_name=\"redis.connections.rejected\"}[$__interval] offset $__interval))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "diff(query1)"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 5,
+        "x": 5,
+        "y": 2
+      },
+      "source_queries": [
+        "sum:redis.net.rejected{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Rejected connections",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.no-reset",
+          "A.regular-sampling",
+          "A.same-samples",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "09edd82dd8af172c16d4a0041d2b2915763c40c6f182e756ed20b1eed274a190",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.ddrate.plain.anchored",
+          "space.agg",
+          "widget.query_value",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "b45a931108aa4dab1d1ebeb0c399fe1c96a324844b32c292dacc808d599c398f",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the counter does not restart from zero inside the time window (how Datadog treats a restart is not yet checked), the data points arrive at an even interval that divides the chart's time step, both tools receive the same data points and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.ddrate.plain.anchored + space.agg + widget.query_value: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-22",
+          "itemKind": "query",
+          "message": "redis.net.commands -> redis.commands.processed is an approximate mapping: D-18: Datadog submits redis.net.commands as a per-second rate (RATE_KEYS); translate with rate(). Same Redis measurement; metric or type name differs.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-22",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-22",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-4/w-22",
+          "itemKind": "panel",
+          "message": "aggregator avg -> StatChart calculation mean",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Base Activity Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-4",
+      "id": "dd-dash-redisdb__overview/w-4/w-22",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 4,
+        "x": 20,
+        "y": 6
+      },
+      "promql": [
+        "sum (rate({otel_metric_name=\"redis.commands.processed\"}[$__interval] anchored))"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "widget.query_value"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 10,
+        "y": 2
+      },
+      "source_queries": [
+        "sum:redis.net.commands{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Commands per second",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": null,
+        "rules": [
+          "layout.group"
+        ],
+        "sourceHash": "373fe52269506eb2feac429183ba44b006f50abfd5d0062ab26131efeddf2f18",
+        "status": "exact"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Kept as a titled section of the dashboard.",
+        "technical": "layout.group: exact"
+      },
+      "findings": [],
+      "group": null,
+      "group_id": null,
+      "id": "dd-dash-redisdb__overview/w-3286140376470284",
+      "kind": "group",
+      "layout": null,
+      "promql": [],
+      "reason_codes": [],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "source_queries": [],
+      "status": "exact",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Key Metrics",
+      "widget_type": "group"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "e07a64b463c6fe77c22b3febcdbe1eec561707782055febac243b4a7d278ff17",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.rollup.default",
+          "space.agg",
+          "widget.timeseries",
+          "panel.style",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "ca1a456c933e3b652a2a3a769aebc38c39c95e8d41c56d6760d212eceda25475",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.rollup.default + space.agg + widget.timeseries + panel.style: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-16",
+          "itemKind": "query",
+          "message": "redis.keys -> redis.db.keys is an approximate mapping: Sum across db labels to reproduce server total.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-16",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-16",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.style",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-16",
+          "itemKind": "panel",
+          "message": "display types area drawn as lines",
+          "ruleId": "panel.style",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Key Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3286140376470284",
+      "id": "dd-dash-redisdb__overview/w-3286140376470284/w-16",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.db.keys\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "panel.style"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [
+        "sum:redis.keys{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Total keys",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "4a47b504fc57d11cd9fcd172fd31dab8068e6a7a4681f8c988002f011d7e28a2",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.rollup.default",
+          "space.agg",
+          "widget.query_value",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "b7c8e28385981b799c80b17a65c237430bd9ccff48853eda0d5534e31248eecc",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.rollup.default + space.agg + widget.query_value: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-1840397376605166",
+          "itemKind": "query",
+          "message": "redis.keys -> redis.db.keys is an approximate mapping: Sum across db labels to reproduce server total.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-1840397376605166",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-1840397376605166",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-1840397376605166",
+          "itemKind": "panel",
+          "message": "aggregator last -> StatChart calculation last-number",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Key Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3286140376470284",
+      "id": "dd-dash-redisdb__overview/w-3286140376470284/w-1840397376605166",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.db.keys\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "widget.query_value"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 6,
+        "y": 0
+      },
+      "source_queries": [
+        "sum:redis.keys{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Current total",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "5b29460c5749468059a68f6d1c9b3548f7746aaef95775b0ef85d627e130dba3",
+        "rules": [
+          "widget.note",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "0e262669fe5f184a1ab30b7c53e21a79940e9f6b36de57cd120ec0f254cfde56",
+        "status": "exact-under"
+      },
+      "condition": "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning.",
+        "technical": "widget.note: exact-under(A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "widget.note",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-4351331682136830",
+          "itemKind": "panel",
+          "message": "note text kept; its colour, font size and alignment are not migrated",
+          "ruleId": "widget.note",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Key Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3286140376470284",
+      "id": "dd-dash-redisdb__overview/w-3286140376470284/w-4351331682136830",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "widget.note"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 2,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "source_queries": [],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "note",
+      "widget_type": "note"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "527959f2f105bc7bf305a4d87fb46a63620b7c27d1b86f33c842e448563b3855",
+        "rules": [
+          "select.metric.mapped",
+          "time.rollup.default",
+          "space.agg",
+          "widget.timeseries",
+          "panel.style",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "c2dd8066094d8216cb2a268cf87ce524c13f8cbe01e2e28c26d0844d83ac7a98",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "select.metric.mapped + time.rollup.default + space.agg + widget.timeseries + panel.style: exact-under(A.align, A.boundary, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-7595489265803660",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-7595489265803660",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.style",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-7595489265803660",
+          "itemKind": "panel",
+          "message": "display types area drawn as lines",
+          "ruleId": "panel.style",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Key Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3286140376470284",
+      "id": "dd-dash-redisdb__overview/w-3286140376470284/w-7595489265803660",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.keys.expired\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "scope.var.free-form",
+        "panel.style"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 6,
+        "x": 0,
+        "y": 2
+      },
+      "source_queries": [
+        "sum:redis.keys.expired{$scope,$host}"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Expired keys",
+      "widget_type": "timeseries"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.align",
+          "A.boundary",
+          "A.var-default"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "54f314a021d5274858dcc0f8db13ca3fda79bd785c37d35b61110b1866d18ad4",
+        "rules": [
+          "select.metric.mapped",
+          "select.metric.approximate",
+          "time.rollup.default",
+          "space.agg",
+          "widget.query_value",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "af7f2f0dbd6deaaec1e5822a7bebfe904aef2a70c13cf04619af042db3609436",
+        "status": "bounded"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound. It also assumes both tools cut time into the same buckets, no data point lands exactly on the edge of a time bucket and the dashboard filter is left on 'all'.",
+        "technical": "select.metric.mapped + select.metric.approximate + time.rollup.default + space.agg + widget.query_value: bounded(ε: see rule)"
+      },
+      "findings": [
+        {
+          "code": "metric.approximate",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-4565766774748375",
+          "itemKind": "query",
+          "message": "redis.expires -> redis.db.expires is an approximate mapping: Sum across all db attributes to reproduce server total.",
+          "ruleId": "select.metric.approximate",
+          "status": "bounded"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-4565766774748375",
+          "itemKind": "query",
+          "message": "template variable $scope has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "scope.var.free-form",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-4565766774748375",
+          "itemKind": "query",
+          "message": "template variable $host has no tag key; dropped (exact while it is left at '*')",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2)",
+            "no sample lies exactly on a bucket boundary (maths.md T8, A3)"
+          ],
+          "code": "widget.query_value",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-4565766774748375",
+          "itemKind": "panel",
+          "message": "aggregator last -> StatChart calculation last-number",
+          "ruleId": "widget.query_value",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Key Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3286140376470284",
+      "id": "dd-dash-redisdb__overview/w-3286140376470284/w-4565766774748375",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 4,
+        "x": 12,
+        "y": 6
+      },
+      "promql": [
+        "sum (avg_over_time({otel_metric_name=\"redis.db.expires\"}[$__interval]))"
+      ],
+      "reason_codes": [
+        "metric.approximate",
+        "scope.var.free-form",
+        "widget.query_value"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 2,
+        "x": 6,
+        "y": 2
+      },
+      "source_queries": [
+        "sum:redis.expires{$scope,$host}"
+      ],
+      "status": "bounded",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Keys with expiration",
+      "widget_type": "query_value"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "84f00218455d4668e963c26f1362b8b9aeced232a30901152523504c66699a22",
+        "rules": [
+          "widget.heatmap",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "a6d0bd94fdfdefe2391bc6c65ba12fd6ae4484ea35fddea6c154b59e097526de",
+        "status": "unsupported"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": true,
+      "explain": {
+        "plain": "Dash0 has no panel for this kind of widget; a placeholder keeps the original.",
+        "technical": "widget.heatmap: unsupported"
+      },
+      "findings": [
+        {
+          "code": "widget.unsupported",
+          "itemId": "dd-dash-redisdb__overview/w-3286140376470284/w-7861051565277545",
+          "itemKind": "panel",
+          "message": "Datadog 'distribution' widget has no Dash0 panel; it becomes a placeholder that keeps the original",
+          "original": "distribution",
+          "status": "manual"
+        }
+      ],
+      "group": "Key Metrics",
+      "group_id": "dd-dash-redisdb__overview/w-3286140376470284",
+      "id": "dd-dash-redisdb__overview/w-3286140376470284/w-7861051565277545",
+      "kind": "panel",
+      "layout": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "manual_actions": [
+        "Rebuild \"Key length distribution\" (Datadog distribution) by hand in Dash0; the placeholder panel holds the original query."
+      ],
+      "promql": [],
+      "reason_codes": [
+        "widget.unsupported"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": [
+        "query1"
+      ],
+      "source_layout": {
+        "h": 2,
+        "w": 4,
+        "x": 8,
+        "y": 2
+      },
+      "source_queries": [
+        "sum:redis.key.length{$scope, $host, $key} by {key}"
+      ],
+      "status": "unsupported",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Key length distribution",
+      "widget_type": "distribution"
+    },
+    {
+      "certificate": {
+        "assumptions": [],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": null,
+        "rules": [
+          "layout.group"
+        ],
+        "sourceHash": "aad2d9722f16d956f7621707bbdca8d078dfbb8b0d0bae6da576527c3f060a75",
+        "status": "exact"
+      },
+      "condition": null,
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Kept as a titled section of the dashboard.",
+        "technical": "layout.group: exact"
+      },
+      "findings": [],
+      "group": null,
+      "group_id": null,
+      "id": "dd-dash-redisdb__overview/w-5",
+      "kind": "group",
+      "layout": null,
+      "promql": [],
+      "reason_codes": [],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "source_queries": [],
+      "status": "exact",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Logs",
+      "widget_type": "group"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.logtable-keys",
+          "A.log-source",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "5eace72d470237a74ef8d5636538f52be6c573522cb86eb19916947ba5784151",
+        "rules": [
+          "logs.stream",
+          "log.match.reserved.approx",
+          "log.match.value",
+          "log.match.var.dropped",
+          "log.match.status",
+          "panel.style",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "e6a7c736a60fe70713e80952f1ddebbd57f4718f2e31ea08a25255c14288269a",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning; Dash0 LogTable filter keys are the dotted forms of the dash0.logs labels (service.name, otel.log.severity.range, otel.log.body)",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as Dash0's log table uses the same field names as its log metrics, the log shipper sets the Datadog 'source' as an attribute, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "logs.stream + log.match.reserved.approx + log.match.value + log.match.var.dropped + log.match.status + panel.style: exact-under(A.logtable-keys, A.log-source, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "log.match.var.dropped",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-30",
+          "itemKind": "panel",
+          "message": "template variable $scope dropped from the log search (exact while it is left at '*')",
+          "original": "$scope",
+          "ruleId": "log.match.var.dropped",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "log.match.var.dropped",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-30",
+          "itemKind": "panel",
+          "message": "template variable $host dropped from the log search (exact while it is left at '*')",
+          "original": "$host",
+          "ruleId": "log.match.var.dropped",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.style",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-30",
+          "itemKind": "panel",
+          "message": "the stream's column choice is not migrated; the LogTable shows Dash0's default columns",
+          "original": "[{\"field\":\"status_line\",\"width\":\"auto\"},{\"field\":\"timestamp\",\"width\":\"auto\"},{\"field\":\"content\",\"width\":\"compact\"}]",
+          "ruleId": "panel.style",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "Dash0 LogTable filter keys are the dotted forms of the dash0.logs labels (service.name, otel.log.severity.range, otel.log.body)"
+          ],
+          "code": "logs.stream",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-30",
+          "itemKind": "panel",
+          "message": "log stream shown as a Dash0 LogTable with 2 filters",
+          "original": "source:redis $scope $host status:error",
+          "ruleId": "logs.stream",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Logs",
+      "group_id": "dd-dash-redisdb__overview/w-5",
+      "id": "dd-dash-redisdb__overview/w-5/w-30",
+      "kind": "panel",
+      "layout": {
+        "h": 24,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "log.match.var.dropped",
+        "panel.style",
+        "logs.stream"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "source_queries": [
+        "source:redis $scope $host status:error"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "Error Logs",
+      "widget_type": "list_stream"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.logtable-keys",
+          "A.log-source",
+          "A.var-default",
+          "A.style"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "21130c671a258dbefa842f548e877d1e93c39032d3f9d02bfefac5a700b96aab",
+        "rules": [
+          "logs.stream",
+          "log.match.reserved.approx",
+          "log.match.value",
+          "log.match.var.dropped",
+          "panel.style",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item"
+        ],
+        "sourceHash": "1d8aaa61589a7954747ab11f8d2b2e8b8db88752ab714ef6f94e0f887658e357",
+        "status": "exact-under"
+      },
+      "condition": "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing; fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning; Dash0 LogTable filter keys are the dotted forms of the dash0.logs labels (service.name, otel.log.severity.range, otel.log.body)",
+      "dashboard": "Redis - Overview",
+      "decision_required": false,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as Dash0's log table uses the same field names as its log metrics, the log shipper sets the Datadog 'source' as an attribute, the dashboard filter is left on 'all' and colours, fonts and exact positions don't change the meaning.",
+        "technical": "logs.stream + log.match.reserved.approx + log.match.value + log.match.var.dropped + panel.style: exact-under(A.logtable-keys, A.log-source, A.var-default, A.style)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "log.match.var.dropped",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-5980709888086058",
+          "itemKind": "panel",
+          "message": "template variable $scope dropped from the log search (exact while it is left at '*')",
+          "original": "$scope",
+          "ruleId": "log.match.var.dropped",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "a free-form template variable (no tag key) is left at its default '*', so dropping it filters nothing"
+          ],
+          "code": "log.match.var.dropped",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-5980709888086058",
+          "itemKind": "panel",
+          "message": "template variable $host dropped from the log search (exact while it is left at '*')",
+          "original": "$host",
+          "ruleId": "log.match.var.dropped",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "fonts, colours, alignment, legend placement and free-layout positions are not part of the panel's meaning"
+          ],
+          "code": "panel.style",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-5980709888086058",
+          "itemKind": "panel",
+          "message": "the stream's column choice is not migrated; the LogTable shows Dash0's default columns",
+          "original": "[{\"field\":\"status_line\",\"width\":\"auto\"},{\"field\":\"timestamp\",\"width\":\"auto\"},{\"field\":\"content\",\"width\":\"compact\"}]",
+          "ruleId": "panel.style",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "Dash0 LogTable filter keys are the dotted forms of the dash0.logs labels (service.name, otel.log.severity.range, otel.log.body)"
+          ],
+          "code": "logs.stream",
+          "itemId": "dd-dash-redisdb__overview/w-5/w-5980709888086058",
+          "itemKind": "panel",
+          "message": "log stream shown as a Dash0 LogTable with 1 filter",
+          "original": "source:redis $scope $host",
+          "ruleId": "logs.stream",
+          "status": "exact-under"
+        }
+      ],
+      "group": "Logs",
+      "group_id": "dd-dash-redisdb__overview/w-5",
+      "id": "dd-dash-redisdb__overview/w-5/w-5980709888086058",
+      "kind": "panel",
+      "layout": {
+        "h": 24,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "promql": [],
+      "reason_codes": [
+        "log.match.var.dropped",
+        "panel.style",
+        "logs.stream"
+      ],
+      "source": "dashboards/redisdb__overview.json",
+      "source_formula": null,
+      "source_layout": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "source_queries": [
+        "source:redis $scope $host"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "dd-redisdb-overview",
+        "kind": "dashboard",
+        "readBack": "skipped"
+      },
+      "title": "All Logs",
+      "widget_type": "list_stream"
+    },
+    {
+      "certificate": {
+        "assumptions": [
+          "A.boundary",
+          "A.eval-1m",
+          "A.full-window",
+          "A.monitor-rollup-60s",
+          "A.msg-conditional",
+          "A.no-new-groups",
+          "A.nonzero-denominator",
+          "A.notify-manual"
+        ],
+        "checks": {
+          "importedReadBack": null,
+          "parses": true
+        },
+        "outputHash": "6f8dfae9e00e8f6373e7bd8dc4b13a1583ccd614065c2e853257c33c9c40b37d",
+        "rules": [
+          "classify.monitor.metric",
+          "alert.opt.notification",
+          "alert.opt.new_group_delay",
+          "alert.opt.require_full_window.true",
+          "select.metric.mapped",
+          "scope.all",
+          "time.rollup.monitor-bucket",
+          "space.agg",
+          "arith.number",
+          "arith.same-groups",
+          "arith.div",
+          "monitor.window",
+          "monitor.cmp.gt",
+          "alert.threshold.both",
+          "alert.id",
+          "alert.name",
+          "alert.tags",
+          "alert.msg.summary",
+          "alert.msg.conditional",
+          "alert.msg.value",
+          "alert.defaults",
+          "emit.rules-disabled",
+          "emit.certificate",
+          "validate.preflight",
+          "emit.id",
+          "emit.single-item",
+          "emit.rules-disabled"
+        ],
+        "sourceHash": "c32604a197c267e078cdac588d2d563c01f3caeb1880640bfa546792a20e4012",
+        "status": "exact-under"
+      },
+      "condition": "notification routing (channels, renotify, escalation) is recreated by hand in Dash0; it does not change when the rule fires; no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay; every evaluated series has samples across the whole monitor window (Datadog require_full_window); the reader of a notification can tell failed from degraded by the rule's threshold, so text from {{#is_alert}} / {{#is_warning}} blocks may appear unconditionally; Datadog evaluates the monitor once per minute (true for metric monitors with windows up to 24 h)",
+      "dashboard": null,
+      "decision_required": true,
+      "explain": {
+        "plain": "Same result as in Datadog, as long as no data point lands exactly on the edge of a time bucket, Datadog checks the monitor once a minute, every series has data for the whole monitor window, Datadog checks the monitor on one-minute buckets, readers can tell critical from warning by the alert's threshold, no new host or group appears during Datadog's grace period, the value you divide by is never zero and notifications are set up again by hand in Dash0.",
+        "technical": "classify.monitor.metric + alert.opt.notification + alert.opt.new_group_delay + alert.opt.require_full_window.true + select.metric.mapped + scope.all + time.rollup.monitor-bucket + space.agg + arith.number + arith.same-groups + arith.div + monitor.window + monitor.cmp.gt + alert.threshold.both + alert.id + alert.name + alert.tags + alert.msg.summary + alert.msg.conditional + alert.msg.value + alert.defaults: exact-under(A.boundary, A.eval-1m, A.full-window, A.monitor-rollup-60s, A.msg-conditional, A.no-new-groups, A.nonzero-denominator, A.notify-manual)"
+      },
+      "findings": [
+        {
+          "assumptions": [
+            "notification routing (channels, renotify, escalation) is recreated by hand in Dash0; it does not change when the rule fires"
+          ],
+          "code": "monitor.option",
+          "itemId": "dd-monitor-redisdb-high-mem",
+          "itemKind": "alert",
+          "message": "renotify_*, escalation_message, notify_audit, include_tags, enable_logs_sample, groupby_simple_monitor, notification_preset_name, notify_by, locked, restricted_roles, silenced → not emitted; listed in the report as manual setup",
+          "original": "include_tags: true",
+          "ruleId": "alert.opt.notification",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay"
+          ],
+          "code": "monitor.option",
+          "itemId": "dd-monitor-redisdb-high-mem",
+          "itemKind": "alert",
+          "message": "new_group_delay / new_host_delay > 0 → expression unchanged",
+          "original": "new_host_delay: 300",
+          "ruleId": "alert.opt.new_group_delay",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "every evaluated series has samples across the whole monitor window (Datadog require_full_window)"
+          ],
+          "code": "monitor.option",
+          "itemId": "dd-monitor-redisdb-high-mem",
+          "itemKind": "alert",
+          "message": "require_full_window: true → expression unchanged",
+          "original": "require_full_window: true",
+          "ruleId": "alert.opt.require_full_window.true",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "the reader of a notification can tell failed from degraded by the rule's threshold, so text from {{#is_alert}} / {{#is_warning}} blocks may appear unconditionally"
+          ],
+          "code": "alert.msg.conditional",
+          "itemId": "dd-monitor-redisdb-high-mem",
+          "itemKind": "alert",
+          "message": "{{#is_alert}} / {{#is_warning}} blocks (until probe:threshold-label is yes) → markers removed, the block's text kept unconditionally",
+          "ruleId": "alert.msg.conditional",
+          "status": "exact-under"
+        },
+        {
+          "assumptions": [
+            "Datadog evaluates the monitor once per minute (true for metric monitors with windows up to 24 h)"
+          ],
+          "code": "alert.defaults",
+          "itemId": "dd-monitor-redisdb-high-mem",
+          "itemKind": "alert",
+          "message": "evaluation schedule → interval \"1m\", for \"0s\", keep_firing_for \"0s\"",
+          "ruleId": "alert.defaults",
+          "status": "exact-under"
+        }
+      ],
+      "group": null,
+      "group_id": null,
+      "id": "dd-monitor-redisdb__high_mem",
+      "kind": "alert",
+      "layout": null,
+      "manual_actions": [
+        "Review and enable the check rule in Dash0 (imported disabled, D-30)."
+      ],
+      "promql": [
+        "avg_over_time((100 * avg (avg_over_time({otel_metric_name=\"redis.memory.used\"}[1m])) / avg (avg_over_time({otel_metric_name=\"redis.maxmemory\"}[1m])))[5m:1m]) > $__threshold"
+      ],
+      "reason_codes": [
+        "monitor.option",
+        "alert.msg.conditional",
+        "alert.defaults"
+      ],
+      "source": "monitors/redisdb__high_mem.json",
+      "source_formula": null,
+      "source_layout": null,
+      "source_queries": [
+        "avg(last_5m):100 * avg:redis.mem.used{*} / avg:redis.mem.maxmemory{*} > 90"
+      ],
+      "status": "exact-under",
+      "target": {
+        "action": "dry-run",
+        "dash0Id": "8f2feda9-c3a8-5b04-a601-58a589b122a5",
+        "kind": "check-rule",
+        "readBack": "skipped"
+      },
+      "thresholds": {
+        "degraded": 70,
+        "failed": 90
+      },
+      "title": "[Redis] High memory consumption",
+      "widget_type": "query alert"
+    }
+  ],
+  "reasonCodes": {
+    "alert.defaults": {
+      "catalogRule": "alert.defaults",
+      "explanation": "evaluation schedule → interval \"1m\", for \"0s\", keep_firing_for \"0s\"",
+      "label": "alert defaults",
+      "plain": "Same result as in Datadog, as long as Datadog checks the monitor once a minute."
+    },
+    "alert.msg.conditional": {
+      "catalogRule": "alert.msg.conditional",
+      "explanation": "{{#is_alert}} / {{#is_warning}} blocks (until probe:threshold-label is yes) → markers removed, the block's text kept unconditionally",
+      "label": "msg conditional",
+      "plain": "Same result as in Datadog, as long as readers can tell critical from warning by the alert's threshold."
+    },
+    "log.match.var.dropped": {
+      "catalogRule": "log.match.var.dropped",
+      "explanation": "$var without a facet → dropped while it is '*'",
+      "label": "var dropped",
+      "plain": "Same result as in Datadog, as long as the dashboard filter is left on 'all'."
+    },
+    "logs.stream": {
+      "catalogRule": "logs.stream",
+      "explanation": "log_stream / list_stream widget → placeholder until the LogTable schema comes from T0",
+      "label": "logs stream",
+      "plain": "Not migrated automatically: placeholder until the LogTable schema comes from T0. The original is kept so a person can rebuild it."
+    },
+    "metric.approximate": {
+      "catalogRule": "select.metric.approximate",
+      "explanation": "mapping entry marked approximate → selector as mapped, status at best bounded (Tried before select.metric.mapped: an entry marked approximate never counts as exact.)",
+      "label": "metric approximate",
+      "plain": "Close to Datadog's result: small differences are possible at the edges of each time window, within a stated bound."
+    },
+    "metric.no_equivalent": {
+      "catalogRule": "metric.no_equivalent",
+      "explanation": "mapping says the OTel receiver emits no equivalent → no output; placeholder panel",
+      "label": "metric no equivalent",
+      "plain": "Not migrated automatically: placeholder panel. The original is kept so a person can rebuild it."
+    },
+    "monitor.option": {
+      "catalogRule": "alert.threshold.recovery",
+      "explanation": "critical_recovery / warning_recovery → no output: value hysteresis has no Dash0 form (keep_firing_for is time-based) (Policy (kb 06 §8): never import a weaker active alert silently. keepManual emits it disabled for review.)",
+      "label": "monitor option",
+      "plain": "Not migrated automatically: value hysteresis has no Dash0 form (keep_firing_for is time-based). The original is kept so a person can rebuild it."
+    },
+    "panel.conditional-format": {
+      "catalogRule": "panel.conditional-format",
+      "explanation": "query_value conditional formats (first matching rule wins; > >= < <=; red/yellow/green/blue/gray or custom hex) → StatChart thresholds: one step wherever the colour changes; pieces Perses can't colour the same way are named in the finding",
+      "label": "panel conditional format",
+      "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning."
+    },
+    "panel.markers": {
+      "catalogRule": "panel.markers",
+      "explanation": "markers / y-axis lines → TimeSeriesChart thresholds",
+      "label": "panel markers",
+      "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning."
+    },
+    "panel.style": {
+      "catalogRule": "panel.style",
+      "explanation": "palette, legend, display type, title alignment → closest Perses visual option",
+      "label": "panel style",
+      "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning."
+    },
+    "scope.var.free-form": {
+      "catalogRule": "scope.var.free-form",
+      "explanation": "$var with no tag key ($scope) → dropped; filters nothing at its default",
+      "label": "var free form",
+      "plain": "Same result as in Datadog, as long as the dashboard filter is left on 'all'."
+    },
+    "variable.pinned": {
+      "catalogRule": "variable.pinned",
+      "explanation": "variable with default * (v1, until variable.list ships) → no variable, no matcher",
+      "label": "variable pinned",
+      "plain": "Same result as in Datadog, as long as the dashboard filter is left on 'all'."
+    },
+    "widget.note": {
+      "catalogRule": "widget.note",
+      "explanation": "note / free_text → Markdown with the same text",
+      "label": "widget note",
+      "plain": "Same result as in Datadog, as long as colours, fonts and exact positions don't change the meaning."
+    },
+    "widget.query_value": {
+      "catalogRule": "widget.query_value",
+      "explanation": "query_value with aggregator avg|max|min|sum|last → StatChart with the matching calculation",
+      "label": "widget query value",
+      "plain": "Same result as in Datadog, as long as both tools cut time into the same buckets and no data point lands exactly on the edge of a time bucket."
+    },
+    "widget.unsupported": {
+      "catalogRule": "widget.unsupported",
+      "explanation": "hostmap, service_map, manage_status, check_status, slo, trace_service, geomap, funnel, iframe, event_stream, event_timeline, split_graph → Markdown panel with the original query and the reason",
+      "label": "widget unsupported",
+      "plain": "Not migrated automatically: Markdown panel with the original query and the reason. The original is kept so a person can rebuild it."
+    }
+  },
+  "run": {
+    "catalogHash": "b76eab815d362a386d08a6b32ccdda8d7fc50719e828cd3d4a3b8583e917f628",
+    "inputHash": "9bafa06fce9833bda170dc5237ce964732872cd43b44cc271b7d32516ea2f7fc",
+    "mappingFiles": [
+      "mappings/tags.yaml",
+      "mappings/log-attributes.yaml",
+      "datadog/nginx.yaml",
+      "datadog/postgresql.yaml",
+      "datadog/redisdb.yaml",
+      "datadog/system.yaml",
+      "datadog/_kinds.json",
+      "mappings/notification-channels.yaml"
+    ],
+    "options": {
+      "enableRules": false,
+      "input": "folder",
+      "mode": "dry-run",
+      "only": "all"
+    },
+    "outputHash": "acc92ef5dc899bb7eb0bc4a1348725e50a590f1945087c1ad65518891c5b4f52",
+    "source": {
+      "kind": "folder",
+      "path": "/tmp/ev-in",
+      "site": null
+    },
+    "tool": "dd2dash0",
+    "toolCommit": null,
+    "version": "0.5.0"
+  },
+  "schema": "dd2dash0.report/v2",
+  "summary": {
+    "alerts": 1,
+    "byKind": {
+      "alert": {
+        "exact-under": 1
+      },
+      "group": {
+        "exact": 7
+      },
+      "panel": {
+        "bounded": 10,
+        "exact-under": 20,
+        "manual": 5,
+        "unsupported": 1
+      }
+    },
+    "coverageExact": 0.448,
+    "coverageTranslated": 0.793,
+    "dashboards": 1,
+    "findingsByCode": {
+      "alert.defaults": 1,
+      "alert.msg.conditional": 1,
+      "log.match.var.dropped": 4,
+      "logs.stream": 2,
+      "metric.approximate": 13,
+      "metric.no_equivalent": 5,
+      "monitor.option": 3,
+      "panel.conditional-format": 6,
+      "panel.markers": 3,
+      "panel.style": 4,
+      "scope.var.free-form": 44,
+      "variable.pinned": 3,
+      "widget.note": 7,
+      "widget.query_value": 9,
+      "widget.unsupported": 1
+    },
+    "flow": [
+      {
+        "claim": "exact-under",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.defaults"
+      },
+      {
+        "claim": "exact",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.id"
+      },
+      {
+        "claim": "exact",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.name"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.opt.new_group_delay"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.opt.notification"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.opt.require_full_window.true"
+      },
+      {
+        "claim": "exact",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.tags"
+      },
+      {
+        "claim": "exact",
+        "construct": "alert",
+        "count": 1,
+        "ruleId": "alert.threshold.both"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "arith",
+        "count": 5,
+        "ruleId": "arith.div"
+      },
+      {
+        "claim": "exact",
+        "construct": "arith",
+        "count": 5,
+        "ruleId": "arith.number"
+      },
+      {
+        "claim": "exact",
+        "construct": "arith",
+        "count": 5,
+        "ruleId": "arith.same-groups"
+      },
+      {
+        "claim": "exact",
+        "construct": "classify",
+        "count": 1,
+        "ruleId": "classify.monitor.metric"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "function",
+        "count": 1,
+        "ruleId": "fn.diff"
+      },
+      {
+        "claim": "bounded",
+        "construct": "function",
+        "count": 1,
+        "ruleId": "fn.per_unit.counter"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "logs",
+        "count": 2,
+        "ruleId": "log.match.reserved.approx"
+      },
+      {
+        "claim": "exact",
+        "construct": "logs",
+        "count": 2,
+        "ruleId": "log.match.value"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "logs",
+        "count": 2,
+        "ruleId": "log.match.var.dropped"
+      },
+      {
+        "claim": "manual",
+        "construct": "logs",
+        "count": 2,
+        "ruleId": "logs.stream"
+      },
+      {
+        "claim": "exact",
+        "construct": "logs",
+        "count": 1,
+        "ruleId": "log.match.status"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "message",
+        "count": 1,
+        "ruleId": "alert.msg.conditional"
+      },
+      {
+        "claim": "exact",
+        "construct": "message",
+        "count": 1,
+        "ruleId": "alert.msg.summary"
+      },
+      {
+        "claim": "exact",
+        "construct": "message",
+        "count": 1,
+        "ruleId": "alert.msg.value"
+      },
+      {
+        "claim": "exact",
+        "construct": "monitor",
+        "count": 1,
+        "ruleId": "monitor.cmp.gt"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "monitor",
+        "count": 1,
+        "ruleId": "monitor.window"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "panel",
+        "count": 6,
+        "ruleId": "panel.conditional-format"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "panel",
+        "count": 4,
+        "ruleId": "panel.style"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "panel",
+        "count": 3,
+        "ruleId": "panel.markers"
+      },
+      {
+        "claim": "exact",
+        "construct": "scope",
+        "count": 1,
+        "ruleId": "scope.all"
+      },
+      {
+        "claim": "exact",
+        "construct": "select",
+        "count": 22,
+        "ruleId": "select.metric.mapped"
+      },
+      {
+        "claim": "bounded",
+        "construct": "select",
+        "count": 9,
+        "ruleId": "select.metric.approximate"
+      },
+      {
+        "claim": "exact",
+        "construct": "select",
+        "count": 1,
+        "ruleId": "select.labels"
+      },
+      {
+        "claim": "exact",
+        "construct": "space",
+        "count": 22,
+        "ruleId": "space.agg"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "time",
+        "count": 16,
+        "ruleId": "time.rollup.default"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "time",
+        "count": 5,
+        "ruleId": "time.ddrate.plain.anchored"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "time",
+        "count": 1,
+        "ruleId": "time.rollup.monitor-bucket"
+      },
+      {
+        "claim": "exact",
+        "construct": "widget",
+        "count": 12,
+        "ruleId": "widget.timeseries"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "widget",
+        "count": 9,
+        "ruleId": "widget.query_value"
+      },
+      {
+        "claim": "exact-under",
+        "construct": "widget",
+        "count": 7,
+        "ruleId": "widget.note"
+      },
+      {
+        "claim": "manual",
+        "construct": "widget",
+        "count": 5,
+        "ruleId": "widget.unknown"
+      },
+      {
+        "claim": "manual",
+        "construct": "widget",
+        "count": 1,
+        "ruleId": "widget.heatmap"
+      }
+    ],
+    "gaps": [
+      {
+        "code": "metric.no_equivalent",
+        "example": "Primary link down (dd-dash-redisdb__overview/w-1/w-8493776400619900)",
+        "fixKind": "source",
+        "items": 5
+      },
+      {
+        "code": "widget.unsupported",
+        "example": "Key length distribution (dd-dash-redisdb__overview/w-3286140376470284/w-7861051565277545)",
+        "fixKind": "dash0-limit",
+        "items": 1
+      }
+    ],
+    "groups": 7,
+    "import": {
+      "failed": 0,
+      "imported": 0,
+      "mode": "dry-run",
+      "readBackMatch": 0,
+      "rejected": 0,
+      "written": 2
+    },
+    "metrics": {
+      "approximate": 7,
+      "derived": 0,
+      "mapped": 11,
+      "needsTransform": 0,
+      "noEquivalent": 6,
+      "total": 24,
+      "unmapped": 0
+    },
+    "reviewOrder": [
+      "dd-dash-redisdb__overview/w-1/w-8493776400619900",
+      "dd-dash-redisdb__overview/w-2/w-17",
+      "dd-dash-redisdb__overview/w-2/w-19",
+      "dd-dash-redisdb__overview/w-2/w-3029111733155793",
+      "dd-dash-redisdb__overview/w-2/w-8558020471598403",
+      "dd-dash-redisdb__overview/w-3286140376470284/w-7861051565277545",
+      "dd-dash-redisdb__overview/w-1/w-4861235762516572",
+      "dd-dash-redisdb__overview/w-2/w-20",
+      "dd-dash-redisdb__overview/w-2/w-8261008667770670",
+      "dd-dash-redisdb__overview/w-1/w-3774440462666086",
+      "dd-dash-redisdb__overview/w-2/w-21",
+      "dd-dash-redisdb__overview/w-3286140376470284/w-16",
+      "dd-dash-redisdb__overview/w-3286140376470284/w-1840397376605166",
+      "dd-dash-redisdb__overview/w-3286140376470284/w-4565766774748375",
+      "dd-dash-redisdb__overview/w-4/w-22",
+      "dd-dash-redisdb__overview/w-3/w-25",
+      "dd-monitor-redisdb__high_mem"
+    ]
+  }
+}
