@@ -3,7 +3,7 @@
 // claims, the PromQL (validated with the official grammar), and the final claim with the conditions it rests on.
 // It calls exactly the code a migration calls; nothing here translates on its own.
 import { basename } from "node:path";
-import { metricAvailability, metricLookup, metricRatio, ddKindLookup, tagLookup } from "../ir/index.js";
+import { metricAvailability, metricLookup, ddKindLookup, tagLookup } from "../ir/index.js";
 import { loadDdKinds, loadMappings, type Mappings } from "../ir/mappings.js";
 import { parseMonitorQuery, parseQuery, type Arg, type Expr, type MonitorQuery, type ScopeExpr } from "../parse/index.js";
 import { ASSUMPTIONS, RULES, translateMonitor, translateQuery, type QueryTranslation, type TranslateContext } from "../translate/query/index.js";
@@ -158,7 +158,7 @@ export function explain(o: ExplainOptions): number {
   // 2. Map
   const mappings: Mappings = loadMappings(o.mappingsDir);
   const kinds = loadDdKinds(o.mappingsDir);
-  const ctx: TranslateContext = { metric: metricLookup(mappings), availability: (dd) => metricAvailability(mappings, dd), ratio: metricRatio(mappings), tag: tagLookup(mappings), ddKind: ddKindLookup(kinds, mappings) };
+  const ctx: TranslateContext = { metric: metricLookup(mappings), availability: (dd) => metricAvailability(mappings, dd), tag: tagLookup(mappings), ddKind: ddKindLookup(kinds, mappings) };
   const metrics = new Set<string>();
   const tags = new Set<string>();
   collect(expr, metrics, tags);
@@ -171,15 +171,6 @@ export function explain(o: ExplainOptions): number {
       const extra = [hit.kind, hit.status ?? "exact", ...(hit.scale && hit.scale !== 1 ? [`× ${hit.scale}`] : []), ...(hit.sumBy?.length ? [`sum over ${hit.sumBy.join(", ")}`] : []), ...(hit.labels ? Object.entries(hit.labels).map(([k, v]) => `${k}="${v}"`) : [])];
       ui.detail(`${m} ${p.dim("→")} ${p.accent(hit.otel)}  ${p.dim(extra.join(" · "))}${origin ? p.dim(`  mappings/datadog/${basename(origin)}`) : ""}`);
     } else {
-      const ratio = ctx.ratio!(m);
-      if (ratio) {
-        ui.detail(`${m} ${p.dim("→")} ${p.accent(`${ratio.num} / ${ratio.den}`)}  ${p.dim("ratio of two mapped metrics")}${origin ? p.dim(`  mappings/datadog/${basename(origin)}`) : ""}`);
-        for (const side of [ratio.num, ratio.den]) {
-          const h = ctx.metric!(side);
-          if (h) ui.detail(`  ${side} ${p.dim("→")} ${p.accent(h.otel)}  ${p.dim([h.kind, h.status ?? "exact"].join(" · "))}`);
-        }
-        continue;
-      }
       const kind = ctx.ddKind!(m);
       ui.detail(`${m} ${p.dim("→")} ${p.warn(avail === "unmapped" ? "no curated mapping" : avail.replace("_", " "))}${kind ? p.dim(`  Datadog kind ${kind} (integrations-core metadata)`) : ""}`);
     }
