@@ -256,8 +256,8 @@ function page(o: WebKeysOptions, nonce: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>dd2dash0 · connect</title><meta name="robots" content="noindex"><meta name="color-scheme" content="dark light">
 <style nonce="${nonce}">
-:root{--bg:#0c0d10;--fg:#d9dbe0;--dim:#8d929c;--line:#2a2e35;--accent:#87afff;--ok:#5fd787;--warn:#d7af5f;--bad:#ff6b6b;--sel:#87afff40;--ease:cubic-bezier(.23,1,.32,1);color-scheme:dark}
-@media (prefers-color-scheme:light){:root{--bg:#fbfbfa;--fg:#1d1f23;--dim:#5d626b;--line:#d9d9d4;--accent:#2d55c4;--ok:#17703d;--warn:#875a08;--bad:#b42f2d;--sel:#2d55c430;color-scheme:light}}
+:root{--bg:#13131c;--fg:#ecebf4;--dim:#a3a2b5;--line:#2d2b40;--accent:#a78bfa;--ok:#5fd787;--warn:#f0a43a;--bad:#f2738f;--sel:#a78bfa40;--ease:cubic-bezier(.23,1,.32,1);color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#ffffff;--fg:#13131c;--dim:#5c5b6b;--line:#e4dcf7;--accent:#6d28d9;--ok:#17703d;--warn:#b45309;--bad:#b4224a;--sel:#6d28d930;color-scheme:light}}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--fg)}::selection{background:var(--sel)}
 body{font:14px/1.6 ui-monospace,"SF Mono",SFMono-Regular,"Cascadia Mono",Menlo,Consolas,monospace;-webkit-font-smoothing:antialiased;padding:9vh 24px 48px}
 main{max-width:660px;margin:0 auto}

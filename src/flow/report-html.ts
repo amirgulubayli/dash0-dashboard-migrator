@@ -203,8 +203,8 @@ ${monitors.length ? `<li><a href="#monitors">Monitors <span class="n">${monitors
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>dd2dash0 report · ${esc(facts.startedAt.slice(0, 16).replace("T", " "))}</title><meta name="color-scheme" content="dark light">
 <style>
-:root{--bg:#0c0d10;--raise:#13151a;--fg:#d9dbe0;--dim:#8d929c;--line:#262a31;--accent:#87afff;--ok:#5fd787;--warn:#d7af5f;--bad:#ff6b6b;--sel:#87afff40;color-scheme:dark}
-@media (prefers-color-scheme:light){:root{--bg:#fbfbfa;--raise:#f1f1ee;--fg:#1d1f23;--dim:#5d626b;--line:#e0e0dc;--accent:#2d55c4;--ok:#17703d;--warn:#875a08;--bad:#b42f2d;--sel:#2d55c430;color-scheme:light}}
+:root{--bg:#13131c;--raise:#1c1b29;--fg:#ecebf4;--dim:#a3a2b5;--line:#2d2b40;--accent:#a78bfa;--ok:#5fd787;--warn:#f0a43a;--bad:#f2738f;--sel:#a78bfa40;color-scheme:dark}
+@media (prefers-color-scheme:light){:root{--bg:#ffffff;--raise:#f4f1fc;--fg:#13131c;--dim:#5c5b6b;--line:#e4dcf7;--accent:#6d28d9;--ok:#17703d;--warn:#b45309;--bad:#b4224a;--sel:#6d28d930;color-scheme:light}}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:64px}html,body{margin:0;background:var(--bg);color:var(--fg)}
 body{font:13.5px/1.6 ui-monospace,"SF Mono",SFMono-Regular,"Cascadia Mono",Menlo,Consolas,monospace;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
 ::selection{background:var(--sel)}a{color:inherit;text-decoration-color:var(--line);text-underline-offset:3px}a:hover{text-decoration-color:var(--accent)}
@@ -290,7 +290,7 @@ footer{color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-
 }
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 @media print{
- :root{--bg:#fff;--raise:#f4f4f2;--fg:#000;--dim:#444;--line:#ccc;--accent:#1f46b5;--ok:#0d6632;--warn:#7a4f00;--bad:#a12020;color-scheme:light}
+ :root{--bg:#fff;--raise:#f4f4f2;--fg:#000;--dim:#444;--line:#ccc;--accent:#5b21b6;--ok:#0d6632;--warn:#7a4f00;--bad:#a12020;color-scheme:light}
  body{font-size:12px}.shell{display:block;padding:0;max-width:none}.toc,.jump,.filter,.skip{display:none}
  details::details-content{content-visibility:visible;display:block}details>summary::before{display:none}
  .item,.ag li,.mon{break-inside:avoid}h2,h3{break-after:avoid}a{text-decoration:none}
