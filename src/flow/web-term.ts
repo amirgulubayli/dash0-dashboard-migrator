@@ -15,6 +15,7 @@ import { basename, extname } from "node:path";
 import type { Out } from "../ui/style.js";
 import type { KeyIO } from "./keys.js";
 import type { AskBlock, Choose } from "./tty.js";
+import { LIVE_CSS, LIVE_JS, liveCsp, liveTags, webLive } from "./web-live.js"; // [web-live hook]
 
 export type WebIO = KeyIO & { choose: Choose; askBlock: AskBlock };
 
@@ -48,7 +49,7 @@ type Ask =
   | { t: "ask"; id: number; kind: "choose"; prompt: string; options: string[]; def: number }
   | { t: "ask"; id: number; kind: "block"; prompt: string };
 type NoId<T> = T extends unknown ? Omit<T, "id"> : never;
-type Ev = { t: "out"; s: string } | Ask | { t: "link"; label: string; url: string } | { t: "exit"; code: number };
+type Ev = { t: "out"; s: string } | Ask | { t: "link"; label: string; url: string } | { t: "exit"; code: number } | { t: "live"; state: unknown; say?: string[] }; // [web-live hook]: + live
 
 const COLUMNS = 96;
 const DIM = (s: string) => `\x1b[2m${s}\x1b[22m`;
@@ -73,7 +74,9 @@ export function webTerminal(o: WebTerminalOptions): Promise<number> {
     const write = (s: string) => {
       history += s;
       send({ t: "out", s });
+      live.feed(s); // [web-live hook]
     };
+    const live = webLive({ token, origin: () => origin, send }); // [web-live hook]
 
     const ask = <T>(ev: NoId<Ask>, echo: (v: T | null) => string): Promise<T | null> =>
       new Promise((res) => {
@@ -156,6 +159,7 @@ export function webTerminal(o: WebTerminalOptions): Promise<number> {
     let stop: (() => void) | null = null;
     const finish = (code: number) => {
       exited = code;
+      live.finish(code); // [web-live hook]
       send({ t: "exit", code });
       let done = false;
       stop = () => {
@@ -179,7 +183,7 @@ export function webTerminal(o: WebTerminalOptions): Promise<number> {
       const path = (req.url ?? "").split("?")[0]!;
       if (req.method === "GET" && path === `/${token}`)
         return reply(res, 200, "text/html; charset=utf-8", page(o, nonce, token), {
-          "Content-Security-Policy": `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'`,
+          "Content-Security-Policy": liveCsp(`default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'`), // [web-live hook]: liveCsp( )
         });
       if (req.method === "GET" && path === `/${token}/events`) {
         if (client) client.end(); // the newest tab wins
@@ -188,6 +192,7 @@ export function webTerminal(o: WebTerminalOptions): Promise<number> {
         if (goneTimer) clearTimeout(goneTimer), (goneTimer = null);
         if (history) send({ t: "out", s: history });
         for (const l of links) send(l);
+        live.replay(); // [web-live hook]
         if (pending) send(pending.ev);
         if (exited !== null) send({ t: "exit", code: exited });
         req.on("close", () => {
@@ -219,6 +224,7 @@ export function webTerminal(o: WebTerminalOptions): Promise<number> {
         p.answer(v);
         return;
       }
+      if (await live.handle(req, res, path)) return; // [web-live hook]
       const f = new RegExp(`^/${token}/f/(\\d+)/`).exec(path);
       if (req.method === "GET" && f) {
         const file = files[Number(f[1])];
@@ -234,7 +240,7 @@ export function webTerminal(o: WebTerminalOptions): Promise<number> {
       clearTimeout(connectTimer);
       reject(e);
     });
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(Number(process.env.DD2DASH0_WEB_PORT) || 0, "127.0.0.1", () => { // [web-live hook]: optional fixed port (launch configs)
       origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       o.onReady(`${origin}/${token}`);
     });
@@ -308,6 +314,7 @@ a:focus-visible,button:focus-visible{outline:1px solid var(--accent);outline-off
 .caret{display:inline-block;width:.6em;height:1.15em;vertical-align:-.2em;background:var(--accent);animation:blink 1.1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.caret{animation:none}}
+${LIVE_CSS /* [web-live hook] */}
 </style></head><body>
 <div class="bar"><span><span class="mark">◆</span> <b>dd2dash0</b> ${esc(o.version)} · ${esc(o.cwd)}</span><span class="state off" id="state">connecting</span></div>
 <div id="scroll"><div id="term" role="log" aria-live="polite"></div></div>
@@ -315,6 +322,7 @@ a:focus-visible,button:focus-visible{outline:1px solid var(--accent);outline-off
 "use strict";
 const base = "/${token}", term = document.getElementById("term"), scroller = document.getElementById("scroll"), stateEl = document.getElementById("state");
 const COLORS = { 111: "a", 78: "ok", 179: "wn", 203: "bad" };
+${LIVE_JS /* [web-live hook] */}
 let active = null; // the open question: { el, focus }
 let ended = false;
 
@@ -483,7 +491,7 @@ document.addEventListener("keydown", (e) => { if (active && document.activeEleme
 
 const es = new EventSource(base + "/events");
 // Every (re)connection replays the whole session, so start from a clean screen.
-es.onopen = () => { term.textContent = ""; out = renderer(term); if (active) { active.el.remove(); active = null; } stateEl.className = "state"; stateEl.textContent = "connected"; };
+es.onopen = () => { LV.reset(); /* [web-live hook] */ term.textContent = ""; out = renderer(term); if (active) { active.el.remove(); active = null; } stateEl.className = "state"; stateEl.textContent = "connected"; };
 es.onmessage = (m) => {
   const ev = JSON.parse(m.data);
   if (ev.t === "out") follow(() => out(ev.s));
@@ -494,6 +502,7 @@ es.onmessage = (m) => {
     l.append(Object.assign(document.createElement("span"), { className: "d", textContent: "⎿ " }), a);
     term.insertBefore(l, lastLine() && !lastLine().textContent ? lastLine() : null);
   });
+  else if (ev.t === "live") LV.on(ev); // [web-live hook]
   else if (ev.t === "exit") {
     ended = true; // keep the stream open: it tells dd2dash0 this tab still needs the report link
     if (active) { active.el.remove(); active = null; }
@@ -502,5 +511,5 @@ es.onmessage = (m) => {
   }
 };
 es.onerror = () => { if (ended) return; stateEl.className = "state lost"; stateEl.textContent = "disconnected"; };
-</script></body></html>`;
+</script>${liveTags(token, nonce) /* [web-live hook] */}</body></html>`;
 }
