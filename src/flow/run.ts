@@ -3,14 +3,14 @@
 // Every step reuses the existing gated pipeline (plan.lock, review.json, apply's refusals); this file only chains
 // them and draws the terminal UI (src/ui/style.ts).
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Report } from "../report/types.js";
 import { runApply } from "../pipeline/apply.js";
 import { resolveConfig } from "../pipeline/config.js";
 import { runPlan } from "../pipeline/plan.js";
 import { importAll, type PrometheusAlertRule } from "../targets/dash0/index.js";
-import { bar, box, link, Ui, type Out } from "../ui/style.js";
+import { bar, box, link, tildify, Ui, type Out } from "../ui/style.js";
 import { configEnvPath, displayPath, KeyError, KEYS, keysFromText, knownKeys, LABELS, resolveKeys, saveDotEnv, type KeyIO, type KeyName, type Keys } from "./keys.js";
 import { openBrowser, webKeys } from "./keys-web.js";
 import { batchedReview } from "./review.js";
@@ -36,6 +36,10 @@ export interface GuidedOptions {
   home?: string;
   /** Terminal UI; default: plain lines through io.print (pipes, tests). */
   ui?: Ui;
+  /** false: the caller already drew the header (the "terminal or browser?" question comes first). */
+  header?: boolean;
+  /** Running inside the browser terminal (web-term.ts): keys are typed on that page, so no separate key page. */
+  inBrowser?: boolean;
   /** --browser: enter missing keys on the local web page without asking. */
   browser?: boolean;
   /** Open a file or URL for the user (report.html, the key page). Default: the system opener. */
@@ -81,7 +85,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
   const need = { datadog: useApi, dash0: live };
   const interactive = !o.yes && !!io.choose;
 
-  ui.header(o.version, cwd);
+  if (o.header !== false) ui.header(o.version, cwd);
 
   // 1. Keys
   ui.heading("Keys");
@@ -91,7 +95,8 @@ export async function guided(o: GuidedOptions): Promise<number> {
   const missing = wanted.filter((k) => !known[k]);
   const pasted: KeyName[] = [];
   if (missing.length && (o.browser || (interactive && !o.yes))) {
-    const options = ["Paste your .env, or drag the file into this window", "Type them one by one", "In the browser (a one-time page on this computer)"];
+    const options = ["Paste your .env, or drag the file into this window", "Type them one by one"];
+    if (!o.inBrowser) options.push("In the browser (a one-time page on this computer)");
     const where = o.browser ? 2 : await io.choose!(`${missing.length} key(s) missing. How do you want to add them?`, options, 0);
     if (where === 0 && io.askBlock) {
       const text = (await io.askBlock(`  Paste the contents of your .env, or drop the file here ${p.dim("(nothing you paste is shown)")}`)) ?? "";
@@ -247,7 +252,11 @@ export async function guided(o: GuidedOptions): Promise<number> {
     return { rows, score, files: writeRunReport(runDir, score, rows, facts) };
   };
   let out = write();
-  const rel = (f: string) => relative(cwd, f) || f;
+  // Inside the current folder: a short relative path. Elsewhere: the full path with ~, never a chain of ../.
+  const rel = (f: string) => {
+    const r = relative(cwd, f);
+    return r && !r.startsWith("..") && !isAbsolute(r) ? r : tildify(f);
+  };
   for (const l of resultCard(ui, out.score, { live, rulesImported: applied.imported.rules, rulesOn: enabled.size, manualMonitors: review.manualMonitors.length, html: out.files.html, md: out.files.md, rel })) ui.line(l);
 
   // Offer to switch on only the imported rules that are off (default: leave them off).

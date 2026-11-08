@@ -112,6 +112,10 @@ $ dd2dash0 explain "avg:redis.mem.used{env:prod} by {host}.rollup(avg, 60)"
 
 It explains monitors too (`avg(last_5m):… > 90` → a Dash0 check rule with `failed`/`degraded` thresholds), and points at the exact character where a query doesn't parse.
 
+## Terminal or browser
+
+`dd2dash0` first asks where you want to work. **Here, in this terminal**, or **in the browser**: the same tool on a one-time page on your own computer (127.0.0.1, a secret link, no account, nothing hosted). The browser page is not a second app. The migration still runs in your terminal's process, and the page draws exactly what the terminal would show: the same step tree, colors, spinners and questions, answered with the same keys (arrows, Enter, numbers, `y`/`n`). Drop your `.env` onto the page to add keys. `--web` skips the question.
+
 ## What you need
 
 | Key | Where to find it |
@@ -136,7 +140,7 @@ Saved once, they live in `~/.config/dd2dash0/.env` (only you can read it) and wo
 5. **Verify**: reads every item back from Dash0 and runs every migrated query against the last hour of data, next to the original Datadog query.
 6. **Report**: the result card, `report.html`, `report.md`, `report.json`. At the end it offers to turn the approved rules on (default no) and to open the report.
 
-Commands: `dd2dash0` (the guided migration), `dd2dash0 explain "<query>"`. Options: `--yes` (no questions: keys from the environment, `.env` or the saved file, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--dry-run` (import nothing), `--input <dir>` (Datadog JSON exports instead of the API), `--browser`, `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
+Commands: `dd2dash0` (the guided migration), `dd2dash0 explain "<query>"`. Options: `--yes` (no questions: keys from the environment, `.env` or the saved file, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--dry-run` (import nothing), `--input <dir>` (Datadog JSON exports instead of the API), `--web` (run it in the browser), `--browser` (only the key page), `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
 
 ## How it works
 

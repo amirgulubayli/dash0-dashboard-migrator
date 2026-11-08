@@ -14,7 +14,9 @@ import { runApply } from "./pipeline/apply.js";
 import { terminalReview } from "./pipeline/review-terminal.js";
 import { explain } from "./flow/explain.js";
 import { guided, terminalIO } from "./flow/run.js";
-import { outOf, Ui } from "./ui/style.js";
+import { outOf, tildify, Ui } from "./ui/style.js";
+import { openBrowser } from "./flow/keys-web.js";
+import { webBanner, webTerminal } from "./flow/web-term.js";
 import { createInterface } from "node:readline/promises";
 
 export const VERSION = "0.5.1";
@@ -45,6 +47,7 @@ Usage:
 Options:
   --yes                 no prompts: keys from env, .env or the saved file; approve bounded panels and
                         translatable monitors
+  --web                 run the whole migration in the browser, on a one-time page on this computer
   --browser             enter missing keys on a one-time local web page instead of the terminal
   --only <what>         dashboards | monitors
   --out <dir>           run directory (default ./dd2dash0-run/<timestamp>)
@@ -82,7 +85,7 @@ const USAGE_ADVANCED = `dd2dash0 ${VERSION} advanced commands
 Guided flow, hidden options: --input <dir> (exported Datadog JSON/YAML instead of the API), --dry-run (write
 payloads, import nothing, skip the live checks).`;
 
-const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser"]);
+const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser", "--web"]);
 
 export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   const [cmd, ...rest] = argv;
@@ -116,7 +119,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
 }
 
 async function runGuided(args: string[]): Promise<number> {
-  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input"], ["--yes", "--dry-run", "--browser"]);
+  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input"], ["--yes", "--dry-run", "--browser", "--web"]);
   if (typeof r === "string" || r._.length) {
     console.error(`${typeof r === "string" ? r : `unexpected argument ${r._[0]}`}\n\n${USAGE}`);
     return EXIT.usage;
@@ -127,19 +130,44 @@ async function runGuided(args: string[]): Promise<number> {
     return EXIT.usage;
   }
   const io = terminalIO();
+  const ui = new Ui(outOf(process.stdout));
+  const common = {
+    yes: r.b.has("--yes"),
+    ...(r.v["--input"] ? { input: r.v["--input"] } : {}),
+    ...(only ? { only: only as "dashboards" | "monitors" } : {}),
+    ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
+    dryRun: r.b.has("--dry-run"),
+    version: VERSION,
+    mappingsDir: defaultMappingsDir(),
+  };
   try {
-    return await guided({
-      yes: r.b.has("--yes"),
-      ...(r.v["--input"] ? { input: r.v["--input"] } : {}),
-      ...(only ? { only: only as "dashboards" | "monitors" } : {}),
-      ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
-      dryRun: r.b.has("--dry-run"),
-      browser: r.b.has("--browser"),
-      ui: new Ui(outOf(process.stdout)),
-      version: VERSION,
-      mappingsDir: defaultMappingsDir(),
-      io,
-    });
+    // First screen: where to work. Only when someone is at a real terminal and didn't already say (--yes, --web, --browser).
+    const atTerminal = process.stdin.isTTY === true && process.stdout.isTTY === true;
+    let web = r.b.has("--web");
+    let header = true;
+    if (!web && atTerminal && !common.yes && !r.b.has("--browser")) {
+      ui.header(VERSION, process.cwd());
+      header = false;
+      const where = await io.choose("Where do you want to work?", ["Here, in this terminal", "In the browser (the same tool, on a one-time page on this computer)"], 0);
+      if (where === null) return EXIT.refused;
+      web = where === 1;
+      if (web) ui.line();
+    }
+    if (web) {
+      io.close();
+      const open = process.env.DD2DASH0_NO_OPEN ? () => {} : openBrowser;
+      return await webTerminal({
+        version: VERSION,
+        cwd: tildify(process.cwd()),
+        onReady: (url) => {
+          for (const l of webBanner(url)) ui.line(l);
+          open(url);
+        },
+        run: (s) => guided({ ...common, io: s.io, ui: new Ui(s.out, s.env), open: s.open, inBrowser: true }),
+        onFinished: (code) => ui.line(`  ${ui.p.dim("⎿")} ${ui.p.dim(`finished (exit ${code}) · the page stays up until you close its tab`)}`),
+      });
+    }
+    return await guided({ ...common, header, browser: r.b.has("--browser"), ui, io });
   } catch (e) {
     console.error(`dd2dash0: ${(e as Error).message}`);
     return EXIT.failed;
