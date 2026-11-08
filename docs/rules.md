@@ -7,7 +7,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 70 | 51 | 19 | 55 | 195 |
+| implemented | 70 | 55 | 15 | 55 | 195 |
 | planned | 16 | 28 | 3 | 11 | 58 |
 
 ## Pipeline order
@@ -389,8 +389,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
-| 10 | `log.count` | log query, compute count, search Q, group_by g | sum by (g) (increase({otel_metric_name="dash0.logs", m(Q)}[w])) | bounded(ε) | unit, proof:T3, live:dash0-4110 | probe:log-labels | T12 | implemented |
-| 20 | `log.cardinality` | cardinality of @a | count by (g) (sum by (g, a) (increase(...[w])) > 0) | bounded(ε) | unit, proof:T3, live:dash0-4110 | probe:log-labels | T12 | implemented |
+| 10 | `log.count` | log query, compute count, search Q, group_by g | sum by (g) (increase({otel_metric_name="dash0.logs", m(Q)}[w])) | exact-under(A.log-count, A.align, A.boundary) | unit, live:dash0-4110, live:log-increase-exact | probe:log-labels, probe:log-increase-exact | T12 | implemented |
+| 20 | `log.cardinality` | cardinality of @a | count by (g) (sum by (g, a) (increase(...[w])) > 0) | exact-under(A.log-count, A.align, A.boundary) | unit, live:dash0-4110, live:log-increase-exact | probe:log-labels, probe:log-increase-exact | T12 | implemented |
 | 30 | `log.match.reserved` | service / host / env / version:x | the resource label (service_name, ...) | exact | unit | probe:log-labels | T12 | implemented |
 | 40 | `log.match.reserved.approx` | source:x | source="x" (no OTel counterpart) | exact-under(A.log-source) | unit | — | T12 | implemented |
 | 50 | `log.match.attr` | @a.b:x | a_b="x" (renames from mappings/log-attributes.yaml applied) | exact-under(A.log-attr-default) | unit | probe:log-labels | T12 | implemented |
@@ -405,11 +405,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 140 | `log.group_by.multi-limit` | several facets with limits | by (labels), limits not applied | exact-under(A.group-limit) | unit | — | T12 | implemented |
 | 150 | `log.group_by.exclude-missing` | should_exclude_missing: true | label!="" for each group-by label | exact | unit | — | T12 | implemented |
 | 155 | `log.range.integer` | @a:>=500 / @a:[200 TO 299] on integer attributes | a=~ an exact regex over the decimal digits | exact | unit | — | T12 | implemented |
-| 157 | `log.or.inclusion-exclusion` | count(A OR B ...) across different keys (up to 3 branches) | sum of counts by inclusion-exclusion | bounded(ε) | unit, proof:log-or, exhaustive:E5 | — | T12 | implemented |
+| 157 | `log.or.inclusion-exclusion` | count(A OR B ...) across different keys (up to 3 branches) | sum of counts by inclusion-exclusion | exact-under(A.log-count, A.align, A.boundary) | unit, proof:log-or, exhaustive:E5, live:log-increase-exact | probe:log-increase-exact | T12 | implemented |
 | 160 | `log.indexes` | indexes other than '*' | all logs (Dash0 has no indexes) | exact-under(A.all-indexes) | unit | — | T12 | implemented |
 | 170 | `log.monitor.count` | logs(Q).rollup(count).by(g).last(W) op T | sum by (g) (increase(...[W])) op $__threshold | bounded(ε) | unit, proof:T3 | probe:log-labels | T12 | implemented |
 | 175 | `log.monitor.formula` | formula("...").last(W) over log queries | the formula over windowed counts | bounded(ε) | unit, proof:T3 | — | T12 | implemented |
-| 180 | `log.scalar.window` | scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe) | the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value | bounded(ε) | unit | probe:range-var | T12 | implemented |
+| 180 | `log.scalar.window` | scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe) | the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value | exact-under(A.log-count, A.log-range) | unit, live:log-increase-exact | probe:range-var, probe:log-increase-exact | T12 | implemented |
 | 185 | `log.or.cross-key` | OR across different keys (or with free text) beyond what inclusion-exclusion covers: more than 3 branches, or outside a count | no output: not a matcher set | manual | unit | — | T12 | implemented |
 | 190 | `log.measure` | avg / sum / min / max / percentile of a log measure (@attr) | no output: dash0.logs only counts log records | manual | unit | — | T12 | implemented |
 | 192 | `log.status.unknown` | status:<value> with no OTel severity range in mappings/log-attributes.yaml (or a wildcard status) | no output: there is no severity range to match, so any guess would count different logs | manual | unit | — | T12 | implemented |
@@ -418,12 +418,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 230 | `logs.stream` | log_stream / list_stream widget | placeholder until the LogTable schema comes from T0 | manual | — | — | T12 | planned |
 | 999 (fallback) | `logs.unparsed` | log search the log-search parser does not accept | no output; original kept | manual | — | — | T12 | planned |
 
-- `log.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). exact-under(A.same-samples) once probe:anchored is yes (maths.md §8).
-- `log.cardinality`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
-- `log.or.inclusion-exclusion`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
+- `log.count`: Dash0's increase(dash0.logs[w]) is the exact number of records in the window (live, maths.md §4a-logs), not an extrapolated counter: no rate error term. Monitors (log.monitor.*) stay bounded: a check rule has not been probed.
 - `log.monitor.count`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `log.monitor.formula`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
-- `log.scalar.window`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed, rule arith.scalar-log-mixed). EPS_RATE gets relatively tighter over a long range: the uncovered edge stays under one scrape interval while the window total grows with the range.
+- `log.scalar.window`: T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed, rule arith.scalar-log-mixed). The whole-range total was exact live (5,660 of 5,660 records).
 - `log.measure`: Ali is checking whether Dash0's signal-to-metrics can derive such a metric without guessing (hub #285).
 - `logs.rate`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 
@@ -458,8 +456,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Id | Statement | Used by |
 |---|---|---|
-| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 16 |
-| `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 16 |
+| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 19 |
+| `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 19 |
 | `A.kind-gauge` | the metric is a gauge; there is no mapping-table entry to confirm its kind | 1 |
 | `A.monitor-rollup-60s` | Datadog evaluates the monitor's inner query on 60 s buckets | 2 |
 | `A.nonzero-denominator` | the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN) | 2 |
@@ -528,6 +526,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `probe:row-height` (open) | Is one Dash0 grid row as tall as one Datadog grid row? | T0: compare a golden export with the Datadog source | `layout.ordered.height` |
 | `probe:collapse` (open) | Does Dash0 honour Grid display.collapse.open for titled sections? | T0: export a dashboard with one collapsed group | `layout.group.collapsed` |
 | `probe:piechart` (yes) | Does Dash0 render a Perses PieChart from a PromQL query with a grouping? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), read on a rendered throwaway dashboard at the 1h picker: a PieChart over sum by (service_name) (increase({otel_metric_name="dash0.logs"}[$__range])) renders one slice per service (import accepted calculation last-number and mode value). Two pies with the same query, one with calculation last-number and one with spec {}, were proportionally identical but had DIFFERENT absolute values, so the default calculation is not last-number: always set it. Not checked: that the last-number pie's absolute values equal the fixed-window control to the digit (the table in the same probe did). | `widget.pie` |
+| `probe:log-increase-exact` (yes) | Is increase({otel_metric_name="dash0.logs", ...}[w]) the exact number of log records whose timestamp is in the window? | LIVE 2026-11-08 (Ali, org thinc_bavarian_big_ben): logs sent over OTLP with controlled timestamps (never on a boundary) and known counts. 60 s windows: 18 of 18 minutes exact incl. empty ones (375 logs); 60 s windows by severity, bursts up to 600 per minute: 40 of 40 (group, minute) cells exact, no value in an empty cell (5,660 logs); 300 s windows 4 of 4; the whole 1200 s range at its end 5,660 of 5,660; cardinality count(sum by (attr)(increase) > 0) 15 of 15 minutes. Plain and anchored give the same values. It is not a sampled cumulative counter. | `log.count`, `log.cardinality`, `log.or.inclusion-exclusion`, `log.scalar.window` |
 | `probe:log-labels` (yes) | What are the label names for severity and body on {otel_metric_name="dash0.logs"}? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): severity otel_log_severity_range / otel_log_severity_text, body otel_log_body (unanchored regex), attributes with dots as underscores; docs/research/dash0.md "dash0.logs labels", dash0-team 71e47aa | `log.count`, `log.cardinality`, `log.match.reserved`, `log.match.attr`, `log.match.status`, `log.match.status.approx`, `log.match.text`, `log.monitor.count`, `logs.rate` |
 | `probe:dd-formula-join` (open) | In a Datadog formula over queries with different groupings, do unmatched groups drop? | maths.md §11 probe 3 | `arith.group-subset` |
 
@@ -603,7 +602,6 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `log.group_by.limit` (exact-under(A.top-stable), implemented, T12)
 - `log.group_by.multi-limit` (exact-under(A.group-limit), implemented, T12)
 - `log.indexes` (exact-under(A.all-indexes), implemented, T12)
-- `log.scalar.window` (bounded(ε), implemented, T12)
 
 ## Implemented ahead of an open probe
 

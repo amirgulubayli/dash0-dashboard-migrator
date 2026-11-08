@@ -20,6 +20,8 @@ export const LOG_ASSUMPTIONS = {
   "A.log-source": "logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent",
   "A.log-attr-default": "a log attribute without a table entry keeps its name in OTel (dots become underscores in the label)",
   "A.log-fulltext": "Datadog's free-text match of a word equals a case-insensitive substring match on the log body",
+  "A.align": ASSUMPTIONS["A.align"],
+  "A.boundary": ASSUMPTIONS["A.boundary"],
   "A.var-regex": ASSUMPTIONS["A.var-regex"],
   "A.var-default": ASSUMPTIONS["A.var-default"],
   "A.top-stable": ASSUMPTIONS["A.top-stable"],
@@ -38,8 +40,8 @@ interface LogRule {
 const r = (status: Status, assumptions: LogAssumptionId[], description: string): LogRule => ({ status, assumptions, description });
 
 export const LOG_RULES = {
-  "log.count": r("bounded", ["A.log-count"], "count of logs matching Q -> sum by (g) (increase({otel_metric_name=\"dash0.logs\", m(Q)}[w]))"),
-  "log.cardinality": r("bounded", ["A.log-count"], "cardinality of @a -> count by (g) (sum by (g, a) (increase(...[w])) > 0)"),
+  "log.count": r("exact-under", ["A.log-count", "A.align", "A.boundary"], "count of logs matching Q -> sum by (g) (increase({otel_metric_name=\"dash0.logs\", m(Q)}[w]))"),
+  "log.cardinality": r("exact-under", ["A.log-count", "A.align", "A.boundary"], "cardinality of @a -> count by (g) (sum by (g, a) (increase(...[w])) > 0)"),
   "log.match.reserved": r("exact", [], "service/host/env/version:x -> the resource label (service_name, ...)"),
   "log.match.reserved.approx": r("exact-under", ["A.log-source"], "source:x -> source=\"x\" (no OTel counterpart)"),
   "log.match.attr": r("exact-under", ["A.log-attr-default"], "@a.b:x -> a_b=\"x\" (renames from mappings/log-attributes.yaml applied)"),
@@ -54,11 +56,11 @@ export const LOG_RULES = {
   "log.group_by.multi-limit": r("exact-under", ["A.group-limit"], "several facets with limits -> by (labels), limits not applied"),
   "log.group_by.exclude-missing": r("exact", [], "should_exclude_missing: true -> label!=\"\" for each group-by label"),
   "log.range.integer": r("exact", [], "@a:>=500 / @a:[200 TO 299] on integers -> a=~ an exact regex over the decimal digits"),
-  "log.or.inclusion-exclusion": r("bounded", ["A.log-count"], "count(A OR B ...) across keys -> sum of counts by inclusion-exclusion (up to 3 branches)"),
+  "log.or.inclusion-exclusion": r("exact-under", ["A.log-count", "A.align", "A.boundary"], "count(A OR B ...) across keys -> sum of counts by inclusion-exclusion (up to 3 branches)"),
   "log.monitor.formula": r("bounded", ["A.log-count"], "formula(\"...\").last(W) over log queries -> the formula over windowed counts"),
   "log.indexes": r("exact-under", ["A.all-indexes"], "indexes other than '*' -> all logs (Dash0 has no indexes)"),
   "log.monitor.count": r("bounded", ["A.log-count"], "logs(Q).rollup(count).by(g).last(W) op T -> sum by (g) (increase(...[W])) op $__threshold"),
-  "log.scalar.window": r("bounded", ["A.log-count", "A.log-range"], "scalar log query (query_value, top list, table): the same count over [$__range] instead of one [$__interval] bucket; the panel must show the last value"),
+  "log.scalar.window": r("exact-under", ["A.log-count", "A.log-range"], "scalar log query (query_value, top list, table): the same count over [$__range] instead of one [$__interval] bucket; the panel must show the last value"),
 } as const satisfies Record<string, LogRule>;
 export type LogRuleId = keyof typeof LOG_RULES;
 

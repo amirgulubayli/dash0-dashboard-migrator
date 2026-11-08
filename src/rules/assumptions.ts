@@ -76,6 +76,8 @@ export const T12_ASSUMPTION_IDS = [
   "A.log-source",
   "A.log-attr-default",
   "A.log-fulltext",
+  "A.align",
+  "A.boundary",
   "A.var-regex",
   "A.var-default",
   "A.top-stable",

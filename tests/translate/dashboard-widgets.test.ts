@@ -137,7 +137,7 @@ describe("image and sunburst widgets", () => {
   it("a single-level geomap is shown as a TimeSeriesTable of its values per group, labelled as an alternative view", () => {
     const e = p("Errors by country");
     expect(e.placeholder).toBe(false);
-    expect(e.status).toBe("bounded");
+    expect(e.status).toBe("exact-under");
     expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
     expect(e.promql[0]).toContain("[$__range]");
     expect(e.rules).toEqual(expect.arrayContaining(["widget.geomap", "log.scalar.window"]));
