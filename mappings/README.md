@@ -15,7 +15,9 @@ Schema and loader: `src/ir/mappings.ts`. Format changes need a CONTRACT.
 ```
 node scripts/build-redis-mapping.mjs <fork>/mappings/datadog/redisdb.yaml
 ```
-Its sources (Datadog check constants, metadata.csv, OTel receiver metadata v0.164.0, the research crosswalk) are in the workspace at `docs/research/sources/redisdb/`. Current totals: 271 metrics: 39 exact, 22 approximate, 5 derived, 205 no equivalent. All 24 metrics used by the Redis overview dashboard and the high-memory monitor are covered, and 18 of them have an equivalent.
+Its sources (Datadog check constants, metadata.csv, OTel receiver metadata v0.164.0, the research crosswalk) are in the workspace at `docs/research/sources/redisdb/`. Current totals: 271 metrics: 39 exact, 22 approximate, 5 derived, 205 no equivalent. All 24 metrics used by the Redis overview dashboard and the high-memory monitor are covered, and 18 of them have an equivalent. 23 of its rows map to receiver metrics that are **disabled by default**, and each note says so; that includes `redis.maxmemory`, the high-memory monitor's denominator, so the Collector must enable it.
+
+**Logic gates (plan 09).** `tests/ir/mappings-logic.test.ts` checks every row of every table against its pinned sources: the OTel name exists in the receiver metadata (L1), kind, unit and labels agree (L2-L4), a ddKind that differs from metadata.csv cites the check source (L5), default-off receiver metrics are declared in the note (L6), and `exact` only when no kind change is needed (L7). The receiver facts come from `datadog/_receivers.json`, **generated** in the workspace with `node scripts/build-receiver-facts.mjs <fork>/mappings/datadog/_receivers.json` from `docs/research/sources/`. A new integration needs its receiver metadata pinned there first.
 
 ## Collector setup (data only appears if the receiver emits the metric)
 
@@ -47,4 +49,24 @@ receivers:
 
 **NGINX** (`nginxreceiver`): needs `stub_status` exposed (for example `location /status { stub_status; }`) and `endpoint: http://<host>/status`. The mapped metrics (`nginx.connections_current`, `nginx.requests`) are enabled by default.
 
-**Host metrics** (`system.*`): not mapped. Those panels stay `metric.unmapped`.
+**Host metrics** (`system.*`, `hostmetricsreceiver`, `datadog/system.yaml`; Datadog side from the datadog-agent 7.60.0 core checks). Scrapers needed: `cpu`, `load`, `memory`, `disk`, `network`. These mapped metrics are **disabled by default** and must be enabled:
+
+```yaml
+receivers:
+  hostmetrics:
+    collection_interval: 10s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization: { enabled: true }   # system.cpu.idle/iowait/stolen (+ derived user/system/interrupt)
+      load: {}
+      memory:
+        metrics:
+          system.memory.limit: { enabled: true }            # system.mem.total
+          system.linux.memory.available: { enabled: true }  # system.mem.usable (Linux only)
+          system.memory.linux.shared: { enabled: true }     # system.mem.shared
+      disk: {}
+      network: {}
+```
+- `system.cpu.utilization` is averaged over CPUs by default (`attributes: [state]`, `aggregation_strategy: avg`), which is what Datadog's `system.cpu.*` percent means. Don't opt in the `cpu` attribute, or the series must be averaged again.
+- Rows with `scale` (CPU percent = fraction x 100, memory MiB = bytes / 1048576) stay `metric.needs_transform` (manual) until `select.metric.transform` ships. Rows with `derived` (`system.cpu.user`/`system`/`interrupt`, `system.io.util`, `system.mem.used`, ...) stay manual until derived expressions are translated.

@@ -13,6 +13,10 @@ export const ASSUMPTIONS = {
   "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
   "A.dd-per-unit": "Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog)",
+  "A.no-reset":
+    "no counter reset inside the window (anchored increase adds the post-reset value; Datadog's treatment of a reset is unverified, maths.md T4)",
+  "A.regular-sampling":
+    "the sampling period is constant and divides the rollup width, so Datadog averaging its per-check points equals the time-weighted PromQL rate (maths.md T10a)",
   "A.no-gaps": "every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier",
   "A.kind-metadata": "the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry)",
   "A.otel-counter": "the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry)",
@@ -24,6 +28,13 @@ export const ASSUMPTIONS = {
   "A.same-key-and": "Datadog applies a literal tag filter and a template variable on the same key together (AND)",
   "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
+  "A.sumby-together": "the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs)",
+  "A.histogram-buckets":
+    "Dash0 exposes the OTel histogram under {otel_metric_name=\"<otel>\"} so that histogram_quantile over sum by (le, ...) (rate(...)) reads its buckets: Dash0's own dashboard-source example queries histogram_quantile(q, sum by (service_name) (rate({otel_metric_name=\"dash0.spans.duration\"}[w]))) with no _bucket suffix (native histogram); not yet checked live on a collector-emitted explicit-bucket histogram",
+  "A.histogram-samples":
+    "the Datadog distribution and the OTel histogram record the same samples in each window (maths.md §12, A.same-samples for distributions)",
+  "A.finite-quantile":
+    "the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d)",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
   // T12 (src/translate/logs, PR #13), text verbatim
   "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
@@ -51,6 +62,8 @@ export const ASSUMPTIONS = {
   "A.row-height": "one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export)",
   "A.var-values": "a label's values in Dash0 are the same set as the matching tag's values in Datadog",
   "A.table-single-query": "the table has one query, default sorting and no conditional formats",
+  "A.alt-view": "what the widget conveys is its value per group; the map or chart drawing is not part of that meaning",
+  "A.table-columns": "every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats",
   "A.top-uniform": "every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie",
   "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
   "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",
@@ -69,6 +82,8 @@ export const T12_ASSUMPTION_IDS = [
   "A.log-source",
   "A.log-attr-default",
   "A.log-fulltext",
+  "A.align",
+  "A.boundary",
   "A.var-regex",
   "A.var-default",
   "A.top-stable",
@@ -89,6 +104,9 @@ export const T4_ASSUMPTION_IDS = [
   "A.var-regex",
   "A.tag-default",
   "A.dd-per-unit",
+  "A.same-samples",
+  "A.no-reset",
+  "A.regular-sampling",
   "A.no-gaps",
   "A.kind-metadata",
   "A.otel-counter",
@@ -102,4 +120,8 @@ export const T4_ASSUMPTION_IDS = [
   "A.at-range",
   "A.monotonic",
   "A.query-threshold",
+  "A.sumby-together",
+  "A.histogram-buckets",
+  "A.histogram-samples",
+  "A.finite-quantile",
 ] as const satisfies readonly AssumptionId[];

@@ -6,9 +6,9 @@ import { createServer, type Server } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { reportToEvents } from "../report/events.js";
-import { narrate } from "../report/narrate.js";
-import type { Report } from "../report/types.js";
+import { reportToEvents } from "../../src/report/events.js";
+import { narrate } from "../../src/report/narrate.js";
+import type { Report } from "../../src/report/types.js";
 import { VIEWER_HTML } from "./viewer.js";
 
 export interface ServeOptions {

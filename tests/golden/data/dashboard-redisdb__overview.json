@@ -48,12 +48,12 @@
     "widget_type": "query_value",
     "status": "bounded",
     "promql": [
-      "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__rate_interval])) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__rate_interval])) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__rate_interval]))) * 100"
+      "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__interval] anchored))) * 100"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "arith.same-groups",
       "arith.div",
@@ -66,10 +66,13 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.nonzero-denominator",
-      "A.var-default",
       "A.align",
       "A.boundary",
+      "A.no-reset",
+      "A.nonzero-denominator",
+      "A.regular-sampling",
+      "A.same-samples",
+      "A.var-default",
       "A.style"
     ],
     "findings": [
@@ -321,14 +324,14 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg (rate({otel_metric_name=\"redis.cpu.time\", state=\"sys\"}[$__rate_interval]))",
-      "avg (rate({otel_metric_name=\"redis.cpu.time\", state=\"user\"}[$__rate_interval]))"
+      "avg (rate({otel_metric_name=\"redis.cpu.time\", state=\"sys\"}[$__interval] anchored))",
+      "avg (rate({otel_metric_name=\"redis.cpu.time\", state=\"user\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
       "select.labels",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -337,6 +340,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.var-default"
     ],
     "findings": [
@@ -351,12 +359,12 @@
     "widget_type": "query_value",
     "status": "bounded",
     "promql": [
-      "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__rate_interval])) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__rate_interval])) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__rate_interval]))) * 100"
+      "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__interval] anchored))) * 100"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "arith.same-groups",
       "arith.div",
@@ -369,10 +377,13 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.nonzero-denominator",
-      "A.var-default",
       "A.align",
       "A.boundary",
+      "A.no-reset",
+      "A.nonzero-denominator",
+      "A.regular-sampling",
+      "A.same-samples",
+      "A.var-default",
       "A.style"
     ],
     "findings": [
@@ -389,12 +400,12 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__rate_interval])) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__rate_interval])) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__rate_interval]))) * 100"
+      "avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) / (avg (rate({otel_metric_name=\"redis.keyspace.hits\"}[$__interval] anchored)) + avg (rate({otel_metric_name=\"redis.keyspace.misses\"}[$__interval] anchored))) * 100"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "arith.same-groups",
       "arith.div",
@@ -407,7 +418,12 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
       "A.nonzero-denominator",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.var-default",
       "A.style"
     ],
@@ -736,12 +752,12 @@
     "widget_type": "query_value",
     "status": "bounded",
     "promql": [
-      "sum (rate({otel_metric_name=\"redis.commands.processed\"}[$__rate_interval]))"
+      "sum (rate({otel_metric_name=\"redis.commands.processed\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "widget.query_value",
       "emit.certificate",
@@ -750,9 +766,12 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.var-default",
       "A.align",
-      "A.boundary"
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
+      "A.var-default"
     ],
     "findings": [
       "bounded metric.approximate",

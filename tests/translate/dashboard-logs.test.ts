@@ -61,7 +61,7 @@ describe("log widgets through T5 with T4 + T12", () => {
   it("a log query in a stat panel uses the window form over the whole timeframe, shown as last-number (#26)", () => {
     const e = p("Error rate %");
     expect(e.placeholder).toBe(false);
-    expect(e.status).toBe("bounded");
+    expect(e.status).toBe("exact-under");
     expect(e.promql).toHaveLength(1);
     expect(e.promql[0]).toMatch(/^100 \* .*\[\$__range\].* \/ .*\[\$__range\]/);
     expect(e.promql[0]).not.toContain("$__interval");
@@ -73,7 +73,7 @@ describe("log widgets through T5 with T4 + T12", () => {
   it("a log query in a toplist uses the window form in a TimeSeriesTable (probed: shows the end-of-range value)", () => {
     const e = p("Top erroring services");
     expect(e.placeholder).toBe(false);
-    expect(e.status).toBe("bounded");
+    expect(e.status).toBe("exact-under");
     expect(e.promql).toHaveLength(1);
     expect(e.promql[0]).toMatch(/^topk\(5, sum by \(service_name\) \(increase\(.*\[\$__range\]/);
     expect(e.promql[0]).not.toContain("$__interval");
@@ -98,10 +98,13 @@ describe("log widgets through T5 with T4 + T12", () => {
     expect(e.rules).toContain("arith.scalar-log-mixed");
   });
 
-  it("a multi-column table stays manual: a TimeSeriesTable cannot join columns per group", () => {
+  it("a multi-column log table whose columns group by the same facet is one TimeSeriesTable (a probed join per group)", () => {
     const e = p("Errors and total (two columns)");
-    expect(e).toMatchObject({ placeholder: true, status: "manual" });
-    expect(e.rules).toContain("widget.query_table.complex");
+    expect(e.placeholder).toBe(false);
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
+    expect(e.promql).toHaveLength(2);
+    expect(e.promql.every((x) => x.includes("[$__range]"))).toBe(true);
+    expect(e.rules).toEqual(expect.arrayContaining(["widget.query_table.columns", "log.scalar.window"]));
   });
 
   it("a stat panel mixing a window log count with a metric query fails closed (arith.scalar-log-mixed)", () => {

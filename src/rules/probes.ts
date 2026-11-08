@@ -10,8 +10,8 @@ export interface Probe {
 export const PROBES = {
   "probe:anchored": {
     question: "Does Dash0 accept increase(x[1m] anchored)?",
-    how: "maths.md §11 probe 1: run it in the Dash0 query API",
-    answer: "open",
+    how: "LIVE 2026-11-08 (Ali, org thinc_bavarian_big_ben, query API): increase(x[5m] anchored) and rate(x[W] anchored) are accepted and APPLIED (values differ from the plain form and move in whole scrape-sized steps; a made-up modifier is a parse error). rate anchored = increase anchored / W exactly (ratio 60.00 at every point for W = 60 s). A window with no new sample gives no point, not 0. The reference evaluator (src/semantics anchoredIncrease) equals Dash0 exactly on a live Redis counter: 0 difference over 36 points (W = 60 s and 300 s). Dashboards only: a check rule with anchored has not been probed.",
+    answer: "yes",
   },
   "probe:at-modifier": {
     question: "Does Dash0 accept the @ end() modifier in queries?",
@@ -55,8 +55,13 @@ export const PROBES = {
   },
   "probe:piechart": {
     question: "Does Dash0 render a Perses PieChart from a PromQL query with a grouping?",
-    how: "T0 or T7 dry-run",
-    answer: "open",
+    how: "LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), read on a rendered throwaway dashboard at the 1h picker: a PieChart over sum by (service_name) (increase({otel_metric_name=\"dash0.logs\"}[$__range])) renders one slice per service (import accepted calculation last-number and mode value). Two pies with the same query, one with calculation last-number and one with spec {}, were proportionally identical but had DIFFERENT absolute values, so the default calculation is not last-number: always set it. Not checked: that the last-number pie's absolute values equal the fixed-window control to the digit (the table in the same probe did).",
+    answer: "yes",
+  },
+  "probe:log-increase-exact": {
+    question: "Is increase({otel_metric_name=\"dash0.logs\", ...}[w]) the exact number of log records whose timestamp is in the window?",
+    how: "LIVE 2026-11-08 (Ali, org thinc_bavarian_big_ben): logs sent over OTLP with controlled timestamps (never on a boundary) and known counts. 60 s windows: 18 of 18 minutes exact incl. empty ones (375 logs); 60 s windows by severity, bursts up to 600 per minute: 40 of 40 (group, minute) cells exact, no value in an empty cell (5,660 logs); 300 s windows 4 of 4; the whole 1200 s range at its end 5,660 of 5,660; cardinality count(sum by (attr)(increase) > 0) 15 of 15 minutes. Plain and anchored give the same values. It is not a sampled cumulative counter.",
+    answer: "yes",
   },
   "probe:log-labels": {
     question: "What are the label names for severity and body on {otel_metric_name=\"dash0.logs\"}?",

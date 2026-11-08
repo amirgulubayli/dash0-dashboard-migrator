@@ -61,7 +61,7 @@ export function reportToEvents(r: Report): RunEvent[] {
   ev.push({ seq: seq++, type: "run.start", version: r.run.version, mode: String(r.run.options.mode), dashboards: r.summary.dashboards, alerts: r.summary.alerts, inputHash: r.run.inputHash });
   const dashboards = [...new Set(r.items.filter((i) => i.kind === "panel").map((i) => i.dashboard!))];
   for (const d of dashboards) {
-    const panels = r.items.filter((i) => i.dashboard === d);
+    const panels = r.items.filter((i) => i.kind === "panel" && i.dashboard === d);
     ev.push({ seq: seq++, type: "dashboard.start", dashboard: d, panels: panels.length });
     const by: Partial<Record<ReportStatus, number>> = {};
     for (const i of panels) {
@@ -90,7 +90,7 @@ function item(seq: number, i: Report["items"][number]): RunEvent {
   return {
     seq,
     type: "item.done",
-    kind: i.kind,
+    kind: i.kind as "panel" | "alert",
     id: i.id,
     title: i.title,
     dashboard: i.dashboard,

@@ -1,6 +1,6 @@
 import { configDefaults, defineConfig } from "vitest/config";
 
-// console/ is a self-contained Bun app with its own package.json and tests (PR #23); the root suite skips it.
+// experimental/ (console, viewer + voice, their tests) is parked, not wired into dd2dash0; the root suite skips it.
 export default defineConfig({
-  test: { exclude: [...configDefaults.exclude, "console/**"] },
+  test: { exclude: [...configDefaults.exclude, "experimental/**"] },
 });

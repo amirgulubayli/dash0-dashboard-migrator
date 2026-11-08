@@ -134,10 +134,11 @@ describe("live import (fake Dash0)", () => {
     expect(calls.map((c) => `${c.method} ${c.url.pathname}`)).toEqual([
       "PUT /api/dashboards/dd-redis-overview",
       "GET /api/dashboards/dd-redis-overview",
+      "GET /api/alerting/check-rules/3e643081-f9f9-5867-88b2-d6c8a6b05f30", // current on/off state (keep it on re-runs)
       "POST /api/import/check-rule",
       "GET /api/alerting/check-rules/3e643081-f9f9-5867-88b2-d6c8a6b05f30",
     ]);
-    expect(calls[2]!.body.id).toBe("3e643081-f9f9-5867-88b2-d6c8a6b05f30"); // the Import API upserts by this UUID
+    expect(calls[3]!.body.id).toBe("3e643081-f9f9-5867-88b2-d6c8a6b05f30"); // the Import API upserts by this UUID
     expect(calls.every((c) => c.headers.Authorization === `Bearer ${TOKEN}` && c.url.searchParams.get("dataset") === "thinc")).toBe(true);
     expect(m.summary).toMatchObject({ imported: 2, readBackMatch: 2, failed: 0 });
   });
@@ -185,11 +186,28 @@ describe("live import (fake Dash0)", () => {
     expect(m.summary.imported).toBe(1);
   });
   it("records the error and traceId of a failed import, and never leaks the token", async () => {
-    const { f } = fakeDash0({ failWith: [{ status: 400, body: { error: { code: 400, type: "invalid_expression", message: "bad PromQL", traceId: "trace-123" } } }] });
+    const bad = { status: 400, body: { error: { code: 400, type: "invalid_expression", message: "bad PromQL", traceId: "trace-123" } } };
+    const { f } = fakeDash0({ failWith: [bad, bad] }); // the state lookup (GET) and the import both fail
     const m = await importAll({ dashboards: [], rules: [rule()] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
     expect(m.results[0]).toMatchObject({ action: "failed", traceId: "trace-123" });
     expect(m.results[0]!.errors[0]).toMatch(/400: bad PromQL/);
     expect(JSON.stringify(m)).not.toContain(TOKEN);
+  });
+  it("a re-run keeps an existing rule's on/off state; a new rule starts disabled; enableRules beats the payload's false", async () => {
+    const { f, calls, stored } = fakeDash0();
+    const sentEnabled = () => calls.filter((c) => c.method === "POST").at(-1)!.body.enabled;
+    await importAll({ dashboards: [], rules: [rule({ enabled: false })] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
+    expect(sentEnabled()).toBe(false); // new
+    const key = "r:3e643081-f9f9-5867-88b2-d6c8a6b05f30";
+    stored.set(key, { ...(stored.get(key) as object), enabled: true }); // someone turned it on in Dash0
+    const m = await importAll({ dashboards: [], rules: [rule({ enabled: false })] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
+    expect(sentEnabled()).toBe(true); // kept on
+    expect(m.results[0]).toMatchObject({ enabled: true, readBack: { state: "match" } });
+    stored.set(key, { ...(stored.get(key) as object), enabled: false });
+    await importAll({ dashboards: [], rules: [rule({ enabled: false })] }, { dryRun: false, outDir: tmp(), config: cfg(f) });
+    expect(sentEnabled()).toBe(false); // kept off
+    await importAll({ dashboards: [], rules: [rule({ enabled: false })] }, { dryRun: false, outDir: tmp(), config: cfg(f), enableRules: true });
+    expect(sentEnabled()).toBe(true); // asked for
   });
   it("imports rules enabled only with enableRules", async () => {
     const { f, calls } = fakeDash0();

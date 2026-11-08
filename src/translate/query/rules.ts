@@ -13,6 +13,11 @@ export const ASSUMPTIONS = {
   "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
   "A.dd-per-unit":
     "Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog)",
+  "A.same-samples": "Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s)",
+  "A.no-reset":
+    "no counter reset inside the window (anchored increase adds the post-reset value; Datadog's treatment of a reset is unverified, maths.md T4)",
+  "A.regular-sampling":
+    "the sampling period is constant and divides the rollup width, so Datadog averaging its per-check points equals the time-weighted PromQL rate (maths.md T10a)",
   "A.no-gaps": "every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier",
   "A.kind-metadata": "the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry)",
   "A.otel-counter": "the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry)",
@@ -28,6 +33,13 @@ export const ASSUMPTIONS = {
   "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
+  "A.sumby-together": "the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs)",
+  "A.histogram-buckets":
+    "Dash0 exposes the OTel histogram under {otel_metric_name=\"<otel>\"} so that histogram_quantile over sum by (le, ...) (rate(...)) reads its buckets: Dash0's own dashboard-source example queries histogram_quantile(q, sum by (service_name) (rate({otel_metric_name=\"dash0.spans.duration\"}[w]))) with no _bucket suffix (native histogram); not yet checked live on a collector-emitted explicit-bucket histogram",
+  "A.histogram-samples":
+    "the Datadog distribution and the OTel histogram record the same samples in each window (maths.md §12, A.same-samples for distributions)",
+  "A.finite-quantile":
+    "the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d)",
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;
@@ -69,14 +81,61 @@ export const RULES = {
     assumptions: ["A.kind-metadata", "A.otel-counter", "A.dd-count-default"],
     description: "Datadog COUNT metric (metadata.csv) queried without a modifier -> increase(x[w]), the same as .as_count()",
   },
+  "time.count.counter": {
+    status: "bounded",
+    assumptions: ["A.dd-count-default"],
+    description: "curated mapping row: Datadog COUNT on an OTel cumulative counter, queried without a modifier -> increase(x[w]) (maths.md T4c)",
+  },
   "time.rollup.counter": {
     status: "bounded",
     assumptions: [],
     description: ".as_count().rollup(sum, s) -> increase(x[s]); .as_rate().rollup(avg, s) -> rate(x[s]) (maths.md T3b)",
   },
+  // Dashboard counter rules on Dash0's `anchored` modifier (probe:anchored = yes, maths.md T4, T4c, T10a): the window is the
+  // rollup width, the increase has no edge extrapolation, so these are exact under the listed assumptions. Monitors keep the
+  // extrapolated forms above (a check rule with `anchored` has not been probed).
+  "time.as_count.counter.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset"],
+    ".as_count() on a cumulative counter -> increase(x[w] anchored) (maths.md T4: the per-check deltas telescope)",
+  ),
+  "time.as_rate.counter.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    ".as_rate() on a cumulative counter -> rate(x[w] anchored) = increase(x[w] anchored) / w (maths.md T4, T10a)",
+  ),
+  "time.ddrate.plain.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    "Datadog RATE metric read from an OTel counter, plain query -> rate(x[w] anchored) (D-18, maths.md T10a)",
+  ),
+  "time.unmapped.counter.anchored": under(
+    ["A.kind-metadata", "A.otel-counter", "A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    "Datadog count/rate (metadata.csv) without a mapping entry: .as_count() -> increase(x[w] anchored), .as_rate() or a plain rate -> rate(x[w] anchored)",
+  ),
+  "time.unmapped.suffix-counter.anchored": under(
+    ["A.kind-suffix", "A.otel-counter", "A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    "no metadata.csv entry, name ends in .count/.total, queried with .as_count()/.as_rate(): a Datadog count, on anchored increase / rate",
+  ),
+  "time.count.default.anchored": under(
+    ["A.kind-metadata", "A.otel-counter", "A.dd-count-default", "A.same-samples", "A.align", "A.boundary", "A.no-reset"],
+    "Datadog COUNT metric (metadata.csv) queried without a modifier -> increase(x[w] anchored), the same as .as_count()",
+  ),
+  "time.count.counter.anchored": under(
+    ["A.dd-count-default", "A.same-samples", "A.align", "A.boundary", "A.no-reset"],
+    "curated mapping row: Datadog COUNT on an OTel cumulative counter, queried without a modifier -> increase(x[w] anchored) (maths.md T4c)",
+  ),
+  "time.rollup.counter.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    ".as_count().rollup(sum, s) -> increase(x[s] anchored); .as_rate().rollup(avg, s) -> rate(x[s] anchored) (maths.md T4, T10a)",
+  ),
   "time.fill.zero.single": exact(".fill(zero) on a single-series query -> q or vector(0) (the same as default_zero)"),
   "select.metric.approximate": bounded("the mapping table marks the OTel metric as approximate (see the entry's note)"),
   "select.labels": exact("mapping-table labels pick the series: redis.cpu.sys -> {otel_metric_name=\"redis.cpu.time\", state=\"sys\"}"),
+  "select.metric.transform": exact(
+    "mapping entry with scale k > 0 and/or sumBy labels L -> k * agg by (G) (sum without (L) (T(x))); k drops out under a count",
+  ),
+  "select.metric.transform.sumby": under(
+    ["A.sumby-together"],
+    "sumBy under avg_over_time/rate/increase: the sum of the split series' values equals the value of their sum",
+  ),
   "time.ddrate.plain": bounded(
     "Datadog RATE metric (stored per second) read from an OTel counter: a plain query -> rate(x[w]) (D-18, maths.md T3b); dashboards use w = $__rate_interval",
   ),
@@ -150,6 +209,12 @@ export const RULES = {
   "fn.max_min.scalar": exact("max(q, n) -> clamp_min(x, n); min(q, n) -> clamp_max(x, n)"),
   "fn.max_min.series": under(["A.both-present"], "max(a, b) -> a >= b or b; min(a, b) -> a <= b or b (pointwise, same group-by)"),
   "map.timeshift": exact("timeshift(q, -s) / hour_before(q) / ... -> offset s on every selector"),
+  "fn.histogram.quantile": {
+    status: "bounded",
+    assumptions: ["A.histogram-buckets", "A.histogram-samples", "A.finite-quantile"],
+    description:
+      "pXX:m{f} by {g} on a distribution / OTel histogram -> histogram_quantile(0.XX, sum by (le, g) (rate(m[w]))) (maths.md §12, T11)",
+  },
   "arith.number": exact("arithmetic with a constant"),
   "arith.same-groups": exact("arithmetic between queries with identical group-by labels (one-to-one matching)"),
   "arith.div": under(["A.nonzero-denominator"], "division between queries"),

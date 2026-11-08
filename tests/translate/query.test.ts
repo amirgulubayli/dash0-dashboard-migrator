@@ -12,6 +12,11 @@ const METRICS: Record<string, MetricMapping> = {
   "nginx.requests": { otel: "nginx.requests", kind: "counter" },
   "app.events": { otel: "app.events", kind: "delta" },
   "http.duration": { otel: "http.server.request.duration", kind: "histogram" },
+  // fn.histogram.quantile fixtures: a curated Datadog distribution read from an OTel histogram.
+  "http.dd.dist": { otel: "http.client.request.duration", kind: "histogram", ddKind: "distribution", status: "exact" },
+  "http.dd.dist_ms": { otel: "http.client.request.duration", kind: "histogram", ddKind: "distribution", status: "exact", scale: 1000 },
+  "http.dd.dist_split": { otel: "rpc.server.duration", kind: "histogram", ddKind: "distribution", status: "exact", sumBy: ["rpc_method"] },
+  "http.dd.gauge_on_hist": { otel: "http.server.request.duration", kind: "histogram", ddKind: "gauge", status: "exact" },
   // Shaped like T1's metricLookup() output (PR #4), taken from mappings/datadog/redisdb.yaml.
   "redis.cpu.sys": { otel: "redis.cpu.time", kind: "counter", ddKind: "rate", labels: { state: "sys" }, status: "exact" },
   "redis.net.commands": { otel: "redis.commands.processed", kind: "counter", ddKind: "rate", status: "exact" },
@@ -22,12 +27,19 @@ const METRICS: Record<string, MetricMapping> = {
   // Datadog stores these running totals as gauges; the OTel receiver emits counters (as in redisdb.yaml).
   "redis.keys.evicted": { otel: "redis.keys.evicted", kind: "counter", ddKind: "gauge", status: "exact" },
   "redis.net.rejected": { otel: "redis.connections.rejected", kind: "counter", ddKind: "gauge", status: "exact" },
+  // select.metric.transform fixtures: Datadog value = scale x OTel value; sumBy labels are summed away first.
+  "redis.dd.scaled": { otel: "redis.dd.fraction", kind: "gauge", ddKind: "gauge", status: "exact", scale: 100 },
+  "redis.dd.cpu_ms": { otel: "redis.cpu.time", kind: "counter", ddKind: "rate", status: "exact", scale: 1000 },
+  "redis.dd.keys": { otel: "redis.db.keys", kind: "gauge", ddKind: "gauge", status: "exact", sumBy: ["db"] },
+  "redis.dd.keys_kb": { otel: "redis.db.bytes", kind: "gauge", ddKind: "gauge", status: "exact", scale: 0.001, sumBy: ["db"] },
+  "redis.dd.negscale": { otel: "redis.dd.neg", kind: "gauge", ddKind: "gauge", status: "exact", scale: -1 },
 };
 /** Mirrors T1's metricAvailability(): known to the table but not usable. */
 const AVAILABILITY: Record<string, MetricAvailability> = {
   "redis.info.latency_ms": "no_equivalent",
   "redis.dd.derived": "derived",
-  "redis.dd.scaled": "needs_transform",
+  // A context that knows the entry needs a transform but can't pass scale/sumBy to T4.
+  "redis.dd.opaque": "needs_transform",
 };
 /** Mirrors the metadata.csv kind table for metrics without a curated entry. */
 const DD_KINDS: Record<string, "gauge" | "count" | "rate" | "distribution"> = {
@@ -74,13 +86,23 @@ const CASES: [string, string, string, string][] = [
   ["scope.or.same-key", "avg:system.cpu.user{env:prod OR env:stage}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', deployment_environment_name=~"^(prod|stage)$"')}[$__interval]))`, "exact-under"],
   ["scope.not", "avg:system.cpu.user{NOT env:dev}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', deployment_environment_name!="dev"')}[$__interval]))`, "exact-under"],
   ["scope.var", "avg:redis.mem.used{$host} by {host}", `avg by (host_name) (avg_over_time(${SEL("redis.memory.used", ', host_name=~"^($host)$"')}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "avg:redis.dd.scaled{*}", `100 * avg (avg_over_time(${SEL("redis.dd.fraction")}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "sum:redis.dd.scaled{*} by {host}", `100 * sum by (host_name) (avg_over_time(${SEL("redis.dd.fraction")}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "max:redis.dd.scaled{*}.rollup(min, 60)", `100 * max (min_over_time(${SEL("redis.dd.fraction")}[1m]))`, "exact-under"],
+  ["select.metric.transform", "count:redis.dd.scaled{*}", `count (avg_over_time(${SEL("redis.dd.fraction")}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "sum:redis.dd.scaled{*}.rollup(count, 60)", `sum (count_over_time(${SEL("redis.dd.fraction")}[1m]))`, "exact-under"],
+  ["select.metric.transform", "avg:redis.dd.cpu_ms{*}", `1000 * avg (rate(${SEL("redis.cpu.time")}[$__interval] anchored))`, "exact-under"],
+  ["select.metric.transform", "sum:redis.dd.keys{*} by {host}", `sum by (host_name) (sum without (db) (avg_over_time(${SEL("redis.db.keys")}[$__interval])))`, "exact-under"],
+  ["select.metric.transform", "sum:redis.dd.keys{*}.rollup(sum, 60)", `sum (sum without (db) (sum_over_time(${SEL("redis.db.keys")}[1m])))`, "exact-under"],
+  ["select.metric.transform", "avg:redis.dd.keys{host:a}", `avg (sum without (db) (avg_over_time(${SEL("redis.db.keys", ', host_name="a"')}[$__interval])))`, "exact-under"],
+  ["select.metric.transform", "max:redis.dd.keys_kb{*} by {host}", `0.001 * max by (host_name) (sum without (db) (avg_over_time(${SEL("redis.db.bytes")}[$__interval])))`, "exact-under"],
   ["time.rollup.default", "max:system.cpu.user{*}", `max (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   ["time.rollup.explicit", "avg:redis.mem.used{*} by {host}.rollup(max, 300)", `avg by (host_name) (max_over_time(${SEL("redis.memory.used")}[5m]))`, "exact-under"],
   ["time.as_count.gauge", "sum:system.cpu.user{*}.as_count()", `sum (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   ["time.as_rate.gauge", "sum:system.cpu.user{*}.as_rate()", `sum (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   ["time.as_count.delta", "sum:app.events{*}.as_count()", `sum (sum_over_time(${SEL("app.events")}[$__interval]))`, "exact-under"],
-  ["time.as_count.counter", "sum:nginx.requests{*} by {host}.as_count()", `sum by (host_name) (increase(${SEL("nginx.requests")}[$__rate_interval]))`, "bounded"],
-  ["time.as_rate.counter", "sum:nginx.requests{*}.as_rate()", `sum (rate(${SEL("nginx.requests")}[$__rate_interval]))`, "bounded"],
+  ["time.as_count.counter.anchored", "sum:nginx.requests{*} by {host}.as_count()", `sum by (host_name) (increase(${SEL("nginx.requests")}[$__interval] anchored))`, "exact-under"],
+  ["time.as_rate.counter.anchored", "sum:nginx.requests{*}.as_rate()", `sum (rate(${SEL("nginx.requests")}[$__interval] anchored))`, "exact-under"],
   ["time.fill.null", "avg:system.cpu.user{*}.fill(null)", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   ["space.agg", "count:system.cpu.user{*} by {host,env}", `count by (deployment_environment_name, host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   ["space.default-avg", "system.cpu.user{*}", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
@@ -99,9 +121,9 @@ const CASES: [string, string, string, string][] = [
   ["fn.per_unit.counter", "per_hour(sum:redis.keys.evicted{*})", `3600 * sum (rate(${SEL("redis.keys.evicted")}[$__rate_interval]))`, "bounded"],
   ["fn.diff", "diff(sum:redis.net.rejected{*})", `sum (avg_over_time(${SEL("redis.connections.rejected")}[$__interval])) - sum (avg_over_time(${SEL("redis.connections.rejected")}[$__interval] offset $__interval))`, "exact-under"],
   ["select.metric.kind-metadata", "avg:dd.gauge.temp{*}.as_count()", `avg (avg_over_time(${SEL("dd.gauge.temp")}[$__interval]))`, "exact-under"],
-  ["time.unmapped.counter", "sum:dd.count.hits{*} by {host}.as_count()", `sum by (host_name) (increase(${SEL("dd.count.hits")}[$__rate_interval]))`, "bounded"],
-  ["time.unmapped.counter", "sum:dd.count.hits{*}.as_rate()", `sum (rate(${SEL("dd.count.hits")}[$__rate_interval]))`, "bounded"],
-  ["time.unmapped.counter", "avg:dd.rate.bytes{*}", `avg (rate(${SEL("dd.rate.bytes")}[$__rate_interval]))`, "bounded"],
+  ["time.unmapped.counter.anchored", "sum:dd.count.hits{*} by {host}.as_count()", `sum by (host_name) (increase(${SEL("dd.count.hits")}[$__interval] anchored))`, "exact-under"],
+  ["time.unmapped.counter.anchored", "sum:dd.count.hits{*}.as_rate()", `sum (rate(${SEL("dd.count.hits")}[$__interval] anchored))`, "exact-under"],
+  ["time.unmapped.counter.anchored", "avg:dd.rate.bytes{*}", `avg (rate(${SEL("dd.rate.bytes")}[$__interval] anchored))`, "exact-under"],
   ["fn.top", "top(avg:system.cpu.user{*} by {host}, 10, 'mean', 'desc')", `topk(10, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
   ["fn.top", "top(avg:system.cpu.user{*} by {host}, 5, 'max', 'asc')", `bottomk(5, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
   ["fn.top", "bottom5_max(avg:system.cpu.user{*} by {host})", `bottomk(5, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
@@ -117,13 +139,14 @@ const CASES: [string, string, string, string][] = [
   ["scope.var.negated", "avg:system.cpu.user{!$host}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', host_name!~"^($host)$"')}[$__interval]))`, "exact-under"],
   ["scope.not.set", "avg:system.cpu.user{NOT (env:dev OR env:test*)}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', deployment_environment_name!~"^(dev|test.*)$"')}[$__interval]))`, "exact-under"],
   ["scope.not.set", "avg:system.cpu.user{NOT env IN (a,b)}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', deployment_environment_name!~"^(a|b)$"')}[$__interval]))`, "exact-under"],
-  ["time.count.default", "sum:dd.count.hits{*} by {host}", `sum by (host_name) (increase(${SEL("dd.count.hits")}[$__rate_interval]))`, "bounded"],
-  ["time.rollup.counter", "sum:dd.count.hits{*}.as_count().rollup(sum, 300)", `sum (increase(${SEL("dd.count.hits")}[5m]))`, "bounded"],
-  ["time.rollup.counter", "sum:nginx.requests{*}.as_rate().rollup(avg, 120)", `sum (rate(${SEL("nginx.requests")}[2m]))`, "bounded"],
+  ["time.count.default.anchored", "sum:dd.count.hits{*} by {host}", `sum by (host_name) (increase(${SEL("dd.count.hits")}[$__interval] anchored))`, "exact-under"],
+  ["time.count.counter.anchored", "sum:redis.dd.count{*} by {host}", `sum by (host_name) (increase(${SEL("redis.keys.evicted")}[$__interval] anchored))`, "exact-under"],
+  ["time.rollup.counter.anchored", "sum:dd.count.hits{*}.as_count().rollup(sum, 300)", `sum (increase(${SEL("dd.count.hits")}[5m] anchored))`, "exact-under"],
+  ["time.rollup.counter.anchored", "sum:nginx.requests{*}.as_rate().rollup(avg, 120)", `sum (rate(${SEL("nginx.requests")}[2m] anchored))`, "exact-under"],
   ["time.fill.zero.single", "sum:system.cpu.user{*}.fill(zero)", `sum (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) or vector(0)`, "exact-under"],
   ["fn.per_unit.counter", "per_second(sum:dd.count.hits{*})", `sum (rate(${SEL("dd.count.hits")}[$__rate_interval]))`, "bounded"],
   ["fn.per_unit.counter", "per_minute(avg:dd.count.hits{*}.as_count())", `60 * avg (rate(${SEL("dd.count.hits")}[$__rate_interval]))`, "bounded"],
-  ["time.unmapped.suffix-counter", "sum:kong.http.status.count{*} by {code}.as_count()", `sum by (code) (increase(${SEL("kong.http.status.count")}[$__rate_interval]))`, "bounded"],
+  ["time.unmapped.suffix-counter.anchored", "sum:kong.http.status.count{*} by {code}.as_count()", `sum by (code) (increase(${SEL("kong.http.status.count")}[$__interval] anchored))`, "exact-under"],
   ["fn.round", "round(avg:system.cpu.user{*})", `round(avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
   ["fn.exclude_null", "exclude_null(avg:system.cpu.user{*} by {host})", `avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization", ', host_name!=""')}[$__interval]))`, "exact-under"],
   ["fn.exclude_null", "exclude_null(avg:system.cpu.user{*})", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
@@ -138,9 +161,8 @@ const CASES: [string, string, string, string][] = [
   ["arith.neg", "-avg:system.cpu.user{*}", `-avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   // T1 mapping fields (ddKind, labels, status)
   ["select.metric.mapped", "avg:redis.net.clients{*}", `avg (avg_over_time(${SEL("redis.clients.connected")}[$__interval]))`, "exact-under"],
-  ["select.labels", "avg:redis.cpu.sys{*} by {host}", `avg by (host_name) (rate(${SEL("redis.cpu.time", ', state="sys"')}[$__rate_interval]))`, "bounded"],
-  ["time.ddrate.plain", "sum:redis.net.commands{*}", `sum (rate(${SEL("redis.commands.processed")}[$__rate_interval]))`, "bounded"],
-  ["time.as_count.counter", "sum:redis.net.commands{*}.as_count()", `sum (increase(${SEL("redis.commands.processed")}[$__rate_interval]))`, "bounded"],
+  ["select.labels", "avg:redis.cpu.sys{*} by {host}", `avg by (host_name) (rate(${SEL("redis.cpu.time", ', state="sys"')}[$__interval] anchored))`, "exact-under"],
+  ["time.ddrate.plain.anchored", "sum:redis.net.commands{*}", `sum (rate(${SEL("redis.commands.processed")}[$__interval] anchored))`, "exact-under"],
   ["select.metric.mapped", "avg:redis.dd.gauge_on_counter{*}", `avg (avg_over_time(${SEL("redis.connections.received")}[$__interval]))`, "exact-under"],
   ["select.metric.approximate", "avg:redis.dd.approx{*}", `avg (avg_over_time(${SEL("redis.memory.rss")}[$__interval]))`, "bounded"],
 ];
@@ -203,7 +225,7 @@ describe("rule table: one exact PromQL string per rule", () => {
   });
 
   it("a counter with an explicit width keeps it (no $__rate_interval)", () => {
-    expect(q("sum:nginx.requests{*}.as_rate()", { ...CTX, interval: 60 }).promql).toBe(`sum (rate(${SEL("nginx.requests")}[1m]))`);
+    expect(q("sum:nginx.requests{*}.as_rate()", { ...CTX, interval: 60 }).promql).toBe(`sum (rate(${SEL("nginx.requests")}[1m] anchored))`);
   });
 
   it("interval can be fixed per dashboard", () => {
@@ -254,6 +276,128 @@ describe("formulas", () => {
   });
 });
 
+describe("select.metric.transform", () => {
+  it("sumBy under avg_over_time/rate/increase adds A.sumby-together; sum_over_time does not", () => {
+    expect(q("sum:redis.dd.keys{*}").assumptions).toContain("A.sumby-together");
+    expect(q("sum:redis.dd.keys{*}.rollup(sum, 60)").assumptions).not.toContain("A.sumby-together");
+    expect(q("avg:redis.dd.scaled{*}").assumptions).not.toContain("A.sumby-together");
+  });
+
+  it("per_second over a scaled running total scales the rate form", () => {
+    const r = track(q("per_second(sum:redis.dd.scaled{*})"));
+    expect(r.promql).toBe(`100 * sum (rate(${SEL("redis.dd.fraction")}[$__rate_interval]))`);
+  });
+
+  it("diff over a summed-by query stays linear", () => {
+    const r = track(q("diff(sum:redis.dd.keys{*})"));
+    expect(r.promql).toBe(
+      `sum (sum without (db) (avg_over_time(${SEL("redis.db.keys")}[$__interval]))) - sum (sum without (db) (avg_over_time(${SEL("redis.db.keys")}[$__interval] offset $__interval)))`,
+    );
+  });
+
+  it("monitors: the scale stays inside the 1m bucket query, in Datadog units against the threshold", () => {
+    const r = track(mon("avg(last_5m):avg:redis.dd.scaled{*} by {host} > 90", { critical: 90 }));
+    expect(r.promql).toBe(`avg_over_time((100 * avg by (host_name) (avg_over_time(${SEL("redis.dd.fraction")}[1m])))[5m:1m]) > $__threshold`);
+    expect(r.thresholds).toEqual({ failed: 90 });
+  });
+
+  it("every emitted transform validates as PromQL", () => {
+    for (const s of ["avg:redis.dd.scaled{*}", "sum:redis.dd.keys{*} by {host}", "max:redis.dd.keys_kb{*} by {host}"]) {
+      const r = q(s);
+      expect(validatePromQL(r.promql!).ok, r.promql!).toBe(true);
+    }
+  });
+});
+
+describe("fn.histogram.quantile: pXX on a distribution (maths.md §12, T11)", () => {
+  const H = (name: string, extra = "", w = "$__rate_interval") => `rate(${SEL(name, extra)}[${w}])`;
+  const HQ_ASSUMPTIONS = ["A.finite-quantile", "A.histogram-buckets", "A.histogram-samples"];
+
+  it("p95 on a curated distribution -> histogram_quantile over sum by (le) of the bucket rates", () => {
+    const r = track(q("p95:http.dd.dist{*}"));
+    expect(r.promql).toBe(`histogram_quantile(0.95, sum by (le) (${H("http.client.request.duration")}))`);
+    expect(r.status).toBe("bounded");
+    expect(r.rules).toEqual(expect.arrayContaining(["select.metric.mapped", "fn.histogram.quantile"]));
+    expect(r.rules).not.toContain("space.agg");
+    expect(r.assumptions).toEqual(HQ_ASSUMPTIONS);
+    expect(validatePromQL(r.promql!).ok).toBe(true);
+  });
+
+  it("p99.9 keeps the decimal quantile exactly (0.999, no float noise)", () => {
+    const r = track(q("p99.9:http.duration{*}"));
+    expect(r.promql).toBe(`histogram_quantile(0.999, sum by (le) (${H("http.server.request.duration")}))`);
+    expect(r.status).toBe("bounded");
+  });
+
+  it("by {g} and filters: le joins the group-by labels, scope becomes matchers", () => {
+    const r = track(q("p50:http.dd.dist{env:prod} by {service,host}"));
+    expect(r.promql).toBe(
+      `histogram_quantile(0.5, sum by (host_name, le, service_name) (${H("http.client.request.duration", ', deployment_environment_name="prod"')}))`,
+    );
+    expect(validatePromQL(r.promql!).ok).toBe(true);
+  });
+
+  it("a fixed dashboard interval is used as the rate window", () => {
+    const r = q("p90:http.dd.dist{*}", { ...CTX, interval: 300 });
+    expect(r.promql).toBe(`histogram_quantile(0.9, sum by (le) (${H("http.client.request.duration", "", "5m")}))`);
+  });
+
+  it("a metadata.csv distribution without a curated entry keeps its name, under A.kind-metadata", () => {
+    const r = track(q("p99:dd.dist.latency{*}"));
+    expect(r.promql).toBe(`histogram_quantile(0.99, sum by (le) (${H("dd.dist.latency")}))`);
+    expect(r.status).toBe("bounded");
+    expect(r.assumptions).toEqual(["A.kind-metadata", ...HQ_ASSUMPTIONS].sort());
+    expect(r.rules).toContain("select.metric.kind-metadata");
+  });
+
+  it("scale k > 0 multiplies the quantile (quantiles commute with positive scaling); sumBy labels are summed by sum by (le, g)", () => {
+    expect(track(q("p95:http.dd.dist_ms{*}")).promql).toBe(`1000 * histogram_quantile(0.95, sum by (le) (${H("http.client.request.duration")}))`);
+    const s = track(q("p95:http.dd.dist_split{*} by {service}"));
+    expect(s.promql).toBe(`histogram_quantile(0.95, sum by (le, service_name) (${H("rpc.server.duration")}))`);
+    expect(s.rules).toContain("select.metric.transform");
+    expect(s.assumptions).not.toContain("A.sumby-together");
+  });
+
+  it("monitors reuse it on 1m buckets inside the window subquery", () => {
+    const r = track(mon("avg(last_5m):p95:http.dd.dist{*} by {service} > 0.5", { critical: 0.5 }));
+    expect(r.promql).toBe(
+      `avg_over_time((histogram_quantile(0.95, sum by (le, service_name) (${H("http.client.request.duration", "", "1m")})))[5m:1m]) > $__threshold`,
+    );
+    expect(r.status).toBe("bounded");
+    expect(r.thresholds).toEqual({ failed: 0.5 });
+    expect(r.assumptions).toEqual(expect.arrayContaining(["A.monitor-rollup-60s", ...HQ_ASSUMPTIONS]));
+  });
+
+  it("avg:/max: on a distribution are unchanged (still manual)", () => {
+    expect(q("avg:http.dd.dist{*}")).toMatchObject({ status: "manual", promql: null });
+    expect(q("max:http.duration{*}")).toMatchObject({ status: "manual", promql: null });
+    expect(q("avg:dd.dist.latency{*}").findings.some((f) => f.code === "metric.distribution")).toBe(true);
+  });
+
+  for (const [code, src, why] of [
+    ["fn.histogram.kind-unknown", "p95:unmapped.latency{*}", /no mapping entry/],
+    ["fn.histogram.kind", "p99:system.cpu.user{*}", /OTel gauge/],
+    ["fn.histogram.kind", "p99:nginx.requests{*}", /OTel counter/],
+    ["fn.histogram.kind", "p95:http.dd.gauge_on_hist{*}", /Datadog stores it as a gauge/],
+    ["fn.histogram.modifier", "p95:http.dd.dist{*}.rollup(max, 60)", /rollup/],
+    ["fn.histogram.le", "p95:http.dd.dist{*} by {le}", /le/],
+    ["query.value-filter", "p95(v: v>=0):http.dd.dist{*}", /value filter/],
+  ] as const) {
+    it(`fails closed: ${code}: ${src}`, () => {
+      const r = q(src);
+      expect(r).toMatchObject({ status: "manual", promql: null });
+      const f = r.findings.find((x) => x.status === "manual" && x.code === code);
+      expect(f, r.findings.map((x) => x.code).join(",")).toBeDefined();
+      expect(f!.message).toMatch(why);
+    });
+  }
+
+  it("a pXX query cannot feed per_second/diff (no rate form, not linear in the series)", () => {
+    expect(q("per_second(p95:http.dd.dist{*})").status).toBe("manual");
+    expect(q("diff(p95:http.dd.dist{*})").status).toBe("manual");
+  });
+});
+
 describe("fail closed: manual, no PromQL, original kept", () => {
   for (const [code, src] of [
     ["fn.anomalies", "anomalies(avg:system.cpu.user{*}, 'basic', 2)"],
@@ -270,7 +414,7 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["time.fill", "avg:system.cpu.user{*}.fill(last)"],
     ["time.kind", "sum:nginx.requests{*}"],
     ["time.kind", "avg:http.duration{*}"],
-    ["space.agg", "p99:system.cpu.user{*}"],
+    ["fn.histogram.kind", "p99:system.cpu.user{*}"],
     ["scope.bare-tag", "avg:system.cpu.user{canary}"],
     ["scope.or.cross-key", "avg:system.cpu.user{env:prod OR host:a}"],
     ["scope.same-key", "avg:system.cpu.user{host:a,host:b}"],
@@ -284,11 +428,18 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["fn.monotonic_diff.agg", "monotonic_diff(count:system.cpu.user{*})"],
     ["fn.diff.agg", "diff(abs(avg:system.cpu.user{*}))"],
     ["time.kind-unknown", "sum:custom.requests.count2{*}.as_count()"],
-    ["time.kind", "sum:redis.dd.count{*}"],
+    ["time.kind", "sum:redis.net.commands{*}.as_count()"],
+    ["time.kind", "sum:redis.net.commands{*}.as_rate()"],
+    ["time.kind", "sum:redis.dd.cpu_ms{*} by {host}.as_count()"],
     ["select.labels.clash", "avg:redis.cpu.sys{state:user}"],
     ["metric.no_equivalent", "avg:redis.info.latency_ms{*}"],
     ["metric.derived", "avg:redis.dd.derived{*}"],
-    ["metric.needs_transform", "avg:redis.dd.scaled{*}"],
+    ["metric.needs_transform", "avg:redis.dd.opaque{*}"],
+    ["metric.needs_transform", "avg:redis.dd.negscale{*}"],
+    ["metric.needs_transform", "sum:redis.dd.keys{db:0}"],
+    ["metric.needs_transform", "sum:redis.dd.keys{*} by {db}"],
+    ["metric.needs_transform", "sum:redis.dd.keys{*}.rollup(max, 60)"],
+    ["metric.needs_transform", "sum:redis.dd.keys{*}.rollup(count, 60)"],
     ["arith.div-zero", "avg:system.cpu.user{*} / 0"],
     ["fn.per_unit.kind", "per_minute(min:system.cpu.user{*})"],
     ["fn.per_unit.kind", "per_minute(max:redis.keys.evicted{*})"],
@@ -339,22 +490,40 @@ describe("monitors", () => {
   });
 
   it("sum(last_W) with .as_count() on a counter is the window's increase (no subquery)", () => {
-    const r = track(mon("sum(last_5m):sum:redis.net.commands{*} by {host}.as_count() > 100", { critical: 100, warning: 50 }));
-    expect(r.promql).toBe(`sum by (host_name) (increase(${SEL("redis.commands.processed")}[5m])) > $__threshold`);
+    const r = track(mon("sum(last_5m):sum:redis.dd.count{*} by {host}.as_count() > 100", { critical: 100, warning: 50 }));
+    expect(r.promql).toBe(`sum by (host_name) (increase(${SEL("redis.keys.evicted")}[5m])) > $__threshold`);
     expect(r).toMatchObject({ status: "bounded", thresholds: { failed: 100, degraded: 50 } });
     expect(r.rules).toContain("monitor.sum.as_count");
   });
 
+  it("monitors keep the extrapolated counter forms (bounded, no `anchored`): a check rule with it has not been probed", () => {
+    const cases: [string, string][] = [
+      ["avg(last_5m):avg:redis.net.commands{*} > 100", "time.ddrate.plain"],
+      ["avg(last_5m):sum:nginx.requests{*}.as_rate() > 100", "time.as_rate.counter"],
+      ["sum(last_5m):sum:dd.count.hits{*}.as_count() > 100", "time.unmapped.counter"],
+      ["sum(last_5m):sum:dd.count.hits{*} > 100", "time.count.default"],
+      ["sum(last_5m):sum:redis.dd.count{*} > 100", "time.count.counter"],
+      ["sum(last_5m):sum:kong.http.status.count{*}.as_count() > 100", "time.unmapped.suffix-counter"],
+      ["avg(last_5m):sum:nginx.requests{*}.as_rate().rollup(avg, 60) > 100", "time.rollup.counter"],
+    ];
+    for (const [src, rule] of cases) {
+      const r = track(mon(src));
+      expect(r.rules, src).toContain(rule);
+      expect(r.status, src).toBe("bounded");
+      expect(r.promql, src).not.toContain("anchored");
+    }
+  });
+
   it("sum(last_W) totals survive linear arithmetic and fail closed otherwise (no W/60x overcount)", () => {
     const tot = (q: string) => `sum (increase(${SEL(q)}[5m]))`;
-    const lin = mon("sum(last_5m):sum:redis.net.commands{*}.as_count() * 2 - sum:nginx.requests{*}.as_count() > 100");
-    expect(lin.promql).toBe(`${tot("redis.commands.processed")} * 2 - ${tot("nginx.requests")} > $__threshold`);
+    const lin = mon("sum(last_5m):sum:redis.dd.count{*}.as_count() * 2 - sum:nginx.requests{*}.as_count() > 100");
+    expect(lin.promql).toBe(`${tot("redis.keys.evicted")} * 2 - ${tot("nginx.requests")} > $__threshold`);
     expect(lin.rules).toContain("monitor.sum.as_count");
     expect(lin.promql).not.toContain("[5m:1m]");
     for (const q of [
-      "sum(last_5m):sum:redis.net.commands{*}.as_count() / sum:nginx.requests{*}.as_count() > 1",
-      "sum(last_5m):sum:redis.net.commands{*}.as_count() + 5 > 1",
-      "sum(last_5m):abs(sum:redis.net.commands{*}.as_count()) > 1",
+      "sum(last_5m):sum:redis.dd.count{*}.as_count() / sum:nginx.requests{*}.as_count() > 1",
+      "sum(last_5m):sum:redis.dd.count{*}.as_count() + 5 > 1",
+      "sum(last_5m):abs(sum:redis.dd.count{*}.as_count()) > 1",
     ]) {
       const r = mon(q);
       expect(r, q).toMatchObject({ status: "manual", promql: null });

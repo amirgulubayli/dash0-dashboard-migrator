@@ -32,6 +32,10 @@ export const DASHBOARD_RULES: RuleDef[] = [
     note: "T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.",
   }),
   w("widget.query_table", 40, "exact-under", "query_table", "TimeSeriesTable", { assumptions: ["A.table-single-query"] }),
+  w("widget.query_table.columns", 41, "exact-under", "query_table with several metric or log columns that all group by the same labels, no conditional formats", "TimeSeriesTable with one query per column", {
+    assumptions: ["A.table-columns"],
+    note: "Probed on a rendered table: several queries with the same group-by show as one row per group with one value column each. Column headers are Dash0 defaults.",
+  }),
   w("widget.query_table.complex", 45, "manual", "query_table with several queries, custom sort or conditional formats", PLACEHOLDER, { findingCode: "widget.unsupported" }),
   w("widget.note", 50, "exact-under", "note / free_text", "Markdown with the same text", { assumptions: ["A.style"] }),
   w("widget.image", 60, "exact-under", "image", "Markdown ![](url)", { assumptions: ["A.style"] }),
@@ -49,6 +53,10 @@ export const DASHBOARD_RULES: RuleDef[] = [
   }),
   panel("panel.style", 130, "exact-under", "palette, legend, display type, title alignment", "closest Perses visual option", { assumptions: ["A.style"] }),
   w("widget.logs", 140, "manual", "log_stream / list_stream", `${PLACEHOLDER} (LogTable comes with logs.stream)`, { findingCode: "query.datasource" }),
+  w("widget.geomap", 145, "exact-under", "geomap that is a single-level breakdown of one metric or log query", "TimeSeriesTable of the same query (an ALTERNATIVE view: Dash0 has no map panel)", {
+    assumptions: ["A.style", "A.alt-view"],
+    note: "The values per group are kept; the map drawing is not. Multi-level, ungrouped or other-source geomaps stay placeholders (widget.unsupported).",
+  }),
   w("widget.heatmap", 150, "manual", "heatmap / distribution / histogram", PLACEHOLDER, { findingCode: "widget.unsupported" }),
   w("widget.treemap", 160, "manual", "treemap", PLACEHOLDER, { findingCode: "widget.unsupported" }),
   w("widget.scatterplot", 170, "manual", "scatterplot", PLACEHOLDER, { findingCode: "widget.unsupported" }),
