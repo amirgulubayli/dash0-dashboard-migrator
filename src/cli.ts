@@ -66,11 +66,11 @@ Claims: every panel and monitor gets exactly one
 What a run does:
   1. keys       DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET from
                 the environment, ./.env or your user key file (~/.config/dd2dash0/.env,
-                %APPDATA%\\dd2dash0\\.env on Windows); asks for missing ones, checks each, offers
-                to save them there (0600)
+                %APPDATA%\\dd2dash0\\.env on Windows); asks for missing ones (drag in a .env, paste,
+                type, or --browser), checks each, offers to save them there (0600)
   2. translate  dashboards -> Perses, queries -> PromQL, monitors -> Dash0 check rules
   3. review     one question for all bounded panels, one per monitor
-  4. import     into Dash0; new check rules start off
+  4. import     into Dash0; new check rules start off, existing ones keep their on/off state
   5. verify     reads every item back from Dash0 and checks the last hour of data against Datadog
   6. report     success · translated · landed · live, plus <run>/report.html and report.md
 

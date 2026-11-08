@@ -218,7 +218,7 @@ describe("guided flow, live against a fake Dash0 + Datadog", () => {
       throw new Error(`test reached the real network: ${String(u)}`);
     }) as typeof fetch;
     const env = { DASH0_API_URL: "https://api.eu-west-1.aws.dash0.com", DASH0_AUTH_TOKEN: "fake-token-1234", DASH0_DATASET: "default" };
-    const io = scripted(["y", "y", "y"]); // approve bounded, approve the rule, enable rules
+    const io = scripted(["y", "y", "y", "y"]); // approve bounded, approve both rules (redis, postgres ratio), enable rules
     const code = await guided({ yes: false, input: "src", out: "run", version: "test", mappingsDir: join(ROOT, "mappings"), io, env, cwd: work, home: tmp("home"), fetch: fetchFn, now: () => new Date("2026-11-08T10:00:00Z") });
     globalThis.fetch = realFetch;
     const printed = io.out.join("\n");
@@ -227,10 +227,10 @@ describe("guided flow, live against a fake Dash0 + Datadog", () => {
     expect([0, 1]).toContain(code); // 1 is fine: fixture metrics outside "redis" have no data in the fake
     const rep = JSON.parse(readFileSync(join(work, "run", "report.json"), "utf8")) as { score: { total: number; landed: { count: number }; translated: { count: number }; success: { count: number } }; items: Row[] };
     expect(rep.score.total).toBe(102);
-    // Every dashboard panel landed (placeholders too); only the 5 untranslatable monitors have nothing in Dash0.
-    expect(rep.score.landed.count).toBe(102 - 5);
-    expect(rep.items.filter((r) => r.kind === "alert" && r.enabled)).toHaveLength(1);
-    expect(calls.filter((c) => c === "POST /api/import/check-rule")).toHaveLength(2); // import (disabled) + enable
+    // Every dashboard panel landed (placeholders too); only the 4 anomalies() monitors have nothing in Dash0.
+    expect(rep.score.landed.count).toBe(102 - 4);
+    expect(rep.items.filter((r) => r.kind === "alert" && r.enabled)).toHaveLength(2);
+    expect(calls.filter((c) => c === "POST /api/import/check-rule")).toHaveLength(4); // 2 rules: import (disabled) + enable
     const md = readFileSync(join(work, "run", "report.md"), "utf8");
     expect(md).toMatch(/\| \*\*Success\*\*/);
     expect(md).toMatch(/## Monitors/);
@@ -241,12 +241,12 @@ describe("guided flow, live against a fake Dash0 + Datadog", () => {
     globalThis.fetch = (async (u: string | URL) => {
       throw new Error(`test reached the real network: ${String(u)}`);
     }) as typeof fetch;
-    const io2 = scripted(["y", "y"]);
+    const io2 = scripted(["y", "y", "y"]);
     await guided({ yes: false, input: "src", out: "run2", version: "test", mappingsDir: join(ROOT, "mappings"), io: io2, env, cwd: work, home: tmp("home"), fetch: fetchFn, now: () => new Date("2026-11-08T10:05:00Z") });
     globalThis.fetch = realFetch;
     expect(io2.prompts.some((p) => /Enable/.test(p))).toBe(false);
     const rep2 = JSON.parse(readFileSync(join(work, "run2", "report.json"), "utf8")) as { items: Row[] };
-    expect(rep2.items.filter((r) => r.kind === "alert" && r.enabled)).toHaveLength(1);
-    expect(io2.out.join("\n")).toMatch(/1 imported \(1 on, 0 off\)/);
+    expect(rep2.items.filter((r) => r.kind === "alert" && r.enabled)).toHaveLength(2);
+    expect(io2.out.join("\n")).toMatch(/2 imported \(2 on, 0 off\)/);
   });
 });

@@ -391,7 +391,11 @@ class Lowerer {
       // The table can know a metric and still have no usable OTel equivalent: never query a metric that doesn't exist.
       const why = this.ctx.availability?.(m.metric) ?? "unmapped";
       if (why === "no_equivalent") this.manual("metric.no_equivalent", `${m.metric}: the OTel receiver emits no equivalent metric`);
-      if (why === "derived") this.manual("metric.derived", `${m.metric}: the equivalent is an expression over several OTel metrics (not translated yet)`);
+      if (why === "derived") {
+        const ratio = this.ctx.ratio?.(m.metric);
+        if (ratio) return this.ratio(m, calls, ratio);
+        this.manual("metric.derived", `${m.metric}: the equivalent is an expression over several OTel metrics (not translated yet)`);
+      }
       if (why === "needs_transform") this.manual("metric.needs_transform", `${m.metric}: the mapping needs a scale or sumBy transform, but the context did not pass it to T4`);
     }
     // Datadog's declared kind (metadata.csv) for a metric without a curated entry.
@@ -620,6 +624,32 @@ class Lowerer {
       return { node, groups: by, rateForm: rateOf(rateRange) };
     }
     return { node, groups: by };
+  }
+
+  /**
+   * select.metric.ratio: Datadog's check computes d = num / den per instance (postgresql.percent_usage_connections =
+   * SUM(numbackends) / MAX(setting)), where num may be split into several series (one per database) and den is one
+   * instance-level setting. With one instance per group G (A.ratio-one-instance):
+   *   sum by (G) (T(num_i)) = T(sum_i num_i)   T = avg|sum_over_time is linear in aligned samples (A.sumby-together)
+   *   max by (G) (T(den))   = den              one series per group, constant in the bucket (A.ratio-den-constant)
+   *   T(num / den)          = T(num) / den     for a constant den > 0
+   * so the group's Datadog value (any of avg/sum/min/max over its one series) is the quotient below. Everything else
+   * fails closed.
+   */
+  ratio(m: MetricQuery, calls: { name: string; args: import("../../parse/index.js").Arg[] }[], r: { num: string; den: string }): Lowered {
+    const why = (s: string): never => this.manual("metric.derived", `${m.metric} = ${r.num} / ${r.den}: ${s}`);
+    if (m.spaceAgg === "count" || (m.spaceAgg !== null && !SPACE_AGGS.has(m.spaceAgg))) why(`${m.spaceAgg}: of a ratio has no rule`);
+    if (m.valueFilter) why("value filters have no PromQL equivalent");
+    for (const c of calls) {
+      const f = c.name === "rollup" ? c.args[0] : undefined;
+      if (c.name === "rollup" && f?.type === "word" && (f.value === "avg" || f.value === "sum")) continue;
+      if (c.name === "fill" && c.args[0]?.type === "word" && c.args[0].value === "null") continue;
+      why(`.${c.name}(${f?.type === "word" ? f.value : ""}) does not commute with the quotient`);
+    }
+    this.use("select.metric.ratio");
+    const num = this.metric({ ...m, metric: r.num, spaceAgg: "sum" }, calls);
+    const den = this.metric({ ...m, metric: r.den, spaceAgg: "max" }, calls);
+    return { node: { k: "binary", op: "/", lhs: num.node, rhs: den.node }, groups: num.groups };
   }
 
   /**

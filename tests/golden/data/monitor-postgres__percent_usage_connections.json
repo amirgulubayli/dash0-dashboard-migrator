@@ -4,24 +4,55 @@
     "kind": "alert",
     "title": "[Postgres] Number of connections is approaching connection limit on {{host.name}}",
     "widget_type": "query alert",
-    "status": "manual",
-    "promql": [],
+    "status": "bounded",
+    "promql": [
+      "avg_over_time((sum (avg_over_time({otel_metric_name=\"postgresql.backends\"}[1m])) / max (avg_over_time({otel_metric_name=\"postgresql.connection.max\"}[1m])))[15m:1m]) > $__threshold"
+    ],
     "rules": [
       "classify.monitor.metric",
       "alert.opt.notification",
       "alert.opt.new_group_delay",
       "alert.opt.require_full_window.true",
-      "metric.derived",
-      "emit.certificate"
+      "select.metric.ratio",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "scope.all",
+      "time.rollup.monitor-bucket",
+      "space.agg",
+      "monitor.window",
+      "monitor.cmp.gt",
+      "alert.threshold.both",
+      "alert.id",
+      "alert.name",
+      "alert.tags",
+      "alert.msg.summary",
+      "alert.msg.label",
+      "alert.msg.conditional",
+      "alert.defaults",
+      "emit.rules-disabled",
+      "emit.certificate",
+      "validate.preflight",
+      "emit.id",
+      "emit.single-item",
+      "emit.rules-disabled"
     ],
     "assumptions": [
+      "A.boundary",
+      "A.eval-1m",
       "A.full-window",
+      "A.monitor-rollup-60s",
+      "A.msg-conditional",
       "A.no-new-groups",
-      "A.notify-manual"
+      "A.notify-manual",
+      "A.ratio-den-constant",
+      "A.ratio-one-instance",
+      "A.sumby-together"
     ],
     "findings": [
-      "exact-under monitor.option",
-      "manual metric.derived"
+      "bounded metric.approximate",
+      "exact-under alert.defaults",
+      "exact-under alert.msg.conditional",
+      "exact-under monitor.option"
     ]
   }
 ]

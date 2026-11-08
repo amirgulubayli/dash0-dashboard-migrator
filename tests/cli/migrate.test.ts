@@ -135,7 +135,7 @@ describe("modes", () => {
       return v ? json(v) : json({ error: { code: 404, message: "nf" } }, 404);
     }) as typeof fetch;
     const r = await migrate(opts({ mode: "live", dash0: { apiUrl: "https://api.example.test", token: "t", fetch: f, sleep: async () => {} } }));
-    expect(r.report.summary.import).toMatchObject({ mode: "live", imported: 5, readBackMatch: 5, failed: 0, rejected: 0 });
+    expect(r.report.summary.import).toMatchObject({ mode: "live", imported: 6, readBackMatch: 6, failed: 0, rejected: 0 });
     const hm = r.report.items.find((i) => i.id === "dd-monitor-redisdb__high_mem")!;
     expect(hm.target).toEqual({ dash0Id: HIGH_MEM_ID, kind: "check-rule", action: "imported", readBack: "match" });
     expect(hm.certificate.checks.importedReadBack).toBe(true);
