@@ -11,6 +11,7 @@ import { canonicalJson, importAll, sha256, type Dash0Config, type DashboardDefin
 import { makeAlertConverter, parseChannelMap, type AlertConversion, type ChannelLookup, type ConverterContext } from "../translate/alerts/index.js";
 import { translateMonitor } from "../translate/query/index.js";
 import type { Alert } from "../ir/index.js";
+import { metricNames, summarizeMetrics } from "./metrics.js";
 
 /** Monitor -> check rule. Default: T6 (src/translate/alerts) over T4's translateMonitor, and T12's
  *  translateLogMonitor for "log alert" monitors when the log-attribute table is loaded. */
@@ -42,6 +43,10 @@ export interface MigrateOptions {
    */
   channelsFile?: string;
   version: string;
+  /** How the source is recorded in report.json (as given, so reports don't carry machine paths). */
+  source?: { kind: "api" | "folder"; site: string | null; path: string | null };
+  /** The resolved config of a `plan` run, recorded in report.json. */
+  config?: Record<string, unknown>;
 }
 
 export const CHANNELS_FILE = "notification-channels.yaml";
@@ -103,7 +108,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
 
   const kindsFile = join(o.mappingsDir, "datadog", "_kinds.json");
   const mappingFiles = [join(o.mappingsDir, "tags.yaml"), ...(attributes ? [logAttributesFile] : []), ...readdirSync(join(o.mappingsDir, "datadog")).filter((f) => f.endsWith(".yaml")).sort().map((f) => join(o.mappingsDir, "datadog", f)), ...(existsSync(kindsFile) ? [kindsFile] : []), ...(channels ? [channels.file] : [])];
-  const inputHash = sha256(canonicalJson({ dashboards: ingested.dashboards.map((d) => d.original), alerts: ingested.alerts.map((a) => a.original) }));
+  const inputHash = inputHashOf(ingested);
   const report = buildReport({
     version: o.version,
     inputHash,
@@ -114,8 +119,16 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
     alerts,
     manifest,
     mode: o.mode,
+    source: o.source ?? (o.ingest.input ? { kind: "folder", site: null, path: null } : { kind: "api", site: process.env.DD_SITE || "datadoghq.eu", path: null }),
+    ...(o.config ? { config: o.config } : {}),
+    metrics: summarizeMetrics(metricNames(ingested.dashboards, ingested.alerts), mappings),
   });
   return { report, manifest, dashboards: dashboards.map((d) => d.out), alerts };
+}
+
+/** Hash of the Datadog sources as ingested: the plan records it, and `apply` re-ingests and compares (source drift). */
+export function inputHashOf(ingested: { dashboards: { original: unknown }[]; alerts: { original: unknown }[] }): string {
+  return sha256(canonicalJson({ dashboards: ingested.dashboards.map((d) => d.original), alerts: ingested.alerts.map((a) => a.original) }));
 }
 
 /** Exit status for the CLI: fail only when something we tried to import failed or was rejected. */

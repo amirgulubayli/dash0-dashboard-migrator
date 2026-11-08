@@ -13,7 +13,8 @@ export interface PMatcher {
 export type PNode =
   | { k: "selector"; matchers: PMatcher[]; range?: Duration; offset?: Duration; at?: "end()" | "start()" }
   | { k: "call"; fn: string; args: PNode[] }
-  | { k: "agg"; op: "avg" | "sum" | "min" | "max" | "count"; by: string[]; expr: PNode }
+  /** `by` lists the grouping labels; with `without: true` they are the labels aggregated away instead (`sum without (db) (x)`). */
+  | { k: "agg"; op: "avg" | "sum" | "min" | "max" | "count"; by: string[]; without?: boolean; expr: PNode }
   /** `on` (only with "and"): match on these labels only, e.g. `x and on (host) topk(...)`. */
   | { k: "binary"; op: "+" | "-" | "*" | "/" | ">" | ">=" | "<" | "<=" | "==" | "!=" | "or" | "and"; lhs: PNode; rhs: PNode; on?: string[] }
   | { k: "num"; value: number }
@@ -82,7 +83,7 @@ export function render(n: PNode): string {
     case "call":
       return `${n.fn}(${n.args.map(render).join(", ")})`;
     case "agg":
-      return `${n.op}${n.by.length ? ` by (${[...n.by].sort().join(", ")})` : ""} (${render(n.expr)})`;
+      return `${n.op}${n.by.length ? ` ${n.without ? "without" : "by"} (${[...n.by].sort().join(", ")})` : ""} (${render(n.expr)})`;
     case "num":
       return formatNumber(n.value);
     case "placeholder":

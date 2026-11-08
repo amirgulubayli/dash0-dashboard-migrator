@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 69 | 45 | 21 | 55 | 190 |
-| planned | 17 | 28 | 3 | 11 | 59 |
+| implemented | 70 | 46 | 21 | 55 | 192 |
+| planned | 16 | 28 | 3 | 11 | 58 |
 
 ## Pipeline order
 
@@ -17,7 +17,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 1 | `ingest` Ingest and normalise | source item | no | 4 | Read the source JSON, unwrap containers, coerce types, keep the raw original. |
 | 2 | `classify` Classify the item | monitor | yes | 3 | Decide which pipeline a monitor goes through; anything unknown stops here as manual. |
 | 3 | `parse` Parse | query string | yes | 4 | Datadog query / formula / monitor strings → AST (T3). Unparseable text is manual with the original kept. |
-| 4 | `select` Select the metric | metric reference | yes | 12 | Datadog metric → OTel metric through the mapping table. |
+| 4 | `select` Select the metric | metric reference | yes | 13 | Datadog metric → OTel metric through the mapping table. |
 | 5 | `scope` Scope filters | filter term | no | 17 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
 | 7 | `time` Time aggregation | postfix or rollup call | no | 31 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
@@ -74,16 +74,18 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 40 | `select.labels.clash` | query filters on a label the mapping already fixes | no output | manual | unit | — | T4 | implemented |
 | 50 | `query.value-filter` | distribution value filter (v: ...) | no output: PromQL has no per-value filter | manual | unit | — | T4 | implemented |
 | 60 | `metric.no_equivalent` | mapping says the OTel receiver emits no equivalent | no output; placeholder panel | manual | unit | — | T4 | implemented |
-| 62 | `metric.needs_transform` | mapping entry with scale or sumBy (CONTRACT-002) | no output until select.metric.transform ships | manual | unit | — | T4 | implemented |
+| 62 | `metric.needs_transform` | mapping entry with scale <= 0, or sumBy labels the query filters or groups on, or sumBy under .rollup(min\|max\|count) | no output: no exact rewrite (select.metric.transform covers the rest) | manual | unit | — | T4 | implemented |
 | 64 | `metric.derived` | mapping entry that is an expression over several OTel metrics | no output until select.metric.derived ships | manual | unit | — | T4 | implemented |
-| 66 | `select.metric.transform` | mapping entry with scale k and/or sumBy labels | k * x, sum without(<sumBy>) (x): both exact rewrites | exact | — | — | T4 | planned |
+| 66 | `select.metric.transform` | mapping entry with scale k > 0 and/or sumBy labels L | k * agg by (G) (sum without (L) (T(x))); k drops out under a count | exact | unit | — | T4 | implemented |
+| 67 | `select.metric.transform.sumby` | select.metric.transform with sumBy under avg_over_time, rate or increase | sum without (L) (T(x)) inside the space aggregation | exact-under(A.sumby-together) | unit | — | T4 | implemented |
 | 68 | `select.metric.derived` | mapping entry with a derived expression over several OTel metrics | the entry's PromQL expression, status from the entry's own claim | exact-under(A.align) | — | — | T4 | planned |
 | 90 | `select.metric.kind-metadata` | Datadog metric with no mapping entry but a kind in its integration's metadata.csv | keep the Datadog name; kind from metadata.csv | exact-under(A.kind-metadata) | unit | — | T4 | implemented |
 | 999 (fallback) | `select.metric.unmapped` | Datadog metric with no mapping entry | keep the Datadog name, assume gauge | exact-under(A.kind-gauge) | unit | — | T4 | implemented |
 
 - `select.metric.approximate`: ε: per mapping entry: the difference stated in the entry's note (e.g. RSS vs used memory). Tried before select.metric.mapped: an entry marked approximate never counts as exact.
 - `select.labels`: Applied together with select.metric.mapped or select.metric.approximate (it refines their selector, it does not replace it).
-- `select.metric.transform`: Replaces metric.needs_transform. Each part is an exact identity; needs T4 support and a unit test per entry shape.
+- `select.metric.transform`: T(k*y) = k*T(y) for every time aggregation T4 emits (count_over_time: unchanged), agg(k*y) = k*agg(y) for sum/avg/min/max with k > 0 (count: unchanged), and sum without (L) restores Datadog's series before its own aggregation. With sumBy, avg_over_time/rate/increase also apply select.metric.transform.sumby (A.sumby-together); min/max/count rollups fail closed (metric.needs_transform).
+- `select.metric.transform.sumby`: Applied together with select.metric.transform. sum_over_time is linear in any samples, so .rollup(sum) needs no assumption.
 - `select.metric.derived`: Replaces metric.derived. The claim comes from the mapping row, which must carry its own status and test.
 - `select.metric.unmapped`: Biggest lever for coverage: more generated mapping tables (T1 follow-up) turn these into select.metric.mapped.
 
@@ -482,6 +484,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.window` | the dashboard substitutes $__range with its visible time range and end() is the end of that range (read live on StatChart and TimeSeriesTable panels), so a [$__range] @ end() window covers the timeframe Datadog aggregates over | 4 |
 | `A.balanced` | every series in a group reports in every rollup bucket of the window, so averaging over series and over time commute (maths.md T5) | 1 |
 | `A.top-tie` | no two series tie at the N-th place of the ranking, so topk/bottomk over the window value keep the same N series as Datadog (the order in which Dash0 lists them is Dash0's) | 2 |
+| `A.sumby-together` | the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs) | 1 |
 | `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
 | `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 6 |
 | `A.log-source` | logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent | 1 |
@@ -535,6 +538,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 Exact-under and bounded claims whose only evidence is a unit test or nothing. These are the next rules to take through the reference evaluator (T16).
 
 - `select.metric.approximate` (bounded(ε), implemented, T4)
+- `select.metric.transform.sumby` (exact-under(A.sumby-together), implemented, T4)
 - `select.metric.derived` (exact-under(A.align), planned, T4)
 - `select.metric.kind-metadata` (exact-under(A.kind-metadata), implemented, T4)
 - `select.metric.unmapped` (exact-under(A.kind-gauge), implemented, T4)

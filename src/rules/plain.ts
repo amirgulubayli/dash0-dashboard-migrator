@@ -32,6 +32,7 @@ export const PLAIN_ASSUMPTIONS: Record<string, string> = {
   "A.same-key-and": "Datadog applies a fixed filter and a dashboard filter on the same tag together",
   "A.at-range": "the dashboard's time range decides which series get filled with zero",
   "A.monotonic": "the measurement only grows between resets",
+  "A.sumby-together": "the per-database (or per-label) parts that get added up are collected at the same moments",
   "A.both-present": "both values exist at the same moment",
   "A.log-count": "Dash0 receives the same log records Datadog indexed",
   "A.log-source": "the log shipper sets the Datadog 'source' as an attribute",

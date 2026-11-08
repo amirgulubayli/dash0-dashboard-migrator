@@ -131,11 +131,13 @@ describe("follow-ups from the PR #4 review", async () => {
       `  a.plain:\n    otel: "z"\n    ddKind: gauge\n    otelKind: gauge\n    status: exact\n`,
   );
   const m = { metrics: table.metrics, tags: new Map(), origin: new Map() };
-  it("entries with scale or sumBy fail closed until a translator applies them", () => {
-    expect(metricAvailability(m, "a.scaled")).toBe("needs_transform");
-    expect(metricAvailability(m, "a.summed")).toBe("needs_transform");
-    expect(metricLookup(m)("a.scaled")).toBeUndefined();
-    expect(metricLookup(m)("a.summed")).toBeUndefined();
+  it("entries with scale or sumBy are mapped and carry the transform to T4 (select.metric.transform)", () => {
+    expect(metricAvailability(m, "a.scaled")).toBe("mapped");
+    expect(metricAvailability(m, "a.summed")).toBe("mapped");
+    expect(metricLookup(m)("a.scaled")).toMatchObject({ otel: "x", scale: 1000 });
+    expect(metricLookup(m)("a.summed")).toMatchObject({ otel: "y", sumBy: ["db"] });
+    expect(metricLookup(m)("a.plain")).not.toHaveProperty("scale");
+    expect(metricLookup(m)("a.plain")).not.toHaveProperty("sumBy");
     expect(metricLookup(m)("a.plain")).toMatchObject({ otel: "z" });
   });
   it("Variable.tagKey accepts null for free-form variables like $scope", () => {

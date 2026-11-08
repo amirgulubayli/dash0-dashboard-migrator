@@ -22,6 +22,10 @@ export interface MetricMapping {
   /** Name-mapping fidelity from the table. "approximate" makes the result at best `bounded`. */
   status?: "exact" | "approximate";
   note?: string;
+  /** Datadog value = scale × OTel value (e.g. 100 for percent vs fraction). Rule select.metric.transform. */
+  scale?: number;
+  /** OTel labels Datadog doesn't have; the OTel series are summed over them first. Rule select.metric.transform. */
+  sumBy?: string[];
 }
 
 export interface TranslateContext {
@@ -29,7 +33,8 @@ export interface TranslateContext {
   metric?: (ddName: string) => MetricMapping | undefined;
   /**
    * Why a metric has no lookup (T1 `metricAvailability`). `no_equivalent`, `derived` and `needs_transform` fail closed
-   * (manual). Without it, every metric the lookup doesn't return is treated as unmapped.
+   * (manual). T1 now returns scale/sumBy entries through `metric` (select.metric.transform); `needs_transform` stays
+   * for contexts that can't supply them. Without it, every metric the lookup doesn't return is treated as unmapped.
    */
   availability?: (ddName: string) => MetricAvailability;
   /**

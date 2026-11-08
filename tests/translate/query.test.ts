@@ -22,12 +22,19 @@ const METRICS: Record<string, MetricMapping> = {
   // Datadog stores these running totals as gauges; the OTel receiver emits counters (as in redisdb.yaml).
   "redis.keys.evicted": { otel: "redis.keys.evicted", kind: "counter", ddKind: "gauge", status: "exact" },
   "redis.net.rejected": { otel: "redis.connections.rejected", kind: "counter", ddKind: "gauge", status: "exact" },
+  // select.metric.transform fixtures: Datadog value = scale x OTel value; sumBy labels are summed away first.
+  "redis.dd.scaled": { otel: "redis.dd.fraction", kind: "gauge", ddKind: "gauge", status: "exact", scale: 100 },
+  "redis.dd.cpu_ms": { otel: "redis.cpu.time", kind: "counter", ddKind: "rate", status: "exact", scale: 1000 },
+  "redis.dd.keys": { otel: "redis.db.keys", kind: "gauge", ddKind: "gauge", status: "exact", sumBy: ["db"] },
+  "redis.dd.keys_kb": { otel: "redis.db.bytes", kind: "gauge", ddKind: "gauge", status: "exact", scale: 0.001, sumBy: ["db"] },
+  "redis.dd.negscale": { otel: "redis.dd.neg", kind: "gauge", ddKind: "gauge", status: "exact", scale: -1 },
 };
 /** Mirrors T1's metricAvailability(): known to the table but not usable. */
 const AVAILABILITY: Record<string, MetricAvailability> = {
   "redis.info.latency_ms": "no_equivalent",
   "redis.dd.derived": "derived",
-  "redis.dd.scaled": "needs_transform",
+  // A context that knows the entry needs a transform but can't pass scale/sumBy to T4.
+  "redis.dd.opaque": "needs_transform",
 };
 /** Mirrors the metadata.csv kind table for metrics without a curated entry. */
 const DD_KINDS: Record<string, "gauge" | "count" | "rate" | "distribution"> = {
@@ -76,6 +83,17 @@ const CASES: [string, string, string, string][] = [
   ["scope.or.same-key", "avg:system.cpu.user{env:prod OR env:stage}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', deployment_environment_name=~"^(prod|stage)$"')}[$__interval]))`, "exact-under"],
   ["scope.not", "avg:system.cpu.user{NOT env:dev}", `avg (avg_over_time(${SEL("system.cpu.utilization", ', deployment_environment_name!="dev"')}[$__interval]))`, "exact-under"],
   ["scope.var", "avg:redis.mem.used{$host} by {host}", `avg by (host_name) (avg_over_time(${SEL("redis.memory.used", ', host_name=~"^($host)$"')}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "avg:redis.dd.scaled{*}", `100 * avg (avg_over_time(${SEL("redis.dd.fraction")}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "sum:redis.dd.scaled{*} by {host}", `100 * sum by (host_name) (avg_over_time(${SEL("redis.dd.fraction")}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "max:redis.dd.scaled{*}.rollup(min, 60)", `100 * max (min_over_time(${SEL("redis.dd.fraction")}[1m]))`, "exact-under"],
+  ["select.metric.transform", "count:redis.dd.scaled{*}", `count (avg_over_time(${SEL("redis.dd.fraction")}[$__interval]))`, "exact-under"],
+  ["select.metric.transform", "sum:redis.dd.scaled{*}.rollup(count, 60)", `sum (count_over_time(${SEL("redis.dd.fraction")}[1m]))`, "exact-under"],
+  ["select.metric.transform", "avg:redis.dd.cpu_ms{*}", `1000 * avg (rate(${SEL("redis.cpu.time")}[$__rate_interval]))`, "bounded"],
+  ["select.metric.transform", "sum:redis.dd.cpu_ms{*} by {host}.as_count()", `1000 * sum by (host_name) (increase(${SEL("redis.cpu.time")}[$__rate_interval]))`, "bounded"],
+  ["select.metric.transform", "sum:redis.dd.keys{*} by {host}", `sum by (host_name) (sum without (db) (avg_over_time(${SEL("redis.db.keys")}[$__interval])))`, "exact-under"],
+  ["select.metric.transform", "sum:redis.dd.keys{*}.rollup(sum, 60)", `sum (sum without (db) (sum_over_time(${SEL("redis.db.keys")}[1m])))`, "exact-under"],
+  ["select.metric.transform", "avg:redis.dd.keys{host:a}", `avg (sum without (db) (avg_over_time(${SEL("redis.db.keys", ', host_name="a"')}[$__interval])))`, "exact-under"],
+  ["select.metric.transform", "max:redis.dd.keys_kb{*} by {host}", `0.001 * max by (host_name) (sum without (db) (avg_over_time(${SEL("redis.db.bytes")}[$__interval])))`, "exact-under"],
   ["time.rollup.default", "max:system.cpu.user{*}", `max (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
   ["time.rollup.explicit", "avg:redis.mem.used{*} by {host}.rollup(max, 300)", `avg by (host_name) (max_over_time(${SEL("redis.memory.used")}[5m]))`, "exact-under"],
   ["time.as_count.gauge", "sum:system.cpu.user{*}.as_count()", `sum (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
@@ -264,6 +282,39 @@ describe("formulas", () => {
   });
 });
 
+describe("select.metric.transform", () => {
+  it("sumBy under avg_over_time/rate/increase adds A.sumby-together; sum_over_time does not", () => {
+    expect(q("sum:redis.dd.keys{*}").assumptions).toContain("A.sumby-together");
+    expect(q("sum:redis.dd.keys{*}.rollup(sum, 60)").assumptions).not.toContain("A.sumby-together");
+    expect(q("avg:redis.dd.scaled{*}").assumptions).not.toContain("A.sumby-together");
+  });
+
+  it("per_second over a scaled running total scales the rate form", () => {
+    const r = track(q("per_second(sum:redis.dd.scaled{*})"));
+    expect(r.promql).toBe(`100 * sum (rate(${SEL("redis.dd.fraction")}[$__rate_interval]))`);
+  });
+
+  it("diff over a summed-by query stays linear", () => {
+    const r = track(q("diff(sum:redis.dd.keys{*})"));
+    expect(r.promql).toBe(
+      `sum (sum without (db) (avg_over_time(${SEL("redis.db.keys")}[$__interval]))) - sum (sum without (db) (avg_over_time(${SEL("redis.db.keys")}[$__interval] offset $__interval)))`,
+    );
+  });
+
+  it("monitors: the scale stays inside the 1m bucket query, in Datadog units against the threshold", () => {
+    const r = track(mon("avg(last_5m):avg:redis.dd.scaled{*} by {host} > 90", { critical: 90 }));
+    expect(r.promql).toBe(`avg_over_time((100 * avg by (host_name) (avg_over_time(${SEL("redis.dd.fraction")}[1m])))[5m:1m]) > $__threshold`);
+    expect(r.thresholds).toEqual({ failed: 90 });
+  });
+
+  it("every emitted transform validates as PromQL", () => {
+    for (const s of ["avg:redis.dd.scaled{*}", "sum:redis.dd.keys{*} by {host}", "max:redis.dd.keys_kb{*} by {host}"]) {
+      const r = q(s);
+      expect(validatePromQL(r.promql!).ok, r.promql!).toBe(true);
+    }
+  });
+});
+
 describe("fail closed: manual, no PromQL, original kept", () => {
   for (const [code, src] of [
     ["fn.anomalies", "anomalies(avg:system.cpu.user{*}, 'basic', 2)"],
@@ -297,7 +348,12 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["select.labels.clash", "avg:redis.cpu.sys{state:user}"],
     ["metric.no_equivalent", "avg:redis.info.latency_ms{*}"],
     ["metric.derived", "avg:redis.dd.derived{*}"],
-    ["metric.needs_transform", "avg:redis.dd.scaled{*}"],
+    ["metric.needs_transform", "avg:redis.dd.opaque{*}"],
+    ["metric.needs_transform", "avg:redis.dd.negscale{*}"],
+    ["metric.needs_transform", "sum:redis.dd.keys{db:0}"],
+    ["metric.needs_transform", "sum:redis.dd.keys{*} by {db}"],
+    ["metric.needs_transform", "sum:redis.dd.keys{*}.rollup(max, 60)"],
+    ["metric.needs_transform", "sum:redis.dd.keys{*}.rollup(count, 60)"],
     ["arith.div-zero", "avg:system.cpu.user{*} / 0"],
     ["fn.per_unit.kind", "per_minute(min:system.cpu.user{*})"],
     ["fn.per_unit.kind", "per_minute(max:redis.keys.evicted{*})"],
