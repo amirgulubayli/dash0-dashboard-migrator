@@ -12,8 +12,10 @@ export interface WebKeysOptions {
   need: { datadog: boolean; dash0: boolean };
   /** Keys already found in env / .env (secrets are shown only as a fingerprint). */
   known: Keys;
-  /** Folder the CLI runs in, shown next to the save checkbox. */
+  /** Folder the CLI runs in, shown in the header. */
   cwd: string;
+  /** Where "save" writes the keys, shown next to the checkbox (e.g. ~/.config/dd2dash0/.env). */
+  savePath?: string;
   fetch?: typeof fetch;
   /** Give up after this many ms. Default 15 minutes. */
   timeoutMs?: number;
@@ -240,6 +242,8 @@ button{font:inherit;color:var(--bg);background:var(--fg);border:0;border-radius:
 button:active{transform:scale(.97)}button[disabled]{opacity:.55;cursor:default}
 .kbd{color:var(--dim);margin-left:12px}
 .foot{color:var(--dim);font-size:12px;margin-top:28px;max-width:52ch}
+.drop{outline:none}.dz{border:1px dashed var(--line);border-radius:8px;padding:10px 12px;color:var(--dim);font-size:12.5px;cursor:pointer;transition:border-color 150ms ease,color 150ms ease}
+.drop:focus .dz,.drop.over .dz{border-color:var(--accent);color:var(--fg)}.k{color:var(--fg)}.ok-msg{color:var(--ok)}
 .done{display:none}.is-done form{display:none}.is-done .done{display:block}
 .done p{margin:4px 0}.done .big{font-size:15px}
 @media (prefers-reduced-motion:reduce){button{transition:opacity 150ms ease}button:active{transform:none}}
@@ -247,9 +251,11 @@ button:active{transform:scale(.97)}button[disabled]{opacity:.55;cursor:default}
 </style></head><body><main>
 <div class="frame"><div><span class="mark">◆</span> <b>dd2dash0</b> <span class="dim">· connect</span></div><div class="dim">${esc(o.cwd)}</div></div>
 <form id="f" novalidate>
+<section class="drop" id="drop" tabindex="0" aria-label="Drop or paste a .env file"><h2><span class="dot">●</span> Have a .env?</h2>
+<div class="row" style="grid-template-columns:1fr"><div class="field"><div class="dz">Drop it here, or click and paste its contents (<span class="k">⌘V</span>). The fields below fill in; nothing leaves this page until you press the button.</div><div class="msg ok-msg" id="dropmsg" aria-live="polite"></div></div></div></section>
 ${o.need.datadog ? section("Datadog", FIELDS.datadog) : ""}
 ${o.need.dash0 ? section("Dash0", FIELDS.dash0) : ""}
-<label class="save"><input type="checkbox" id="save" checked> save to .env in this folder (only you can read it)</label>
+<label class="save"><input type="checkbox" id="save" checked> save them in ${esc(o.savePath ?? "~/.config/dd2dash0/.env")} (only you can read it; works from any folder)</label>
 <div><button id="go" type="submit">Check and continue</button><span class="kbd">⏎</span></div>
 <p class="foot">Keys go only to this computer (127.0.0.1). It checks them with one read-only call to Datadog and one to Dash0, then hands them to the terminal. This page works once.</p>
 </form>
@@ -267,6 +273,15 @@ f.addEventListener("submit",async(e)=>{e.preventDefault();if(go.disabled)return;
   const bad=f.querySelector(".row.bad input");if(bad)bad.focus();
  }catch{f.querySelector(".foot").textContent="The terminal stopped listening. Run dd2dash0 again.";}
  finally{clearInterval(spin);go.textContent="Check and continue";go.disabled=false;}});
+const drop=document.getElementById("drop"),dmsg=document.getElementById("dropmsg");
+function fill(text){const got={};for(const raw of text.split(/\r?\n/)){const m=/^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/.exec(raw);if(!m)continue;let v=m[2].trim();if(/^(['"]).*\\1$/.test(v))v=v.slice(1,-1);else v=v.replace(/\s+#.*$/,"");got[m[1]]=v;}
+ const used=[];for(const i of f.querySelectorAll(".row input")){if(got[i.name]){i.value=got[i.name];used.push(i.name);i.closest(".row").classList.remove("bad","ok");}}
+ dmsg.className="msg "+(used.length?"ok-msg":"");dmsg.textContent=used.length?"⎿ filled "+used.join(", "):"⎿ no dd2dash0 keys found in that text";if(used.length)go.focus();}
+drop.addEventListener("click",()=>drop.focus());
+drop.addEventListener("paste",(e)=>{const t=e.clipboardData&&e.clipboardData.getData("text");if(t){e.preventDefault();fill(t);}});
+for(const ev of["dragenter","dragover"])document.addEventListener(ev,(e)=>{e.preventDefault();drop.classList.add("over");});
+document.addEventListener("dragleave",(e)=>{if(!e.relatedTarget)drop.classList.remove("over");});
+document.addEventListener("drop",async(e)=>{e.preventDefault();drop.classList.remove("over");const file=e.dataTransfer&&e.dataTransfer.files[0];if(file&&file.size<65536)fill(await file.text());});
 const first=[...f.querySelectorAll(".row input")].find(i=>!i.value&&i.required);(first||f.querySelector(".row input")).focus();
 </script></body></html>`;
 }

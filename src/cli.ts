@@ -19,13 +19,20 @@ import { createInterface } from "node:readline/promises";
 export const VERSION = "0.4.1";
 
 /**
- * The mapping tables: $DD2DASH0_MAPPINGS, else a mappings/ folder next to the executable (the release download),
- * else the package's own mappings/ (running from source).
+ * The mapping tables, first found wins:
+ *   1. $DD2DASH0_MAPPINGS
+ *   2. a mappings/ folder next to the executable (your own edited tables)
+ *   3. the tables built into the release executable (scripts/release/build.sh embeds them; they are read in place
+ *      from the executable's virtual file system, nothing is unpacked)
+ *   4. the package's own mappings/ (running from source)
  */
 export function defaultMappingsDir(): string {
   if (process.env.DD2DASH0_MAPPINGS) return resolve(process.env.DD2DASH0_MAPPINGS);
+  const isTables = (dir: string) => existsSync(join(dir, "tags.yaml"));
   const besideExe = join(dirname(process.execPath), "mappings");
-  if (existsSync(join(besideExe, "metrics.yaml")) || existsSync(join(besideExe, "tags.yaml"))) return besideExe;
+  if (isTables(besideExe)) return besideExe;
+  const builtIn = join(import.meta.dirname, "mappings");
+  if (isTables(builtIn)) return builtIn;
   return join(import.meta.dirname, "..", "mappings");
 }
 

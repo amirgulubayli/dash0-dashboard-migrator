@@ -54,8 +54,8 @@ describe("keys", () => {
 
   it("--yes never prompts and names the missing keys", async () => {
     const io = scripted([]);
-    await expect(resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd: tmp("yes"), io, yes: true })).rejects.toThrow(KeyError);
-    await expect(resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd: tmp("yes"), io, yes: true })).rejects.toThrow(/DD_API_KEY, DD_APP_KEY, DASH0_API_URL, DASH0_AUTH_TOKEN/);
+    await expect(resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd: tmp("yes"), io, yes: true, home: tmp("home") })).rejects.toThrow(KeyError);
+    await expect(resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd: tmp("yes"), io, yes: true, home: tmp("home") })).rejects.toThrow(/DD_API_KEY, DD_APP_KEY, DASH0_API_URL, DASH0_AUTH_TOKEN/);
     expect(io.prompts).toEqual([]);
   });
 
@@ -80,19 +80,23 @@ describe("keys", () => {
       "", // dataset -> default
       "", // save? -> yes
     ]);
-    const keys = await resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd, io, yes: false, fetch: fetchFn });
+    const home = tmp("home");
+    const keys = await resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd, io, yes: false, fetch: fetchFn, home });
     expect(keys).toMatchObject({ DD_SITE: "datadoghq.eu", DD_API_KEY: "dd-good-api-key", DASH0_API_URL: "https://api.eu-west-1.aws.dash0.com", DASH0_DATASET: "default" });
     const printed = io.out.join("\n");
     expect(printed).toMatch(/rejected the API key/);
     expect(printed).toMatch(/ingress/);
     for (const secret of ["dd-good-api-key", "dd-good-app-key", "d0-good-token-xyz", "dd-bad-api-key-000"]) expect(printed).not.toContain(secret);
-    const saved = parseDotEnv(readFileSync(join(cwd, ".env"), "utf8"));
+    // Saved to the per-user key file (works from any folder), not into the current folder.
+    const savedFile = join(home, ".config", "dd2dash0", ".env");
+    expect(existsSync(join(cwd, ".env"))).toBe(false);
+    const saved = parseDotEnv(readFileSync(savedFile, "utf8"));
     expect(saved).toMatchObject({ DD_API_KEY: "dd-good-api-key", DASH0_AUTH_TOKEN: "d0-good-token-xyz" });
-    expect(statSync(join(cwd, ".env")).mode & 0o777).toBe(0o600);
+    expect(statSync(savedFile).mode & 0o777).toBe(0o600);
 
     // Second run: everything comes from ./.env, nothing is asked.
     const io2 = scripted([]);
-    await resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd, io: io2, yes: false, fetch: fetchFn });
+    await resolveKeys({ need: { datadog: true, dash0: true }, env: {}, cwd: tmp("elsewhere"), io: io2, yes: false, fetch: fetchFn, home }); // a different folder
     expect(io2.prompts).toEqual([]);
   });
 });
@@ -215,7 +219,7 @@ describe("guided flow, live against a fake Dash0 + Datadog", () => {
     }) as typeof fetch;
     const env = { DASH0_API_URL: "https://api.eu-west-1.aws.dash0.com", DASH0_AUTH_TOKEN: "fake-token-1234", DASH0_DATASET: "default" };
     const io = scripted(["y", "y", "y"]); // approve bounded, approve the rule, enable rules
-    const code = await guided({ yes: false, input: "src", out: "run", version: "test", mappingsDir: join(ROOT, "mappings"), io, env, cwd: work, fetch: fetchFn, now: () => new Date("2026-11-08T10:00:00Z") });
+    const code = await guided({ yes: false, input: "src", out: "run", version: "test", mappingsDir: join(ROOT, "mappings"), io, env, cwd: work, home: tmp("home"), fetch: fetchFn, now: () => new Date("2026-11-08T10:00:00Z") });
     globalThis.fetch = realFetch;
     const printed = io.out.join("\n");
     expect(printed).not.toContain("fake-token-1234");
@@ -238,7 +242,7 @@ describe("guided flow, live against a fake Dash0 + Datadog", () => {
       throw new Error(`test reached the real network: ${String(u)}`);
     }) as typeof fetch;
     const io2 = scripted(["y", "y"]);
-    await guided({ yes: false, input: "src", out: "run2", version: "test", mappingsDir: join(ROOT, "mappings"), io: io2, env, cwd: work, fetch: fetchFn, now: () => new Date("2026-11-08T10:05:00Z") });
+    await guided({ yes: false, input: "src", out: "run2", version: "test", mappingsDir: join(ROOT, "mappings"), io: io2, env, cwd: work, home: tmp("home"), fetch: fetchFn, now: () => new Date("2026-11-08T10:05:00Z") });
     globalThis.fetch = realFetch;
     expect(io2.prompts.some((p) => /Enable/.test(p))).toBe(false);
     const rep2 = JSON.parse(readFileSync(join(work, "run2", "report.json"), "utf8")) as { items: Row[] };

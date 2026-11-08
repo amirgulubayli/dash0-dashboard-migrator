@@ -2,8 +2,9 @@
 // check each against its API with a read-only call, and offer to save them to ./.env (0600).
 // Secrets are never printed, logged or written anywhere but .env; at most a 4-character fingerprint is shown.
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join } from "node:path";
 
 export const KEYS = ["DD_SITE", "DD_API_KEY", "DD_APP_KEY", "DASH0_API_URL", "DASH0_AUTH_TOKEN", "DASH0_DATASET"] as const;
 export type KeyName = (typeof KEYS)[number];
@@ -13,12 +14,66 @@ export const DEFAULTS: Partial<Record<KeyName, string>> = { DD_SITE: "datadoghq.
 
 export const LABELS: Record<KeyName, string> = {
   DD_SITE: "Datadog site",
-  DD_API_KEY: "Datadog API key (Organization Settings -> API Keys)",
-  DD_APP_KEY: "Datadog application key (Organization Settings -> Application Keys)",
-  DASH0_API_URL: "Dash0 API URL (Dash0 -> Settings -> Endpoints -> API)",
-  DASH0_AUTH_TOKEN: "Dash0 auth token (Dash0 -> Settings -> Auth Tokens)",
+  DD_API_KEY: "Datadog API key",
+  DD_APP_KEY: "Datadog application key",
+  DASH0_API_URL: "Dash0 API URL",
+  DASH0_AUTH_TOKEN: "Dash0 auth token",
   DASH0_DATASET: "Dash0 dataset",
 };
+
+/** Where to find each value, shown next to its question. */
+export const HINTS: Partial<Record<KeyName, string>> = {
+  DD_API_KEY: "Organization Settings → API Keys",
+  DD_APP_KEY: "Organization Settings → Application Keys",
+  DASH0_API_URL: "Settings → Endpoints → API, not the ingress",
+  DASH0_AUTH_TOKEN: "Settings → Auth Tokens",
+};
+
+/** Other names people use for the same values (Datadog's own docs, Terraform, other tools). */
+export const ALIASES: Record<string, KeyName> = {
+  DATADOG_API_KEY: "DD_API_KEY",
+  DD_APPLICATION_KEY: "DD_APP_KEY",
+  DATADOG_APP_KEY: "DD_APP_KEY",
+  DATADOG_APPLICATION_KEY: "DD_APP_KEY",
+  DATADOG_SITE: "DD_SITE",
+  DATADOG_HOST: "DD_SITE",
+  DASH0_TOKEN: "DASH0_AUTH_TOKEN",
+  DASH0_API_TOKEN: "DASH0_AUTH_TOKEN",
+  DASH0_URL: "DASH0_API_URL",
+  DASH0_API_ENDPOINT: "DASH0_API_URL",
+};
+
+/**
+ * A path someone dragged into the terminal, as the terminal typed it: macOS Terminal escapes spaces
+ * (/Users/me/env\ copy.txt), iTerm and others may quote it, and a trailing space is common. Returns the path, or null.
+ */
+export function droppedPath(text: string, cwd: string, home = homedir()): string | null {
+  let t = text.trim();
+  if (!t || t.includes("\n") || t.includes("=")) return null;
+  if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) t = t.slice(1, -1);
+  else t = t.replace(/\\(.)/g, "$1");
+  if (t.startsWith("file://")) t = decodeURIComponent(t.slice(7));
+  if (t === "~" || t.startsWith("~/")) t = join(home, t.slice(1));
+  const p = isAbsolute(t) ? t : join(cwd, t);
+  try {
+    return statSync(p).isFile() ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keys from pasted text or a dropped file: KEY=value lines, other names mapped, everything else ignored. */
+export function keysFromText(text: string, cwd: string, home = homedir()): { keys: Keys; file: string | null } {
+  const file = droppedPath(text, cwd, home);
+  const raw = parseDotEnv(file ? readFileSync(file, "utf8") : text);
+  const keys: Keys = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const name = (KEYS as readonly string[]).includes(k) ? (k as KeyName) : ALIASES[k];
+    if (name && v && !keys[name]) keys[name] = v;
+  }
+  if (keys.DD_SITE) keys.DD_SITE = keys.DD_SITE.replace(/^https?:\/\/(api\.|app\.)?/, "").replace(/\/.*$/, "");
+  return { keys, file };
+}
 
 /** Minimal .env parser: KEY=value, optional quotes, # comments. Only what we need, no expansion. */
 export function parseDotEnv(text: string): Record<string, string> {
@@ -63,8 +118,26 @@ export function mergeDotEnv(existing: string, keys: Keys): string {
   return out.join("\n") + "\n";
 }
 
-/** Write .env with mode 0600 (also tightens an existing file). */
+/** The per-user key file: $XDG_CONFIG_HOME/dd2dash0/.env, %APPDATA%\\dd2dash0\\.env, or ~/.config/dd2dash0/.env. */
+export function configEnvPath(env: NodeJS.ProcessEnv = process.env, home = homedir()): string {
+  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, "dd2dash0", ".env");
+  if (process.platform === "win32" && env.APPDATA) return join(env.APPDATA, "dd2dash0", ".env");
+  return join(home, ".config", "dd2dash0", ".env");
+}
+
+/** "~/.config/dd2dash0/.env" for display. */
+export const displayPath = (p: string, home = homedir()) => (p.startsWith(home) ? "~" + p.slice(home.length) : p);
+
+/** Keys from the environment, then ./.env, then the per-user key file (first one wins). */
+export function knownKeys(env: NodeJS.ProcessEnv, cwd: string, home = homedir()): { keys: Keys; files: Record<string, string> } {
+  const read = (p: string) => (existsSync(p) ? parseDotEnv(readFileSync(p, "utf8")) : {});
+  const files = { ...read(configEnvPath(env, home)), ...read(join(cwd, ".env")) };
+  return { keys: lookupKeys(env, files), files };
+}
+
+/** Write a .env with mode 0600 (also tightens an existing file); creates its folder (0700). */
 export function saveDotEnv(path: string, keys: Keys): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const prev = existsSync(path) ? readFileSync(path, "utf8") : "";
   writeFileSync(path, mergeDotEnv(prev, keys), { mode: 0o600 });
   chmodSync(path, 0o600);
@@ -159,11 +232,16 @@ export interface ResolveKeysOptions {
   need: { datadog: boolean; dash0: boolean };
   env: NodeJS.ProcessEnv;
   cwd: string;
-  io: KeyIO;
+  /** choose(): an arrow-key list on a TTY (src/flow/tty.ts); without it, yes/no questions are typed. */
+  io: KeyIO & { choose?: (question: string, options: string[], defaultIndex?: number) => Promise<number | null> };
   /** --yes: never prompt; missing keys are an error. */
   yes: boolean;
   fetch?: typeof fetch;
   maxTries?: number;
+  /** Home folder for the per-user key file (tests). */
+  home?: string;
+  /** Keys the user pasted in this run (offered for saving like typed ones). */
+  pasted?: KeyName[];
 }
 
 /**
@@ -171,23 +249,22 @@ export interface ResolveKeysOptions {
  * a key is missing under --yes or keeps failing its check.
  */
 export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
-  const envPath = join(o.cwd, ".env");
-  const dotenv = existsSync(envPath) ? parseDotEnv(readFileSync(envPath, "utf8")) : {};
-  const keys = lookupKeys(o.env, dotenv);
+  const savePath = configEnvPath(o.env, o.home ?? homedir());
+  const { keys, files: dotenv } = knownKeys(o.env, o.cwd, o.home ?? homedir());
   const fromFile = new Set(KEYS.filter((n) => keys[n] !== undefined));
-  const asked = new Set<KeyName>();
+  const asked = new Set<KeyName>(o.pasted ?? []);
   const tries = o.maxTries ?? 3;
   const f = o.fetch ?? fetch;
 
   const wanted: KeyName[] = [...(o.need.datadog ? (["DD_SITE", "DD_API_KEY", "DD_APP_KEY"] as const) : []), ...(o.need.dash0 ? (["DASH0_API_URL", "DASH0_AUTH_TOKEN", "DASH0_DATASET"] as const) : [])];
   for (const n of wanted) if (keys[n] === undefined && DEFAULTS[n] && o.yes) keys[n] = DEFAULTS[n];
   const missing = wanted.filter((n) => keys[n] === undefined);
-  if (o.yes && missing.length) throw new KeyError(`missing ${missing.join(", ")} (set them in the environment or ./.env; --yes never prompts)`);
+  if (o.yes && missing.length) throw new KeyError(`missing ${missing.join(", ")} (set them in the environment, ./.env or ${displayPath(savePath, o.home ?? homedir())}; --yes never prompts)`);
 
   const ask = async (n: KeyName): Promise<string> => {
     asked.add(n);
     const def = DEFAULTS[n];
-    const prompt = `  ${LABELS[n]}${def ? ` [${def}]` : ""}: `;
+    const prompt = `  ⎿ ${LABELS[n]}${def ? ` [${def}]` : ""}${HINTS[n] ? ` · ${HINTS[n]}` : ""} › `;
     const v = ((SECRET_KEYS.has(n) ? await o.io.askSecret(prompt) : await o.io.ask(prompt)) ?? "").trim();
     if (!v && def) return def;
     if (!v) throw new KeyError(`no ${n} given`);
@@ -250,23 +327,15 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
   // Offer to save only what was typed in this run (env-only keys stay env-only).
   const typed = [...asked].filter((n) => keys[n] !== undefined && !(fromFile.has(n) && dotenv[n] === keys[n]));
   if (typed.length && !o.yes) {
-    const a = ((await o.io.ask(`  Save ${typed.length === 1 ? "it" : "these"} to ./.env for next time? [Y/n] `)) ?? "").trim().toLowerCase();
-    if (a === "" || a === "y" || a === "yes") {
-      const ign = gitIgnoreState(envPath);
-      if (ign === "not-ignored") {
-        const b = ((await o.io.ask("  ./.env is NOT gitignored here, so it could be committed. Add '.env' to .gitignore and save? [y/N] ")) ?? "").trim().toLowerCase();
-        if (b !== "y" && b !== "yes") {
-          o.io.print("  ⎿ not saved");
-          return keys;
-        }
-        const gi = join(o.cwd, ".gitignore");
-        const prev = existsSync(gi) ? readFileSync(gi, "utf8") : "";
-        writeFileSync(gi, prev + (prev && !prev.endsWith("\n") ? "\n" : "") + ".env\n");
-      }
+    const where = displayPath(savePath, o.home ?? homedir());
+    const save = o.io.choose
+      ? (await o.io.choose(`Save ${typed.length === 1 ? "it" : "them"} for next time?`, [`Yes, in ${where} (only you can read it; works from any folder)`, "No, ask again next time"], 0)) === 0
+      : /^(|y|yes)$/i.test(((await o.io.ask(`  Save ${typed.length === 1 ? "it" : "them"} for next time in ${where}? Only you can read it. [Y/n] `)) ?? "").trim());
+    if (save) {
       const toSave: Keys = {};
       for (const n of typed) toSave[n] = keys[n];
-      saveDotEnv(envPath, toSave);
-      o.io.print(`  ⎿ saved ${typed.join(", ")} to ./.env (only you can read it)`);
+      saveDotEnv(savePath, toSave);
+      o.io.print(`  ⎿ saved to ${where}; dd2dash0 finds them from any folder`);
     }
   }
   return keys;

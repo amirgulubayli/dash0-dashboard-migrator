@@ -13,9 +13,9 @@ describe("applyKeys", () => {
     expect(t.buf).toBe("q");
   });
 
-  it("secrets echo nothing; arrow keys are ignored; Ctrl+D is EOF only on an empty line; Ctrl+C interrupts", () => {
+  it("secrets echo a dot per character, never the text; arrow keys are ignored; Ctrl+D is EOF only on an empty line; Ctrl+C interrupts", () => {
     const s = { buf: "" };
-    expect(applyKeys(s, "se\u001b[Dcr\u0004et\u007f\u007f", true)).toEqual({ echo: "", done: null, rest: "" });
+    expect(applyKeys(s, "se\u001b[Dcr\u0004et\u007f\u007f", true)).toEqual({ echo: "••••••\b \b\b \b", done: null, rest: "" });
     expect(s.buf).toBe("secr");
     expect(applyKeys({ buf: "" }, "\u0004", true).done).toBe("eof");
     expect(applyKeys({ buf: "x" }, "\u0003", false).done).toBe("interrupt");

@@ -56,13 +56,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: "${{ env.BUN_VERSION }}" }
       - run: npm ci --omit=optional
-      - name: compile
+      - name: "compile (one file, the mapping tables are embedded)"
         run: |
           out="dist/${{ matrix.name }}"
           mkdir -p "$out"
-          bun build src/bin.ts --compile --minify --target ${{ matrix.target }} --outfile "$out/dd2dash0${{ matrix.exe }}"
-          cp -R mappings "$out/mappings"
-          cp scripts/release/README.txt "$out/README.txt"
+          scripts/release/build.sh ${{ matrix.target }} "$out/dd2dash0${{ matrix.exe }}"
       - name: sign (ad hoc, required for Apple silicon)
         if: startsWith(matrix.target, 'bun-darwin')
         run: codesign --force --sign - "dist/${{ matrix.name }}/dd2dash0"
@@ -72,12 +70,14 @@ jobs:
           bin="$PWD/dist/${{ matrix.name }}/dd2dash0"
           "$bin" --version
           tmp="$(mktemp -d)" && cd "$tmp"
+          export HOME="$tmp"   # a clean home and an empty folder: the built-in tables must work on their own
           "$bin" --yes --dry-run --input "$GITHUB_WORKSPACE/fixtures/datadog" < /dev/null
           test -f dd2dash0-run/*/report.md
       - name: archive
         run: |
           cd dist
-          if [ -n "${{ matrix.exe }}" ]; then zip -qr "${{ matrix.name }}.zip" "${{ matrix.name }}"; else tar czf "${{ matrix.name }}.tar.gz" "${{ matrix.name }}"; fi
+          # The archive holds just the executable, at its top level: unpack and run ./dd2dash0.
+          if [ -n "${{ matrix.exe }}" ]; then (cd "${{ matrix.name }}" && zip -q "../${{ matrix.name }}.zip" dd2dash0.exe); else tar czf "${{ matrix.name }}.tar.gz" -C "${{ matrix.name }}" dd2dash0; fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
