@@ -198,7 +198,7 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
     for (let t = 1; ; t++) {
       if (keys.DD_SITE === undefined) keys.DD_SITE = await ask("DD_SITE");
       if (!validSite(keys.DD_SITE)) {
-        o.io.print(`  ✗ '${keys.DD_SITE}' is not a Datadog site (e.g. datadoghq.eu, datadoghq.com, us5.datadoghq.com)`);
+        o.io.print(`  ⎿ ✗ '${keys.DD_SITE}' is not a Datadog site (e.g. datadoghq.eu, datadoghq.com, us5.datadoghq.com)`);
         if (o.yes || t >= tries) throw new KeyError(`invalid DD_SITE '${keys.DD_SITE}'`);
         delete keys.DD_SITE;
         continue;
@@ -207,10 +207,10 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
       if (keys.DD_APP_KEY === undefined) keys.DD_APP_KEY = await ask("DD_APP_KEY");
       const c = await checkDatadog({ site: keys.DD_SITE, apiKey: keys.DD_API_KEY, appKey: keys.DD_APP_KEY }, f);
       if (c.ok) {
-        o.io.print(`  ✓ Datadog ${keys.DD_SITE} (API key ${fingerprint(keys.DD_API_KEY)}, app key ${fingerprint(keys.DD_APP_KEY)})`);
+        o.io.print(`  ⎿ Datadog  ${keys.DD_SITE} · API key ${fingerprint(keys.DD_API_KEY)} · app key ${fingerprint(keys.DD_APP_KEY)}  ✓`);
         break;
       }
-      o.io.print(`  ✗ ${c.message}`);
+      o.io.print(`  ⎿ ✗ ${c.message}`);
       if (o.yes || t >= tries) throw new KeyError(c.message);
       // Ask again for what most likely caused it.
       if (/application key/.test(c.message)) delete keys.DD_APP_KEY;
@@ -224,7 +224,7 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
       if (keys.DASH0_API_URL === undefined) keys.DASH0_API_URL = await ask("DASH0_API_URL");
       const u = normalizeDash0Url(keys.DASH0_API_URL);
       if ("error" in u) {
-        o.io.print(`  ✗ ${u.error}`);
+        o.io.print(`  ⎿ ✗ ${u.error}`);
         if (o.yes || t >= tries) throw new KeyError(`DASH0_API_URL: ${u.error}`);
         delete keys.DASH0_API_URL;
         continue;
@@ -234,10 +234,10 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
       if (keys.DASH0_DATASET === undefined) keys.DASH0_DATASET = await ask("DASH0_DATASET");
       const c = await checkDash0({ apiUrl: keys.DASH0_API_URL, token: keys.DASH0_AUTH_TOKEN, dataset: keys.DASH0_DATASET }, f);
       if (c.ok) {
-        o.io.print(`  ✓ Dash0 ${new URL(keys.DASH0_API_URL).host} dataset ${keys.DASH0_DATASET} (token ${fingerprint(keys.DASH0_AUTH_TOKEN)})`);
+        o.io.print(`  ⎿ Dash0    ${new URL(keys.DASH0_API_URL).host} · ${keys.DASH0_DATASET} · token ${fingerprint(keys.DASH0_AUTH_TOKEN)}  ✓`);
         break;
       }
-      o.io.print(`  ✗ ${c.message}`);
+      o.io.print(`  ⎿ ✗ ${c.message}`);
       if (o.yes || t >= tries) throw new KeyError(c.message);
       if (/404/.test(c.message)) {
         delete keys.DASH0_API_URL;
@@ -256,7 +256,7 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
       if (ign === "not-ignored") {
         const b = ((await o.io.ask("  ./.env is NOT gitignored here, so it could be committed. Add '.env' to .gitignore and save? [y/N] ")) ?? "").trim().toLowerCase();
         if (b !== "y" && b !== "yes") {
-          o.io.print("  Not saved.");
+          o.io.print("  ⎿ not saved");
           return keys;
         }
         const gi = join(o.cwd, ".gitignore");
@@ -266,7 +266,7 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
       const toSave: Keys = {};
       for (const n of typed) toSave[n] = keys[n];
       saveDotEnv(envPath, toSave);
-      o.io.print(`  ✓ saved ${typed.join(", ")} to ./.env (mode 600)`);
+      o.io.print(`  ⎿ saved ${typed.join(", ")} to ./.env (only you can read it)`);
     }
   }
   return keys;

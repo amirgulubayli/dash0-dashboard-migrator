@@ -8,6 +8,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Report, ReportItem } from "../report/types.js";
+import { reportHtml } from "./report-html.js";
 import type { BatchResult } from "./review.js";
 import type { Live, LiveResult } from "./verify.js";
 
@@ -221,12 +222,14 @@ export function reportMarkdown(score: Score, rows: Row[], facts: RunFacts): stri
   return L.join("\n") + "\n";
 }
 
-export function writeRunReport(dir: string, score: Score, rows: Row[], facts: RunFacts): { md: string; json: string } {
+export function writeRunReport(dir: string, score: Score, rows: Row[], facts: RunFacts): { md: string; json: string; html: string } {
   const md = join(dir, "report.md");
   const json = join(dir, "report.json");
+  const html = join(dir, "report.html");
   writeFileSync(md, reportMarkdown(score, rows, facts));
   writeFileSync(json, JSON.stringify({ schema: "dd2dash0.run/v1", facts, score, items: rows }, null, 2) + "\n");
-  return { md, json };
+  writeFileSync(html, reportHtml(score, rows, facts));
+  return { md, json, html };
 }
 
 export function summaryText(score: Score, facts: RunFacts, extra: { rulesImported: number; rulesOn?: number; manualMonitors: number; reportMd: string }): string[] {

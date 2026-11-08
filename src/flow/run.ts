@@ -1,16 +1,21 @@
 // `dd2dash0` with no arguments: the one guided flow.
 //   keys -> plan (dry run) -> batched review -> apply (rules disabled) -> verify (read-back + live data) -> report
-// Every step reuses the existing gated pipeline (plan.lock, review.json, apply's refusals); this file only chains them.
+// Every step reuses the existing gated pipeline (plan.lock, review.json, apply's refusals); this file only chains
+// them and draws the terminal UI (src/ui/style.ts).
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Report } from "../report/types.js";
 import { runApply } from "../pipeline/apply.js";
 import { resolveConfig } from "../pipeline/config.js";
 import { runPlan } from "../pipeline/plan.js";
 import { importAll, type PrometheusAlertRule } from "../targets/dash0/index.js";
-import { KeyError, resolveKeys, type KeyIO } from "./keys.js";
+import { bar, box, link, Ui, type Out } from "../ui/style.js";
+import { gitIgnoreState, KeyError, KEYS, lookupKeys, parseDotEnv, resolveKeys, saveDotEnv, type KeyIO, type Keys } from "./keys.js";
+import { openBrowser, webKeys } from "./keys-web.js";
 import { batchedReview } from "./review.js";
-import { decisionsOf, rowsOf, scoreOf, summaryText, writeRunReport, type RunFacts } from "./score.js";
+import { decisionsOf, rowsOf, scoreOf, writeRunReport, type RunFacts, type Score } from "./score.js";
+import type { Choose } from "./tty.js";
 import { verifyLive } from "./verify.js";
 
 export const EXIT = { ok: 0, failed: 1, refused: 2, usage: 3 } as const;
@@ -26,7 +31,13 @@ export interface GuidedOptions {
   dryRun?: boolean;
   version: string;
   mappingsDir: string;
-  io: KeyIO;
+  io: KeyIO & { choose?: Choose };
+  /** Terminal UI; default: plain lines through io.print (pipes, tests). */
+  ui?: Ui;
+  /** --browser: enter missing keys on the local web page without asking. */
+  browser?: boolean;
+  /** Open a file or URL for the user (report.html, the key page). Default: the system opener. */
+  open?: (target: string) => void;
   env?: NodeJS.ProcessEnv;
   cwd?: string;
   fetch?: typeof fetch;
@@ -35,91 +46,165 @@ export interface GuidedOptions {
 
 const WINDOW_S = 3600;
 
+/** Lines written through io.print (no TTY: no spinners, no colors). */
+export function outFromIO(io: Pick<KeyIO, "print">): Out {
+  let buf = "";
+  return {
+    isTTY: false,
+    columns: 80,
+    write: (s) => {
+      buf += s;
+      let i: number;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        io.print(buf.slice(0, i));
+        buf = buf.slice(i + 1);
+      }
+    },
+  };
+}
+
 export async function guided(o: GuidedOptions): Promise<number> {
   const env = o.env ?? process.env;
   const cwd = o.cwd ?? process.cwd();
   const io = o.io;
+  const ui = o.ui ?? new Ui(outFromIO(io), env);
+  const p = ui.p;
+  // DD2DASH0_NO_OPEN=1: never open a browser (SSH sessions, tests); the URL is printed either way.
+  const open = o.open ?? (env.DD2DASH0_NO_OPEN ? () => {} : openBrowser);
   const started = (o.now ?? (() => new Date()))();
   const stamp = started.toISOString().replace(/[:]/g, "").replace(/\..*$/, "");
   const runDir = resolve(cwd, o.out ?? join("dd2dash0-run", stamp));
   const live = !o.dryRun;
   const useApi = !o.input;
+  const need = { datadog: useApi, dash0: live };
+  const interactive = !o.yes && !!io.choose;
+
+  ui.header(o.version, cwd);
 
   // 1. Keys
-  io.print("1/5  Keys");
+  ui.heading("Keys");
+  if (!need.datadog && !need.dash0) ui.detail(p.dim("dry run from a folder: no keys needed"));
+  const envPath = join(cwd, ".env");
+  const known = lookupKeys(env, existsSync(envPath) ? parseDotEnv(readFileSync(envPath, "utf8")) : {});
+  const wanted = KEYS.filter((k) => (k.startsWith("DD_") ? need.datadog : need.dash0) && k !== "DD_SITE" && k !== "DASH0_DATASET");
+  const missing = wanted.filter((k) => !known[k]);
+  if (missing.length && (o.browser || (interactive && !o.yes))) {
+    const where = o.browser ? 1 : await io.choose!(`${missing.length} key(s) missing. Where do you want to enter them?`, ["Here in the terminal", "In the browser (a one-time page on this computer)"], 0);
+    if (where === 1) {
+      try {
+        const r = await webKeys({
+          need,
+          known,
+          cwd,
+          ...(o.fetch ? { fetch: o.fetch } : {}),
+          onReady: (url) => {
+            ui.detail(`Enter your keys on ${link(p, "the key page", url)} ${p.dim("(this computer only, works once)")}`);
+            ui.detail(p.dim(url));
+            open(url);
+          },
+        });
+        for (const [k, v] of Object.entries(r.keys)) if (v) env[k] = v;
+        if (r.save) {
+          const ign = gitIgnoreState(envPath);
+          if (ign === "not-ignored") ui.detail(p.warn("not saved: ./.env is not gitignored in this folder"));
+          else {
+            const toSave: Keys = {};
+            for (const k of KEYS) if (r.keys[k] && r.keys[k] !== known[k]) toSave[k] = r.keys[k];
+            if (Object.keys(toSave).length) {
+              saveDotEnv(envPath, toSave);
+              ui.detail(p.dim(`saved to ./.env (only you can read it)`));
+            }
+          }
+        }
+      } catch (e) {
+        ui.detail(p.bad(`browser: ${(e as Error).message}`));
+        return EXIT.usage;
+      }
+    }
+  }
   let keys;
   try {
-    keys = await resolveKeys({ need: { datadog: useApi, dash0: live }, env, cwd, io, yes: o.yes, ...(o.fetch ? { fetch: o.fetch } : {}) });
+    keys = await resolveKeys({ need, env, cwd, io, yes: o.yes, ...(o.fetch ? { fetch: o.fetch } : {}) });
   } catch (e) {
     if (e instanceof KeyError) {
-      io.print(`dd2dash0: ${e.message}`);
+      ui.line(`${p.bad("✗")} dd2dash0: ${e.message}`);
       return EXIT.usage;
     }
     throw e;
   }
-  if (!live && !useApi) io.print("  (dry run from a folder: no keys needed)");
   // The pipeline's ingest reads the Datadog keys from the environment; set them for this process only.
   for (const [k, v] of Object.entries(keys)) {
     if (v === undefined) continue;
     env[k] = v;
     process.env[k] = v;
   }
+  ui.line();
 
-  // 2. Plan
-  io.print("");
-  io.print(`2/5  Translating ${useApi ? `everything in Datadog (${keys.DD_SITE})` : o.input}${o.only ? ` (${o.only} only)` : ""}`);
+  // 2. Translate
   mkdirSync(runDir, { recursive: true });
   const planDir = join(runDir, "plan");
   const config = resolveConfig(useApi ? { source: { kind: "api", site: keys.DD_SITE! } } : { source: { kind: "folder", path: resolve(cwd, o.input!) } }, {}, env);
   let plan;
+  const tStep = ui.step("Translate", useApi ? `Reading Datadog (${keys.DD_SITE}) and translating…` : `Translating ${o.input}…`);
   try {
     plan = await runPlan({ config, outDir: planDir, defaultMappingsDir: o.mappingsDir, ...(o.input ? { resolvedInput: resolve(cwd, o.input) } : {}), ...(o.only ? { only: o.only } : {}), version: o.version });
   } catch (e) {
-    io.print(`dd2dash0: could not read or translate the source: ${(e as Error).message}`);
+    tStep.fail(p.bad("could not read or translate the source"), [(e as Error).message]);
     return EXIT.usage;
   }
   const report: Report = plan.result.report;
   const items = report.items.filter((i) => i.kind === "panel" || i.kind === "alert");
   const by = (s: string) => items.filter((i) => i.status === s).length;
-  io.print(`  ${report.summary.dashboards} dashboards, ${report.summary.alerts} monitors -> ${items.length} items: ${by("exact")} exact · ${by("exact-under")} exact-under · ${by("bounded")} bounded · ${by("manual")} manual · ${by("unsupported")} unsupported`);
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const claims = [["exact", by("exact")], ["exact-under", by("exact-under")], ["bounded", by("bounded")], ["manual", by("manual")], ["unsupported", by("unsupported")]].filter(([, n]) => n).map(([w, n]) => `${n} ${w}`);
+  tStep.done(`${plural(report.summary.dashboards, "dashboard")} · ${plural(report.summary.alerts, "monitor")} ${p.dim("→")} ${items.length} items${o.only ? p.dim(` (${o.only} only)`) : ""}`, [p.dim(claims.join(" · "))]);
+  ui.line();
   if (items.length === 0) {
-    io.print("  Nothing to migrate (no dashboards or monitors found).");
+    ui.line(p.dim("Nothing to migrate: no dashboards or monitors found."));
     return EXIT.ok;
   }
 
   // 3. Review
-  io.print("");
-  io.print("3/5  Review");
+  ui.heading("Review");
   const review = await batchedReview(planDir, io, { yes: o.yes });
+  ui.line();
 
-  // 4. Apply
-  io.print("");
-  io.print(live ? `4/5  Importing into Dash0 (${new URL(keys.DASH0_API_URL!).host}, dataset ${keys.DASH0_DATASET}); new check rules go in disabled, existing ones keep their on/off state` : "4/5  Writing Dash0 payloads (dry run, nothing imported)");
+  // 4. Import
+  const iStep = ui.step("Import", live ? `Importing into Dash0 (${new URL(keys.DASH0_API_URL!).host})…` : "Writing Dash0 payloads…");
   const dash0 = live ? { apiUrl: keys.DASH0_API_URL!, token: keys.DASH0_AUTH_TOKEN!, dataset: keys.DASH0_DATASET!, ...(o.fetch ? { fetch: o.fetch } : {}) } : undefined;
   const applied = await runApply({ planDir, reviewFile: review.file, dryRun: !live, enableRules: false, cwd, ...(dash0 ? { dash0 } : {}) });
   if (applied.kind === "refused") {
-    io.print("  apply refused:");
-    for (const r of applied.reasons) io.print(`    ${r}`);
+    iStep.fail(p.bad("refused"), applied.reasons);
     return EXIT.refused;
   }
-  for (const w of applied.warnings) io.print(`  ! ${w}`);
   const failedImports = applied.manifest.results.filter((r) => r.errors.length);
-  for (const r of failedImports) io.print(`  ✗ ${r.kind} ${r.name}: ${r.errors.join("; ")}${r.traceId ? ` (traceId ${r.traceId})` : ""}`);
-  io.print(`  ${live ? "imported" : "written"}: ${applied.imported.dashboards} dashboard(s), ${applied.imported.rules} check rule(s)${failedImports.length ? `, ${failedImports.length} failed` : ""}`);
+  const imported = `${plural(applied.imported.dashboards, "dashboard")} · ${plural(applied.imported.rules, "check rule")}${live ? "" : p.dim(" (dry run, nothing imported)")}`;
+  const iDetails = [
+    ...applied.warnings.map((w) => p.warn(w)),
+    ...failedImports.map((r) => `${p.bad("✗")} ${r.kind} ${r.name}: ${r.errors.join("; ")}${r.traceId ? p.dim(` (traceId ${r.traceId})`) : ""}`),
+    ...(live && applied.imported.rules ? [p.dim("new check rules start off; existing ones keep their on/off state")] : []),
+  ];
+  (failedImports.length ? iStep.fail : iStep.done)(imported, iDetails);
   const appliedReport = JSON.parse(readFileSync(applied.reportFile, "utf8")) as Report;
+  ui.line();
 
   // 5. Verify
-  io.print("");
   let liveResults = null;
   if (live) {
-    io.print(`5/5  Verifying: read-back done; checking the last ${WINDOW_S / 60} min of data in Dash0${useApi ? " and Datadog" : ""}`);
+    const vStep = ui.step("Verify", `Reading back and checking the last ${WINDOW_S / 60} min of data${useApi ? " in Dash0 and Datadog" : " in Dash0"}…`);
     liveResults = await verifyLive(appliedReport.items, {
       dash0: dash0!,
       ...(keys.DD_API_KEY && keys.DD_APP_KEY && keys.DD_SITE ? { datadog: { site: keys.DD_SITE, apiKey: keys.DD_API_KEY, appKey: keys.DD_APP_KEY } } : {}),
       windowSeconds: WINDOW_S,
       ...(o.fetch ? { fetch: o.fetch } : {}),
     });
-  } else io.print("5/5  Verify skipped (dry run)");
+    const landed = applied.manifest.results.filter((r) => r.readBack.state === "match").length;
+    const lv = [...liveResults.values()];
+    const liveN = lv.filter((x) => x.live === "live").length;
+    const denom = lv.filter((x) => x.live === "live" || x.live === "missing" || x.live === "error").length;
+    vStep.done(`read back ${landed}/${applied.manifest.results.length} · ${liveN}/${denom} queries return data`);
+  } else ui.heading("Verify", p.dim("skipped (dry run)"));
+  ui.line();
 
   // Report
   const decisions = decisionsOf(review, appliedReport.items);
@@ -142,30 +227,54 @@ export async function guided(o: GuidedOptions): Promise<number> {
     return { rows, score, files: writeRunReport(runDir, score, rows, facts) };
   };
   let out = write();
-  io.print("");
-  for (const l of summaryText(out.score, facts, { rulesImported: applied.imported.rules, rulesOn: enabled.size, manualMonitors: review.manualMonitors.length, reportMd: out.files.md.startsWith(cwd) ? out.files.md.slice(cwd.length + 1) : out.files.md })) io.print(l);
+  const rel = (f: string) => relative(cwd, f) || f;
+  for (const l of resultCard(ui, out.score, { live, rulesImported: applied.imported.rules, rulesOn: enabled.size, manualMonitors: review.manualMonitors.length, html: out.files.html, md: out.files.md, rel })) ui.line(l);
 
-  // Offer to enable the approved, imported rules (default No).
-  // Offer to switch on only the imported rules that are off.
-  const importedRuleIds = applied.manifest.results.filter((r) => r.kind === "check-rule" && r.action === "imported" && !r.enabled).map((r) => r.id);
-  if (live && importedRuleIds.length && !o.yes) {
-    const a = ((await io.ask(`Enable the ${importedRuleIds.length} approved check rule(s) that are off? They will start evaluating and can notify. They will start evaluating and can notify. [y/N] `)) ?? "").trim().toLowerCase();
-    if (a === "y" || a === "yes") {
+  // Offer to switch on only the imported rules that are off (default: leave them off).
+  const offRules = applied.manifest.results.filter((r) => r.kind === "check-rule" && r.action === "imported" && !r.enabled).map((r) => r.id);
+  if (live && offRules.length && !o.yes) {
+    ui.line();
+    const q = `Turn on ${offRules.length === 1 ? "the approved check rule" : `the ${offRules.length} approved check rules`}? ${p.dim("It starts evaluating and can notify.")}`;
+    const yes = io.choose ? (await io.choose(q, ["No, leave it off", "Yes, turn it on"], 0)) === 1 : /^y(es)?$/i.test(((await io.ask(`${q} [y/N] `)) ?? "").trim());
+    if (yes) {
       const dir = join(planDir, "dash0", "check-rules"); // the plan always writes every payload
-      const payloads = importedRuleIds
+      const payloads = offRules
         .map((id) => join(dir, `${id}.json`))
         .filter(existsSync)
-        .map((p) => ({ ...(JSON.parse(readFileSync(p, "utf8")) as PrometheusAlertRule), enabled: true }));
+        .map((f) => ({ ...(JSON.parse(readFileSync(f, "utf8")) as PrometheusAlertRule), enabled: true }));
       const m = await importAll({ dashboards: [], rules: payloads }, { dryRun: false, outDir: join(runDir, "enable"), enableRules: true, config: dash0! });
       for (const r of m.results) if (r.action === "imported") enabled.add(r.id);
       const bad = m.results.filter((r) => r.errors.length);
-      io.print(`  ${enabled.size} rule(s) enabled${bad.length ? `, ${bad.length} failed: ${bad.map((r) => `${r.name}: ${r.errors.join("; ")}`).join(" | ")}` : ""}`);
+      ui.detail(`${enabled.size} rule(s) on${bad.length ? p.bad(`, ${bad.length} failed: ${bad.map((r) => `${r.name}: ${r.errors.join("; ")}`).join(" | ")}`) : ""}`);
       out = write();
-    } else io.print("  Left disabled. Enable them in Dash0 when you're ready.");
+    } else ui.detail(p.dim("left off; turn it on in Dash0 when you're ready"));
+  }
+
+  // Offer to open the report page.
+  if (interactive && io.choose && ui.out.isTTY) {
+    ui.line();
+    if ((await io.choose("Open the report?", ["Open report.html", "Done"], 0)) === 0) open(out.files.html);
   }
 
   const liveFail = out.rows.some((r) => r.live === "missing" || r.live === "error");
   return applied.ok && !liveFail ? EXIT.ok : EXIT.failed;
+}
+
+/** The closing card: one bar per number, top gaps, rules, and links to the report. */
+export function resultCard(ui: Ui, s: Score, x: { live: boolean; rulesImported: number; rulesOn: number; manualMonitors: number; html: string; md: string; rel: (f: string) => string }): string[] {
+  const p = ui.p;
+  const meter = (name: string, n: Score["success"], bold = false) => {
+    const label = (bold ? p.bold : (t: string) => t)(name.padEnd(11));
+    if (!n) return `${label} ${p.dim("░".repeat(18))}  ${p.dim("not measured")}`;
+    const frac = n.total ? n.count / n.total : 0;
+    return `${label} ${bar(p, frac)}  ${`${n.count}/${n.total}`.padStart(7)}  ${(bold ? p.bold : (t: string) => t)(`${n.pct}%`.padStart(4))}`;
+  };
+  const lines = [meter("success", s.success, true), meter("translated", s.translated), meter("landed", s.landed), meter("live", s.live), ""];
+  if (s.topGaps.length) lines.push(`${p.dim("gaps  ")} ${s.topGaps.slice(0, 3).map(([c, n]) => `${c} ${p.dim(`×${n}`)}`).join(p.dim(" · "))}`);
+  lines.push(`${p.dim("rules ")} ${x.rulesImported} ${x.live ? `imported (${x.rulesOn} on, ${x.rulesImported - x.rulesOn} off)` : "written (dry run)"}${x.manualMonitors ? p.dim(` · ${x.manualMonitors} monitor(s) not translatable`) : ""}`);
+  const dir = x.rel(dirname(x.html));
+  lines.push(p.on ? `${p.dim("report")} ${link(p, "report.html", pathToFileURL(x.html).href)}${p.dim(" · ")}${link(p, "report.md", pathToFileURL(x.md).href)}${p.dim(`  in ${dir}`)}` : `report ${x.rel(x.html)} · ${x.rel(x.md)}`);
+  return box(p, lines, { title: "Result", max: Math.min(ui.out.columns, 96) });
 }
 
 export { terminalIO } from "./tty.js";
