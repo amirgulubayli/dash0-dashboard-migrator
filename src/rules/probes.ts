@@ -10,8 +10,8 @@ export interface Probe {
 export const PROBES = {
   "probe:anchored": {
     question: "Does Dash0 accept increase(x[1m] anchored)?",
-    how: "maths.md §11 probe 1: run it in the Dash0 query API",
-    answer: "open",
+    how: "LIVE 2026-11-08 (Ali, org thinc_bavarian_big_ben, query API): increase(x[5m] anchored) and rate(x[W] anchored) are accepted and APPLIED (values differ from the plain form and move in whole scrape-sized steps; a made-up modifier is a parse error). rate anchored = increase anchored / W exactly (ratio 60.00 at every point for W = 60 s). A window with no new sample gives no point, not 0. The reference evaluator (src/semantics anchoredIncrease) equals Dash0 exactly on a live Redis counter: 0 difference over 36 points (W = 60 s and 300 s). Dashboards only: a check rule with anchored has not been probed.",
+    answer: "yes",
   },
   "probe:at-modifier": {
     question: "Does Dash0 accept the @ end() modifier in queries?",

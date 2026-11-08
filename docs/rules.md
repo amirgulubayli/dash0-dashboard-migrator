@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 70 | 43 | 19 | 55 | 187 |
-| planned | 16 | 29 | 3 | 11 | 59 |
+| implemented | 70 | 51 | 19 | 55 | 195 |
+| planned | 16 | 28 | 3 | 11 | 58 |
 
 ## Pipeline order
 
@@ -20,7 +20,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 4 | `select` Select the metric | metric reference | yes | 13 | Datadog metric → OTel metric through the mapping table. |
 | 5 | `scope` Scope filters | filter term | no | 17 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
-| 7 | `time` Time aggregation | postfix or rollup call | no | 27 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
+| 7 | `time` Time aggregation | postfix or rollup call | no | 34 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
 | 9 | `function` Functions | function call | yes | 41 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 9 | Formulas over named queries, constants, division. |
@@ -128,21 +128,27 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Pri | Rule | Datadog | Output | Claim | Evidence | Needs | Owner | State |
 |---|---|---|---|---|---|---|---|---|
-| 10 | `time.ddrate.plain` | plain query on a Datadog RATE metric stored as an OTel counter | rate(x[w]) (D-18) | bounded(ε) | unit, proof:T3, property:T16 | — | T4 | implemented |
+| 5 | `time.ddrate.plain.anchored` | plain query on a Datadog RATE metric stored as an OTel counter, dashboards | rate(x[w] anchored) (D-18) | exact-under(A.same-samples, A.align, A.boundary, A.no-reset, A.regular-sampling) | unit, proof:T10, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 10 | `time.ddrate.plain` | plain query on a Datadog RATE metric stored as an OTel counter (monitors; dashboards use the .anchored rule) | rate(x[w]) (D-18) | bounded(ε) | unit, proof:T3, property:T16 | — | T4 | implemented |
 | 20 | `time.rollup.default` | implicit avg rollup | avg_over_time(x[interval]) | exact-under(A.align, A.boundary) | unit, proof:T8, exhaustive:E2 | — | T4 | implemented |
 | 30 | `time.rollup.explicit` | .rollup(fn, s) | fn_over_time(x[s]) inside the space aggregation | exact-under(A.align, A.boundary) | unit, proof:T8, exhaustive:E2 | — | T4 | implemented |
 | 40 | `time.rollup.monitor-bucket` | monitor inner query | fn_over_time(x[1m]) inside a 1m-step subquery, Unix-aligned by construction | exact-under(A.boundary) | unit, proof:T8, property:T16 | — | T4 | implemented |
 | 50 | `time.as_count.gauge` | .as_count() on a gauge | no effect | exact | unit | — | T4 | implemented |
 | 60 | `time.as_rate.gauge` | .as_rate() on a gauge | no effect | exact | unit | — | T4 | implemented |
 | 70 | `time.as_count.delta` | .as_count() on a delta sum | sum_over_time(x[w]) | exact-under(A.align, A.boundary) | unit, proof:T8 | — | T4 | implemented |
-| 75 | `time.as_count.counter.anchored` | .as_count() on a cumulative counter (or a Datadog RATE metric on an OTel counter) | increase(x[w] anchored) | exact-under(A.same-samples, A.align, A.boundary) | proof:T4, exhaustive:E1 | probe:anchored | T4 | planned |
-| 80 | `time.as_count.counter` | .as_count() on a cumulative counter | increase(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
-| 90 | `time.as_rate.counter` | .as_rate() on a cumulative counter | rate(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
-| 92 | `time.unmapped.counter` | Datadog count/rate (metadata.csv) without a mapping entry, with .as_count() / .as_rate() or plain | increase(x[w]) / rate(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
-| 93 | `time.unmapped.suffix-counter` | no metadata.csv entry, name ends in .count/.total, with .as_count()/.as_rate() | treated as a Datadog count: increase / rate | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
-| 94 | `time.count.default` | Datadog COUNT metric (metadata.csv) without a modifier | increase(x[w]), like .as_count() | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 75 | `time.as_count.counter.anchored` | .as_count() on a cumulative counter (or a Datadog RATE metric on an OTel counter), dashboards | increase(x[w] anchored) | exact-under(A.same-samples, A.align, A.boundary, A.no-reset) | unit, proof:T4, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 80 | `time.as_count.counter` | .as_count() on a cumulative counter (monitors; dashboards use the .anchored rule) | increase(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 85 | `time.as_rate.counter.anchored` | .as_rate() on a cumulative counter, dashboards | rate(x[w] anchored) = increase(x[w] anchored) / w | exact-under(A.same-samples, A.align, A.boundary, A.no-reset, A.regular-sampling) | unit, proof:T10, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 90 | `time.as_rate.counter` | .as_rate() on a cumulative counter (monitors; dashboards use the .anchored rule) | rate(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 91 | `time.unmapped.counter.anchored` | Datadog count/rate (metadata.csv) without a mapping entry, with .as_count() / .as_rate() or plain, dashboards | increase(x[w] anchored) / rate(x[w] anchored) | exact-under(A.kind-metadata, A.otel-counter, A.same-samples, A.align, A.boundary, A.no-reset, A.regular-sampling) | unit, proof:T4, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 91.5 | `time.unmapped.suffix-counter.anchored` | no metadata.csv entry, name ends in .count/.total, with .as_count()/.as_rate(), dashboards | treated as a Datadog count: increase / rate, anchored | exact-under(A.kind-suffix, A.otel-counter, A.same-samples, A.align, A.boundary, A.no-reset, A.regular-sampling) | unit, proof:T4, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 92 | `time.unmapped.counter` | Datadog count/rate (metadata.csv) without a mapping entry, with .as_count() / .as_rate() or plain (monitors; dashboards use the .anchored rule) | increase(x[w]) / rate(x[w]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 93 | `time.unmapped.suffix-counter` | no metadata.csv entry, name ends in .count/.total, with .as_count()/.as_rate() (monitors; dashboards use the .anchored rule) | treated as a Datadog count: increase / rate | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 93.5 | `time.count.default.anchored` | Datadog COUNT metric (metadata.csv) without a modifier, dashboards | increase(x[w] anchored), like .as_count() | exact-under(A.kind-metadata, A.otel-counter, A.dd-count-default, A.same-samples, A.align, A.boundary, A.no-reset) | unit, proof:T4c, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 94 | `time.count.default` | Datadog COUNT metric (metadata.csv) without a modifier (monitors; dashboards use the .anchored rule) | increase(x[w]), like .as_count() | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
 | 95 | `time.as_rate.delta.sum` | .as_rate() on a delta sum | sum_over_time(x[w]) / w | exact-under(A.align, A.boundary) | — | — | T4 | planned |
-| 96 | `time.count.counter` | Datadog COUNT metric on an OTel counter, from a curated mapping row, without a modifier | increase(x[w]), like .as_count() | bounded(ε) | unit, proof:T4c | — | T4 | implemented |
+| 95.5 | `time.count.counter.anchored` | Datadog COUNT metric on an OTel counter, from a curated mapping row, without a modifier, dashboards | increase(x[w] anchored), like .as_count() | exact-under(A.dd-count-default, A.same-samples, A.align, A.boundary, A.no-reset) | unit, proof:T4c, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 96 | `time.count.counter` | Datadog COUNT metric on an OTel counter, from a curated mapping row, without a modifier (monitors; dashboards use the .anchored rule) | increase(x[w]), like .as_count() | bounded(ε) | unit, proof:T4c | — | T4 | implemented |
 | 100 | `time.fill.null` | .fill(null) | nothing: Datadog's default, PromQL does not fill | exact | unit | — | T4 | implemented |
 | 102 | `time.fill.zero.single` | .fill(zero) on a single-series query | q or vector(0) | exact | unit | — | T4 | implemented |
 | 104 | `time.weighted` | .weighted() | no-op | exact-under(A.static-tags) | unit | — | T4 | implemented |
@@ -153,11 +159,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 150 | `time.rollup.width` | .rollup() width that is not whole seconds | no output | manual | unit | — | T4 | implemented |
 | 160 | `time.rollup.monitor-width` | monitor query with a rollup other than 60 s | no output | manual | unit | — | T4 | implemented |
 | 170 | `time.rollup.args` | .rollup() with too many arguments | no output | manual | unit | — | T4 | implemented |
-| 180 | `time.rollup.counter` | .as_count().rollup(sum, s) / .as_rate().rollup(avg, s) | increase(x[s]) / rate(x[s]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
+| 179 | `time.rollup.counter.anchored` | .as_count().rollup(sum, s) / .as_rate().rollup(avg, s), dashboards | increase(x[s] anchored) / rate(x[s] anchored) | exact-under(A.same-samples, A.align, A.boundary, A.no-reset, A.regular-sampling) | unit, proof:T10, property:T4-anchored, live:probe-anchored | probe:anchored | T4 | implemented |
+| 180 | `time.rollup.counter` | .as_count().rollup(sum, s) / .as_rate().rollup(avg, s) (monitors; dashboards use the .anchored rule) | increase(x[s]) / rate(x[s]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
 | 190 | `time.fill` | .fill() other than null (zero, last, linear) | no output: PromQL does not fill gaps | manual | unit | — | T4 | implemented |
 
 - `time.ddrate.plain`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
-- `time.as_count.counter.anchored`: Replaces time.as_count.counter (bounded) once Dash0 accepts `anchored`. Priority 75 so it wins when enabled.
 - `time.as_count.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.as_rate.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.unmapped.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
@@ -452,8 +458,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Id | Statement | Used by |
 |---|---|---|
-| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 9 |
-| `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 9 |
+| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 16 |
+| `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 16 |
 | `A.kind-gauge` | the metric is a gauge; there is no mapping-table entry to confirm its kind | 1 |
 | `A.monitor-rollup-60s` | Datadog evaluates the monitor's inner query on 60 s buckets | 2 |
 | `A.nonzero-denominator` | the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN) | 2 |
@@ -462,13 +468,15 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.tag-default` | the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry) | 1 |
 | `A.query-threshold` | Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical | 1 |
 | `A.dd-per-unit` | Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog) | 3 |
+| `A.no-reset` | no counter reset inside the window (anchored increase adds the post-reset value; Datadog's treatment of a reset is unverified, maths.md T4) | 8 |
+| `A.regular-sampling` | the sampling period is constant and divides the rollup width, so Datadog averaging its per-check points equals the time-weighted PromQL rate (maths.md T10a) | 5 |
 | `A.no-gaps` | every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier | 2 |
-| `A.kind-metadata` | the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry) | 3 |
-| `A.otel-counter` | the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry) | 3 |
+| `A.kind-metadata` | the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry) | 5 |
+| `A.otel-counter` | the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry) | 6 |
 | `A.top-stable` | the ranking of the series is the same at every step, so Datadog's whole-window ranking picks the same series as PromQL's per-step topk | 2 |
 | `A.static-tags` | each series keeps its tags for the whole window, so .weighted() has nothing to re-weight | 1 |
-| `A.dd-count-default` | Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog) | 2 |
-| `A.kind-suffix` | a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming) | 1 |
+| `A.dd-count-default` | Datadog shows a COUNT metric queried without a modifier as counts per interval, i.e. like .as_count() (Datadog docs; not yet checked against Datadog) | 4 |
+| `A.kind-suffix` | a metric with no metadata.csv entry whose name ends in .count or .total, queried with .as_count()/.as_rate(), is a monotonic count (Datadog OpenMetrics naming) | 2 |
 | `A.mono-diff` | Datadog's monotonic_diff drops negative steps (counter resets) rather than reporting them as 0 | 1 |
 | `A.same-key-and` | Datadog applies a literal tag filter and a template variable on the same key together (AND) | 1 |
 | `A.at-range` | the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live) | 1 |
@@ -483,7 +491,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.severity-map` | the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level) | 1 |
 | `A.all-indexes` | every Datadog log index is queried (Dash0 has no indexes) | 1 |
 | `A.log-range` | the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (a stat uses calculation last-number; a TimeSeriesTable shows the last point), so a scalar covers the same timeframe Datadog aggregates over | 1 |
-| `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
+| `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 8 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
 | `A.eval-1m` | Datadog evaluates the monitor once per minute (true for metric monitors with windows up to 24 h) | 1 |
@@ -510,7 +518,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Probe | Question | How | Rules waiting |
 |---|---|---|---|
-| `probe:anchored` (open) | Does Dash0 accept increase(x[1m] anchored)? | maths.md §11 probe 1: run it in the Dash0 query API | `time.as_count.counter.anchored` |
+| `probe:anchored` (yes) | Does Dash0 accept increase(x[1m] anchored)? | LIVE 2026-11-08 (Ali, org thinc_bavarian_big_ben, query API): increase(x[5m] anchored) and rate(x[W] anchored) are accepted and APPLIED (values differ from the plain form and move in whole scrape-sized steps; a made-up modifier is a parse error). rate anchored = increase anchored / W exactly (ratio 60.00 at every point for W = 60 s). A window with no new sample gives no point, not 0. The reference evaluator (src/semantics anchoredIncrease) equals Dash0 exactly on a live Redis counter: 0 difference over 36 points (W = 60 s and 300 s). Dashboards only: a check rule with anchored has not been probed. | `time.ddrate.plain.anchored`, `time.as_count.counter.anchored`, `time.as_rate.counter.anchored`, `time.unmapped.counter.anchored`, `time.unmapped.suffix-counter.anchored`, `time.count.default.anchored`, `time.count.counter.anchored`, `time.rollup.counter.anchored` |
 | `probe:at-modifier` (yes) | Does Dash0 accept the @ end() modifier in queries? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted by the query API; 935/935 queries with the new constructs accepted (hub #278). That test did NOT show that a dashboard substitutes $__range: see probe:range-var. | `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist` |
 | `probe:range-var` (yes) | Does a Dash0 dashboard substitute $__range with its visible time range in panel queries (and a stat panel with calculation last-number show the value at the end of that range)? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), visual check on a throwaway dashboard (the query API does not substitute variables, so only a rendered panel can answer): a StatChart (calculation last-number) over sum(increase({otel_metric_name="dash0.logs", service_name="frontend"}[$__range])) equalled the same query over a fixed [5m] with the picker at 5m (about 3k) and over a fixed [1h] with the picker at 1h (about 32k). 15m was not read. Import also accepted calculation last-number, and it rendered the last value. TimeSeriesTable (spec {}, what T5 emits for top lists and tables), same org, 1h picker, read by Ali: the panel `time() - E` showed 212 = seconds since E at the moment the page was loaded, i.e. the table shows the LAST point of the range, not the first or the mean; and sum by (service_name) (increase({otel_metric_name="dash0.logs"}[$__range])) equalled the fixed-[1h] control to the digit (frontend-proxy 57.013K, frontend 31.783K, product-catalog 20.981K, checkout 8.174K) and differed from the fixed-[5m] control. The table was read at 1h only. | `fn.default_zero.grouped`, `fn.top.window`, `log.scalar.window` |
 | `probe:lt-threshold` (open) | How does Dash0 compare $__threshold for `<` expressions (is higher always worse)? | maths.md §11 probe 5, T0 check-rule export | `monitor.cmp.lt` |

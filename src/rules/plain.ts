@@ -21,6 +21,8 @@ export const PLAIN_ASSUMPTIONS: Record<string, string> = {
   "A.tag-default": "the Datadog tag has the same name in OpenTelemetry (dots become underscores)",
   "A.query-threshold": "the threshold in the monitor's query is the one that counts",
   "A.dd-per-unit": "Datadog computes per-second values from consecutive points of a growing total (documented, not yet checked)",
+  "A.no-reset": "the counter does not restart from zero inside the time window (how Datadog treats a restart is not yet checked)",
+  "A.regular-sampling": "the data points arrive at an even interval that divides the chart's time step",
   "A.no-gaps": "every time bucket has data",
   "A.kind-metadata": "the metric type Datadog's integration declares is correct",
   "A.otel-counter": "the OpenTelemetry metric with this name is a growing counter",

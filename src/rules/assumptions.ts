@@ -13,6 +13,10 @@ export const ASSUMPTIONS = {
   "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
   "A.dd-per-unit": "Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog)",
+  "A.no-reset":
+    "no counter reset inside the window (anchored increase adds the post-reset value; Datadog's treatment of a reset is unverified, maths.md T4)",
+  "A.regular-sampling":
+    "the sampling period is constant and divides the rollup width, so Datadog averaging its per-check points equals the time-weighted PromQL rate (maths.md T10a)",
   "A.no-gaps": "every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier",
   "A.kind-metadata": "the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry)",
   "A.otel-counter": "the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry)",
@@ -92,6 +96,9 @@ export const T4_ASSUMPTION_IDS = [
   "A.var-regex",
   "A.tag-default",
   "A.dd-per-unit",
+  "A.same-samples",
+  "A.no-reset",
+  "A.regular-sampling",
   "A.no-gaps",
   "A.kind-metadata",
   "A.otel-counter",

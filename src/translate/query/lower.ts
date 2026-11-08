@@ -91,6 +91,11 @@ class Lowerer {
       ...(original !== undefined && { original }),
     });
   }
+  /** Dashboard counter rules use the `.anchored` rule ids; monitors keep the extrapolated ones. */
+  private counterRule(id: "time.unmapped.counter" | "time.unmapped.suffix-counter" | "time.as_count.counter" | "time.as_rate.counter" | "time.ddrate.plain" | "time.rollup.counter" | "time.count.default" | "time.count.counter"): RuleId {
+    return this.monitor ? id : (`${id}.anchored` as RuleId);
+  }
+
   manual(code: string, message: string, original?: unknown): never {
     this.find("manual", code, message, { original });
     throw new Manual(message);
@@ -393,7 +398,7 @@ class Lowerer {
     const countModifier = calls.some((c) => c.name === "as_count" || c.name === "as_rate");
     if (!mapping && hint === undefined && this.ctx.ddKind && countModifier && /\.(count|total)$/.test(m.metric)) {
       hint = "count";
-      this.use("time.unmapped.suffix-counter");
+      this.use(this.counterRule("time.unmapped.suffix-counter"));
     }
     if (mapping) this.use("select.metric.mapped");
     else if (hint) {
@@ -458,7 +463,7 @@ class Lowerer {
       else if (!(unmappedCounter && mapping.ddKind === "count") && !curatedCount)
         this.manual("time.kind", `Datadog ${mapping.ddKind} stored as an OTel ${kind}: no tested rule yet`);
     }
-    if (unmappedCounter) this.use("time.unmapped.counter");
+    if (unmappedCounter) this.use(this.counterRule("time.unmapped.counter"));
 
     // Time aggregation, Datadog order: per series first.
     let fn = "avg";
@@ -487,7 +492,7 @@ class Lowerer {
         if (!kindKnown) this.manual("time.kind-unknown", `.${c.name}() on ${m.metric}: its kind is unknown (no mapping entry), so the time aggregation can't be chosen`);
         if (kind === "gauge") this.use(`time.${c.name}.gauge`);
         else if (kind === "counter") {
-          this.use(`time.${c.name}.counter`);
+          this.use(this.counterRule(c.name === "as_count" ? "time.as_count.counter" : "time.as_rate.counter"));
           counterMode = c.name === "as_count" ? "increase" : "rate";
         } else if (kind === "delta" && c.name === "as_count") {
           this.use("time.as_count.delta");
@@ -504,13 +509,13 @@ class Lowerer {
       } else this.manual(`fn.${c.name}`, `no exact rule for .${c.name}()`);
     }
     if (ddRate && !counterMode) {
-      this.use("time.ddrate.plain");
+      this.use(this.counterRule("time.ddrate.plain"));
       counterMode = "rate";
     }
     if (((unmappedCounter && hint === "count") || curatedCount) && !counterMode) {
       if (explicitRollup && fn !== "sum") this.manual("time.rollup.counter", `.rollup(${fn}) on a COUNT metric has no rule`);
-      if (explicitRollup) this.use("time.rollup.counter");
-      this.use(curatedCount ? "time.count.counter" : "time.count.default");
+      if (explicitRollup) this.use(this.counterRule("time.rollup.counter"));
+      this.use(this.counterRule(curatedCount ? "time.count.counter" : "time.count.default"));
       counterMode = "increase";
     }
     if ((kind === "counter" && !counterMode) || kind === "histogram" || (kind === "delta" && fn !== "sum"))
@@ -518,7 +523,7 @@ class Lowerer {
     if (counterMode && explicitRollup) {
       const ok = (counterMode === "increase" && fn === "sum") || (counterMode === "rate" && fn === "avg");
       if (!ok) this.manual("time.rollup.counter", `.rollup(${fn}) combined with ${counterMode}() has no rule`);
-      this.use("time.rollup.counter");
+      this.use(this.counterRule("time.rollup.counter"));
     }
 
     // sum(last_W):q.as_count() in a monitor: the window's total count is increase over the whole window.
@@ -527,9 +532,13 @@ class Lowerer {
       if (explicitRollup) this.manual("time.rollup.counter", ".rollup() combined with a counter rate has no exact rule");
       width = this.monitorSumWindow!;
     }
-    // rate()/increase() need at least two samples per window; on dashboards use Perses' $__rate_interval for that.
-    const range: Duration = counterMode && width === "$__interval" ? "$__rate_interval" : width;
-    const sel: PNode = { k: "selector", matchers, range };
+    // Dashboards: `anchored` (maths.md T4, T4c, T10a) takes its baseline from the last sample before the window and does not
+    // extrapolate, so the window is the rollup width itself and needs no $__rate_interval. Monitors keep the extrapolated forms:
+    // a check rule with `anchored` has not been probed.
+    const anchored = counterMode !== null && !this.monitor;
+    // rate()/increase() without `anchored` need at least two samples per window; on dashboards use Perses' $__rate_interval for that.
+    const range: Duration = counterMode && !anchored && width === "$__interval" ? "$__rate_interval" : width;
+    const sel: PNode = { k: "selector", matchers, range, ...(anchored && { anchored: true }) };
     let inner: PNode;
     if (counterMode) inner = { k: "call", fn: counterMode, args: [sel] };
     else {

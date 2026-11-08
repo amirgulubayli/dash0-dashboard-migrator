@@ -135,10 +135,10 @@ describe("formulas mixing log and metric queries", () => {
     if (!f.ok) throw new Error();
     const r = translateQuery(f.value, { ddKind: () => "count" }, env);
     expect(r.promql).toBe(
-      `100 * sum (increase(${L(', otel_log_severity_range="ERROR", service_name="api"')})) / sum (increase({otel_metric_name="trace.http.request.hits", service="api"}[$__rate_interval]))`,
+      `100 * sum (increase(${L(', otel_log_severity_range="ERROR", service_name="api"')})) / sum (increase({otel_metric_name="trace.http.request.hits", service="api"}[$__interval] anchored))`,
     );
     expect(r.status).toBe("bounded");
-    expect(r.rules).toEqual(expect.arrayContaining(["log.count", "time.unmapped.counter"]));
+    expect(r.rules).toEqual(expect.arrayContaining(["log.count", "time.unmapped.counter.anchored"]));
     expect(r.assumptions).toEqual(expect.arrayContaining(["A.log-count", "A.otel-counter"]));
   });
   it("a manual log query makes the formula manual", () => {
