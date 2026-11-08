@@ -8,6 +8,8 @@ Translation is **deterministic**: a Datadog query parser, rule tables and metric
 
 It runs in your terminal, because the people who migrate monitoring are engineers, and engineers live there. No web app to log in to, no account to create.
 
+**Tested on Datadog's own dashboards.** All 516 dashboards and 329 monitors in [DataDog/integrations-core](https://github.com/DataDog/integrations-core) run through end to end: **93.7% of 14,172 distinct queries and monitors translate, and 92.2% are exact under a stated condition** ([details](#tested-against-datadogintegrations-core)). One command repeats it: `npm run integrations-core`.
+
 ## Quick start
 
 Download one file and run it. No Node, no clone, no install, no folder of extras:
@@ -30,7 +32,7 @@ The archive holds one file, `dd2dash0`, with everything inside it (the mapping t
 
 ## What a run looks like
 
-A real run against our Datadog trial and Dash0 org (1 dashboard, 1 monitor):
+A real run against our Datadog trial and Dash0 org (1 dashboard, 1 monitor; v0.5.0, live import). Since v0.5.5 the run also prints the coverage by query type after Translate (shown [below](#tested-against-datadogintegrations-core)):
 
 ```
 ╭──────────────────────────────────────────╮
