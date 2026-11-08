@@ -105,3 +105,31 @@ describe("apply (dry-run)", () => {
     expect(o.warnings.join(" ")).toMatch(/payloads are not covered/);
   });
 });
+
+describe("duplicate widget ids (review of #33, Henry's stress item c)", () => {
+  it("get unique item ids, and flagging the second widget replaces the second panel, not the first", async () => {
+    const work = mkdtempSync(join(tmpdir(), "dd2dash0-dup-"));
+    const src = join(work, "src", "dashboards");
+    cpSync(join(ROOT, "fixtures", "datadog", "README.md"), join(work, "README.md"));
+    const w = (title: string, q: string) => ({ id: 1, layout: { x: 0, y: 0, width: 4, height: 2 }, definition: { type: "timeseries", title, requests: [{ queries: [{ data_source: "metrics", name: "a", query: q }], formulas: [{ formula: "a" }], response_format: "timeseries" }] } });
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(src, { recursive: true });
+    writeFileSync(join(src, "dup.json"), JSON.stringify({ id: "dup-test", title: "Dup", layout_type: "ordered", widgets: [w("First (cpu)", "avg:redis.cpu.sys{*}"), w("Second (rate)", "avg:redis.net.commands{*}")] }));
+    const planDir = join(work, "plan");
+    const config = resolveConfig({ source: { kind: "folder", path: "src" } }, {}, {});
+    await runPlan({ config, outDir: planDir, defaultMappingsDir: join(ROOT, "mappings"), resolvedInput: join(work, "src"), version: "test" });
+    const items = (JSON.parse(readFileSync(join(planDir, "report.json"), "utf8")) as { items: (Item & { title: string })[] }).items.filter((i) => i.kind === "panel");
+    expect(items.map((i) => i.id)).toEqual(["dd-dash-dup-test/w-1", "dd-dash-dup-test/w-1_2"]);
+    const second = items.find((i) => i.title === "Second (rate)")!;
+    const first = items.find((i) => i.title === "First (cpu)")!;
+    const review = join(work, "review.json");
+    writeFileSync(review, JSON.stringify({ schema_version: "1", plan_sha256: readLock(planDir).planHash, reviewer: "t", decisions: [{ id: second.id, decision: "flagged", note: "rejected" }, { id: first.id, decision: "approved", note: "" }] }));
+    const o = await runApply({ planDir, reviewFile: review, dryRun: true, skipSourceCheck: true, allowPending: true });
+    expect(o.kind).toBe("done");
+    const dir = join(planDir, "apply", "dash0", "dashboards");
+    const { readdirSync } = await import("node:fs");
+    const dash = JSON.parse(readFileSync(join(dir, readdirSync(dir)[0]!), "utf8")) as { spec: { panels: Record<string, { spec: { display?: { name?: string }; plugin: { kind: string } } }> } };
+    expect(dash.spec.panels["w-1"]!.spec.plugin.kind).not.toBe("Markdown"); // First (cpu) imported as a chart
+    expect(dash.spec.panels["w-1_2"]!.spec.plugin.kind).toBe("Markdown"); // Second (rate) is the flagged placeholder
+  });
+});
