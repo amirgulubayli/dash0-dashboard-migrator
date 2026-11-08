@@ -47,6 +47,22 @@ receivers:
 - Verified live with this config: the Postgres and NGINX fixture dashboards return data in Dash0 (44 of 53 items with queries, `scripts/returns-data.ts`). Not tested: the receiver's default config, where these nine metrics are simply not emitted.
 - The receiver logs a warning that the feature gate `receiver.postgresql.separateSchemaAttr` is off. It changes how schema and table are labelled on table-level metrics, and the db/table/schema tags are not mapped yet.
 
+**Redis** (`redisreceiver`, checked against v0.164.0 `metadata.yaml`). 23 of the mapped Redis metrics are **disabled by default** (each row's note says so; `tests/ir/mappings-logic.test.ts` L6 enforces it). The demo needs these three, which the live setup enables:
+
+```yaml
+receivers:
+  redis:
+    endpoint: <host>:6379
+    collection_interval: 10s
+    metrics:
+      redis.maxmemory: { enabled: true }
+      redis.cmd.calls: { enabled: true }
+      redis.cmd.usec: { enabled: true }
+```
+- `redis.maxmemory` is the denominator of the migrated high-memory monitor (`redis.memory.used / redis.maxmemory`). With the default config the metric is not emitted, so the rule has no denominator and reads no data. Redis itself must also have a `maxmemory` set (0 means unlimited and gives no meaningful percentage).
+- Set a distinct `host.name` resource attribute on each collector (for example with the `resource` processor). The migrated rule averages over every Redis series in the dataset, so a second collector sending to the same Dash0 org changes the value (seen live: 48% instead of 95%).
+- Verified live with this config: the high-memory rule read 95.4% scoped to our host while the Datadog monitor alerted at the same load. Other default-off rows were not checked live.
+
 **NGINX** (`nginxreceiver`): needs `stub_status` exposed (for example `location /status { stub_status; }`) and `endpoint: http://<host>/status`. The mapped metrics (`nginx.connections_current`, `nginx.requests`) are enabled by default.
 
 **Host metrics** (`system.*`): not mapped. Those panels stay `metric.unmapped`.
