@@ -28,7 +28,7 @@ describe("report.html", () => {
   it("is the shell around the exported REPORT_CSS, filter rules and reportBody (for pages that reuse the look)", () => {
     const body = reportBody(scoreOf(rows), rows, facts);
     expect(body.startsWith('<a class="skip"')).toBe(true);
-    expect(body).not.toMatch(/<html|<head|<style|<body/);
+    expect(body).not.toMatch(/<html|<head[ >]|<style|<body/);
     expect(REPORT_CSS).toContain("--accent:#a78bfa");
     expect(REPORT_CSS).toContain("@media print");
     const head = html.slice(0, html.indexOf("<style>\n") + 8);
