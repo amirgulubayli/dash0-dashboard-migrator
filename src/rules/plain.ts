@@ -60,6 +60,8 @@ export const PLAIN_ASSUMPTIONS: Record<string, string> = {
   "A.row-height": "a Dash0 grid row is as tall as a Datadog grid row",
   "A.var-values": "the filter's values are the same in Dash0 as in Datadog",
   "A.table-single-query": "the table has a single query and default sorting",
+  "A.alt-view": "the numbers per group are what matters, not how they are drawn",
+  "A.table-columns": "all columns of the table are grouped the same way and default sorting is fine",
   "A.top-uniform": "all ranked series have data at the same moments and no two tie",
   "A.top-unlimited": "showing all series, unranked, is acceptable for now",
   "A.agg-default": "the panel uses Datadog's default average",
