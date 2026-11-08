@@ -15,3 +15,6 @@ Dash0_Hackathon_Challenge.pdf
 
 # guided-flow run folders (report.md, report.json, plan/)
 dd2dash0-run/
+
+# Jev answer cache (tools/jev; may hold model output, never keys)
+.jev-cache/

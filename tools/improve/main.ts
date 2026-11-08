@@ -1,13 +1,17 @@
 // tools/improve: the build-time improvement loop (plan 06 §6). Not part of the migrator: src/ never imports it.
 //
 //   npx tsx tools/improve/main.ts [--rounds N] [--depth 1] [--budget-usd 5] [--max-turns 40] [--patience 2]
-//                                 [--gap <key>] [--dry-run] [--keep]
+//                                 [--gap <key>] [--picker deterministic|jev] [--jev-review] [--dry-run] [--keep]
+//
+// Jev (plans 08, 09 §5) is OFF by default and only suggests. It runs only when asked (--picker jev: J2, choose among
+// the top 5 deterministic gaps; --jev-review: J3, score each new mapping row's evidence after the gates pass) AND
+// TYPESAFE_API_KEY is set AND JEV_DISABLED is not 1. Any Jev failure falls back to the deterministic path.
 //
 // Each round: measure the fixtures -> pick the biggest actionable gap -> one agent in a fresh worktree -> gates
 // (scope, typecheck, all tests, determinism, no regression, untouched items byte-identical, the gap shrinks,
 // coverage doesn't drop) -> pass: commit on branch improve/<gap> for review; fail: discard and record why.
 // Stops at --rounds, at --budget-usd, or after --patience rounds without progress. Nothing is pushed.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { findGaps, pickGap } from "./gaps.js";
 import { evaluate, type CommandResults } from "./gates.js";
@@ -22,10 +26,14 @@ interface Options {
   gap: string | null;
   dryRun: boolean;
   keep: boolean;
+  /** Who picks the gap: the deterministic ranking (default), or Jev among its top 5 (J2). */
+  picker: "deterministic" | "jev";
+  /** J3: Jev scores the evidence of new mapping rows after the gates pass. A note, never a gate. */
+  jevReview: boolean;
 }
 
 function parse(argv: string[]): Options {
-  const o: Options = { rounds: 1, depth: 1, budgetUsd: 5, maxTurns: 40, patience: 2, gap: null, dryRun: false, keep: false };
+  const o: Options = { rounds: 1, depth: 1, budgetUsd: 5, maxTurns: 40, patience: 2, gap: null, dryRun: false, keep: false, picker: "deterministic", jevReview: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     const num = () => {
@@ -41,6 +49,11 @@ function parse(argv: string[]): Options {
     else if (a === "--gap") o.gap = argv[++i] ?? null;
     else if (a === "--dry-run") o.dryRun = true;
     else if (a === "--keep") o.keep = true;
+    else if (a === "--picker") {
+      const v = argv[++i];
+      if (v !== "jev" && v !== "deterministic") throw new Error("--picker is deterministic or jev");
+      o.picker = v;
+    } else if (a === "--jev-review") o.jevReview = true;
     else throw new Error(`unknown option ${a}`);
   }
   if (o.depth !== 1) throw new Error("--depth > 1 (agents splitting a gap into sub-agents) is not in v0 yet");
@@ -61,12 +74,26 @@ async function main() {
   log("top gaps:");
   for (const g of findGaps(baseline).slice(0, 8)) log(`  ${g.actionable ? "*" : " "} ${g.key.padEnd(34)} score ${String(g.score).padStart(3)}  items ${g.items.length}`);
 
+  // Jev is loaded only when asked for; without the flags tools/jev is never imported and nothing leaves the machine.
+  const jev = o.picker === "jev" || o.jevReview ? (await import("../jev/client.js")).createJev({ requested: true, cacheDir: join(base, ".jev-cache") }) : null;
+  if (jev) log(jev.reason);
+  const jevUses = jev?.enabled ? await import("../jev/uses.js") : null;
+
   const tried = new Set<string>();
   let spent = 0;
   let idle = 0;
   for (let round = 1; round <= o.rounds; round++) {
-    const gap = o.gap ? (findGaps(baseline).find((g) => g.key === o.gap) ?? null) : pickGap(baseline, tried);
-    const pickedBy: Record<string, unknown> = { by: o.gap ? "--gap" : "deterministic" };
+    let gap = o.gap ? (findGaps(baseline).find((g) => g.key === o.gap) ?? null) : pickGap(baseline, tried);
+    let pickedBy: Record<string, unknown> = { by: o.gap ? "--gap" : "deterministic" };
+    if (!o.gap && o.picker === "jev" && jev && jevUses) {
+      const p = await jevUses.pickGapWithJev(findGaps(baseline).filter((g) => !tried.has(g.key)), jev);
+      if (p) {
+        gap = p.gap;
+        pickedBy = { ...p, gap: p.gap.key };
+        log(`picker: ${p.label}${p.model ? ` (${p.model}, confidence ${p.confidence?.toFixed(2)})` : ""}: ${p.gap.key}${p.note ? ` (${p.note})` : ""}`);
+        if (p.probabilities) log(`  ${Object.entries(p.probabilities).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(", ")}`);
+      }
+    }
     if (!gap) {
       log(o.gap ? `gap ${o.gap} not found` : "no actionable gap left");
       break;
@@ -105,8 +132,26 @@ async function main() {
         Object.assign(record, { gates: r });
         for (const g of r.gates) log(`  ${g.ok ? "PASS" : "FAIL"} ${g.name}: ${g.detail.split("\n")[0]}`);
         if (r.ok) {
+          // J3 (plan 09 §5): Jev scores each new mapping row's evidence (0-3), rows under 1.5 flagged. Never a gate.
+          let jevNote = "";
+          if (o.jevReview && jev && jevUses) {
+            const review: Record<string, unknown> = {};
+            for (const f of files.filter((x) => x.startsWith("mappings/") && x.endsWith(".yaml"))) {
+              try {
+                const before = existsSync(join(base, f)) ? readFileSync(join(base, f), "utf8") : null;
+                const after = readFileSync(join(ws.dir, f), "utf8");
+                const e = await jevUses.scoreEvidence(after, jev, jevUses.newMappingRows(before, after));
+                review[f] = e;
+                jevNote += "\n\n" + jevUses.evidenceNote(f, e);
+                log(`jev review: ${f}: ${e.skipped ?? `${e.rows.length} new row(s) scored, ${e.flagged.length} flagged${e.flagged.length ? `: ${e.flagged.join(", ")}` : ""}`}`);
+              } catch (err) {
+                log(`jev review skipped for ${f}: ${err instanceof Error ? err.message : err}`);
+              }
+            }
+            Object.assign(record, { jevReview: review });
+          }
           const branch = `improve/${slug(gap.key)}-${new Date().toISOString().slice(0, 10)}`;
-          const msg = `improve: close ${gap.key} (${r.gapBefore} -> ${r.gapAfter} findings)\n\n${a.summary}\n\nGenerated by tools/improve (build time; model claude-opus-5-5). Gates: ${r.gates.map((g) => g.name).join(", ")}.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`;
+          const msg = `improve: close ${gap.key} (${r.gapBefore} -> ${r.gapAfter} findings)\n\n${a.summary}${jevNote}\n\nGenerated by tools/improve (build time; model claude-opus-5-5). Gates: ${r.gates.map((g) => g.name).join(", ")}.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`;
           const msgFile = join(ws.dir, "..", "COMMIT_MSG");
           writeFileSync(msgFile, msg);
           const steps = [run("git", ["switch", "-c", branch], ws.dir), run("git", ["add", "--", ...files], ws.dir), run("git", ["commit", "-q", "-F", msgFile], ws.dir)];
