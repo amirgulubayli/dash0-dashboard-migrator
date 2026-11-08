@@ -31,10 +31,8 @@ export interface MetricMapping {
   scale?: number;
   /** How faithful the name mapping is. "none" = no equivalent metric. */
   status: "exact" | "approximate" | "none";
-  /** When the equivalent is an expression over several OTel metrics. */
+  /** When the equivalent is an expression over several OTel metrics (not translated yet). */
   derived?: string;
-  /** derived = num / den, both Datadog metrics with their own mapping rows (rule select.metric.ratio). */
-  ratio?: { num: string; den: string };
   note?: string;
 }
 
@@ -56,7 +54,7 @@ export class MappingError extends Error {}
 
 const DD_KINDS: readonly DatadogKind[] = ["gauge", "rate", "count", "distribution"];
 const OTEL_KINDS: readonly OtelKind[] = ["gauge", "counter", "updowncounter", "histogram"];
-const METRIC_FIELDS = new Set(["otel", "labels", "sumBy", "ddKind", "otelKind", "unit", "scale", "status", "derived", "ratio", "note"]);
+const METRIC_FIELDS = new Set(["otel", "labels", "sumBy", "ddKind", "otelKind", "unit", "scale", "status", "derived", "note"]);
 
 export function parseMetricTable(text: string, file = "<metrics>"): MetricTable {
   const doc = parseYaml(text) as unknown;
@@ -87,15 +85,6 @@ export function parseMetricTable(text: string, file = "<metrics>"): MetricTable 
     const sumBy = raw.sumBy ?? [];
     if (!Array.isArray(sumBy) || !sumBy.every((v) => typeof v === "string")) at("sumBy must be a list of strings");
     if (raw.scale !== undefined && (typeof raw.scale !== "number" || !Number.isFinite(raw.scale) || raw.scale === 0)) at("scale must be a non-zero number");
-    const ratio = raw.ratio;
-    if (ratio !== undefined) {
-      if (!isObj(ratio) || typeof ratio.num !== "string" || typeof ratio.den !== "string" || Object.keys(ratio).length !== 2) at("ratio must be { num, den } (Datadog metric names)");
-      if (otel !== null || raw.derived === undefined) at("ratio needs otel: null and a 'derived' expression");
-      for (const side of ["num", "den"] as const) {
-        const r = (doc.metrics as Record<string, unknown>)[(ratio as Record<string, string>)[side]!];
-        if (!isObj(r) || typeof r.otel !== "string") at(`ratio.${side} must name a row in this table that has an otel metric`);
-      }
-    }
     for (const k of ["unit", "derived", "note"] as const) if (raw[k] !== undefined && typeof raw[k] !== "string") at(`${k} must be a string`);
     metrics.set(name, {
       datadog: name,
@@ -108,7 +97,6 @@ export function parseMetricTable(text: string, file = "<metrics>"): MetricTable 
       ...(raw.scale !== undefined && { scale: raw.scale as number }),
       status: status as MetricMapping["status"],
       ...(raw.derived !== undefined && { derived: raw.derived as string }),
-      ...(ratio !== undefined && { ratio: { num: (ratio as Record<string, string>).num!, den: (ratio as Record<string, string>).den! } }),
       ...(raw.note !== undefined && { note: raw.note as string }),
     });
   }

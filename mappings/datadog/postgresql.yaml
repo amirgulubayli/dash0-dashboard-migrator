@@ -157,14 +157,13 @@ metrics:
     unit: "{lock}"
     status: approximate
     note: "metadata.csv: 'The number of locks active for this database' (gauge, tagged lock_mode, granted). Receiver metadata.yaml: postgresql.database.locks 'The number of database locks, including those held by the receiver' (gauge; relation, mode, lock_type). The receiver counts its own locks and has no granted attribute. Disabled by default in the receiver."
-  # --- Derived: a ratio of two receiver metrics, translated by rule select.metric.ratio through the rows it names.
+  # --- Derived: a ratio of two receiver metrics (the translator treats derived rows as manual for now).
   postgresql.percent_usage_connections:
     otel: null
     ddKind: gauge
     otelKind: null
     status: approximate
     derived: "postgresql.backends / postgresql.connection.max"
-    ratio: { num: postgresql.connections, den: postgresql.max_connections }
     note: "metadata.csv: 'The number of connections to this database as a fraction of the maximum number of allowed connections' (gauge, fraction; check: SUM(numbackends)/MAX(setting)). Receiver metadata.yaml has no ratio; sum(postgresql.backends) / postgresql.connection.max gives it."
   # Not mapped: postgresql.deadlocks.count (check: monotonic_count -> ddKind count). count -> counter has no tested
   # translator rule yet (kindTransform fails closed), so the row would only turn a heuristic into manual.

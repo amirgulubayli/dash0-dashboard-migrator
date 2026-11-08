@@ -51,11 +51,6 @@ export const QUERY_RULES: RuleDef[] = [
     assumptions: ["A.sumby-together"],
     note: "Applied together with select.metric.transform. sum_over_time is linear in any samples, so .rollup(sum) needs no assumption.",
   }),
-  select("select.metric.ratio", 65, "exact-under", "mapping entry with ratio {num, den} (Datadog metrics), avg/sum/min/max query, rollup avg or sum", "sum by (G) (T(num)) / max by (G) (T(den)), T = avg|sum_over_time", {
-    assumptions: ["A.ratio-one-instance", "A.ratio-den-constant", "A.sumby-together"],
-    note:
-      "Datadog's check computes num/den per instance (postgresql: SUM(numbackends)/MAX(setting)). With one instance per group, sum by (G) of the numerator's split series is that instance's num and max by (G) of the denominator its den. T is linear, so T(sum) = sum(T) (A.sumby-together), and T(n/c) = T(n)/c for a denominator constant in the bucket. Any other rollup, .as_count()/.as_rate(), a count: aggregation or a percentile fails closed (metric.derived).",
-  }),
   selectPlan("select.metric.derived", 68, "exact-under", "mapping entry with a derived expression over several OTel metrics", "the entry's PromQL expression, status from the entry's own claim", {
     assumptions: ["A.align"],
     note: "Replaces metric.derived. The claim comes from the mapping row, which must carry its own status and test.",
@@ -263,7 +258,6 @@ export const T4_TABLE_IDS = [
   "select.labels",
   "select.metric.transform",
   "select.metric.transform.sumby",
-  "select.metric.ratio",
   "time.ddrate.plain",
   "scope.all",
   "scope.tag.eq",

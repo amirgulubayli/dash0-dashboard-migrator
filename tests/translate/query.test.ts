@@ -33,17 +33,11 @@ const METRICS: Record<string, MetricMapping> = {
   "redis.dd.keys": { otel: "redis.db.keys", kind: "gauge", ddKind: "gauge", status: "exact", sumBy: ["db"] },
   "redis.dd.keys_kb": { otel: "redis.db.bytes", kind: "gauge", ddKind: "gauge", status: "exact", scale: 0.001, sumBy: ["db"] },
   "redis.dd.negscale": { otel: "redis.dd.neg", kind: "gauge", ddKind: "gauge", status: "exact", scale: -1 },
-  // select.metric.ratio fixtures, shaped like postgresql.yaml: a per-db numerator over an instance-level setting.
-  "pg.dd.conns": { otel: "postgresql.backends", kind: "gauge", ddKind: "gauge", status: "exact" },
-  "pg.dd.max": { otel: "postgresql.connection.max", kind: "gauge", ddKind: "gauge", status: "exact" },
 };
-/** Mirrors T1's metricRatio(): derived rows that are num / den over two mapped Datadog metrics. */
-const RATIOS: Record<string, { num: string; den: string }> = { "pg.dd.pct": { num: "pg.dd.conns", den: "pg.dd.max" } };
 /** Mirrors T1's metricAvailability(): known to the table but not usable. */
 const AVAILABILITY: Record<string, MetricAvailability> = {
   "redis.info.latency_ms": "no_equivalent",
   "redis.dd.derived": "derived",
-  "pg.dd.pct": "derived",
   // A context that knows the entry needs a transform but can't pass scale/sumBy to T4.
   "redis.dd.opaque": "needs_transform",
 };
@@ -58,7 +52,6 @@ const CTX: TranslateContext = {
   metric: (n) => METRICS[n],
   ddKind: (n) => DD_KINDS[n],
   availability: (n) => AVAILABILITY[n] ?? (METRICS[n] ? "mapped" : "unmapped"),
-  ratio: (n) => RATIOS[n],
   tag: (t) => ({ host: "host_name", env: "deployment_environment_name", service: "service_name" })[t],
   variables: { host: { tag: "host" }, scope: { tag: null } },
 };
@@ -81,7 +74,6 @@ const track = <T extends { rules: string[] }>(r: T): T => {
   return r;
 };
 
-const PG = `sum by (host_name) (avg_over_time(${SEL("postgresql.backends")}[$__interval])) / max by (host_name) (avg_over_time(${SEL("postgresql.connection.max")}[$__interval]))`;
 /** [rule under test, Datadog query, expected PromQL, expected status] */
 const CASES: [string, string, string, string][] = [
   ["select.metric.mapped", "avg:system.cpu.user{*}", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`, "exact-under"],
@@ -173,7 +165,6 @@ const CASES: [string, string, string, string][] = [
   ["time.ddrate.plain.anchored", "sum:redis.net.commands{*}", `sum (rate(${SEL("redis.commands.processed")}[$__interval] anchored))`, "exact-under"],
   ["select.metric.mapped", "avg:redis.dd.gauge_on_counter{*}", `avg (avg_over_time(${SEL("redis.connections.received")}[$__interval]))`, "exact-under"],
   ["select.metric.approximate", "avg:redis.dd.approx{*}", `avg (avg_over_time(${SEL("redis.memory.rss")}[$__interval]))`, "bounded"],
-  ["select.metric.ratio", "max:pg.dd.pct{*} by {host}", PG, "exact-under"],
 ];
 
 describe("rule table: one exact PromQL string per rule", () => {
@@ -315,46 +306,6 @@ describe("select.metric.transform", () => {
       const r = q(s);
       expect(validatePromQL(r.promql!).ok, r.promql!).toBe(true);
     }
-  });
-});
-
-describe("select.metric.ratio: a derived row that is num / den", () => {
-  it("states its three assumptions, and any Datadog space aggregation gives the same quotient", () => {
-    const r = q("avg:pg.dd.pct{*} by {host}");
-    expect(r.promql).toBe(PG);
-    expect(r.rules).toContain("select.metric.ratio");
-    for (const a of ["A.ratio-one-instance", "A.ratio-den-constant", "A.sumby-together"]) expect(r.assumptions).toContain(a);
-    expect(r.status).toBe("exact-under");
-  });
-
-  it("scope and rollup(avg|sum) apply to both sides", () => {
-    expect(q("avg:pg.dd.pct{env:prod}.rollup(sum, 60)").promql).toBe(
-      `sum (sum_over_time(${SEL("postgresql.backends", ', deployment_environment_name="prod"')}[1m])) / max (sum_over_time(${SEL("postgresql.connection.max", ', deployment_environment_name="prod"')}[1m]))`,
-    );
-  });
-
-  it("a monitor wraps the quotient in its window and keeps the threshold in Datadog units (a fraction)", () => {
-    const r = mon("avg(last_15m):avg:pg.dd.pct{*} > 0.9", { critical: 0.9 });
-    expect(r.promql).toBe(
-      `avg_over_time((sum (avg_over_time(${SEL("postgresql.backends")}[1m])) / max (avg_over_time(${SEL("postgresql.connection.max")}[1m])))[15m:1m]) > $__threshold`,
-    );
-    expect(r.thresholds).toEqual({ failed: 0.9 });
-    expect(validatePromQL(r.promql!).ok).toBe(true);
-  });
-
-  it.each([
-    ["avg:pg.dd.pct{*}.rollup(max, 60)", "rollup(max)"],
-    ["avg:pg.dd.pct{*}.rollup(count, 60)", "rollup(count)"],
-    ["avg:pg.dd.pct{*}.as_count()", "as_count"],
-    ["count:pg.dd.pct{*}", "count: of a ratio"],
-  ])("fails closed: %s", (src, why) => {
-    const r = q(src);
-    expect(r.promql).toBeNull();
-    expect(r.findings.find((f) => f.status === "manual")?.message).toContain(why);
-  });
-
-  it("without ctx.ratio a derived row stays manual (metric.derived)", () => {
-    expect(q("avg:pg.dd.pct{*}", { ...CTX, ratio: undefined }).findings.some((f) => f.code === "metric.derived")).toBe(true);
   });
 });
 

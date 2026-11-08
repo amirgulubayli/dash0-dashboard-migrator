@@ -3,7 +3,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ingestDatadog, type IngestOptions } from "../sources/datadog/index.js";
-import { ddKindLookup, loadDdKinds, loadMappings, metricAvailability, metricLookup, metricRatio, tagLookup } from "../ir/index.js";
+import { ddKindLookup, loadDdKinds, loadMappings, metricAvailability, metricLookup, tagLookup } from "../ir/index.js";
 import { translateQuery, type TranslateContext } from "../translate/query/index.js";
 import { toPerses, type DashboardTranslation, type TranslateExpr, type TranslateLog } from "../translate/dashboard/index.js";
 import { loadLogAttributes, translateLogMonitor, translateLogQuery, type LogAttributes } from "../translate/logs/index.js";
@@ -74,7 +74,6 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   const base: TranslateContext = {
     metric: metricLookup(mappings),
     availability: (dd) => metricAvailability(mappings, dd),
-    ratio: metricRatio(mappings),
     tag: tagLookup(mappings),
     // Datadog's own metric kinds (generated from integrations-core metadata.csv); curated entries win. Without it every
     // unmapped metric is time.kind-unknown and stays manual.
