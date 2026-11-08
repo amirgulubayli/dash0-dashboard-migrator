@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "bin": {
-    "dd2dash0": "dist/cli.js"
+    "dd2dash0": "dist/bin.js"
   },
   "scripts": {
     "build": "tsc -p .",

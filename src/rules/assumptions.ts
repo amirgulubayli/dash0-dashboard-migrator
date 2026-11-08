@@ -24,6 +24,7 @@ export const ASSUMPTIONS = {
   "A.same-key-and": "Datadog applies a literal tag filter and a template variable on the same key together (AND)",
   "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
+  "A.sumby-together": "the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs)",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
   // T12 (src/translate/logs, PR #13), text verbatim
   "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
@@ -104,4 +105,5 @@ export const T4_ASSUMPTION_IDS = [
   "A.at-range",
   "A.monotonic",
   "A.query-threshold",
+  "A.sumby-together",
 ] as const satisfies readonly AssumptionId[];

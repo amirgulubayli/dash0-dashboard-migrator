@@ -28,6 +28,7 @@ export const ASSUMPTIONS = {
   "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
+  "A.sumby-together": "the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs)",
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;
@@ -82,6 +83,13 @@ export const RULES = {
   "time.fill.zero.single": exact(".fill(zero) on a single-series query -> q or vector(0) (the same as default_zero)"),
   "select.metric.approximate": bounded("the mapping table marks the OTel metric as approximate (see the entry's note)"),
   "select.labels": exact("mapping-table labels pick the series: redis.cpu.sys -> {otel_metric_name=\"redis.cpu.time\", state=\"sys\"}"),
+  "select.metric.transform": exact(
+    "mapping entry with scale k > 0 and/or sumBy labels L -> k * agg by (G) (sum without (L) (T(x))); k drops out under a count",
+  ),
+  "select.metric.transform.sumby": under(
+    ["A.sumby-together"],
+    "sumBy under avg_over_time/rate/increase: the sum of the split series' values equals the value of their sum",
+  ),
   "time.ddrate.plain": bounded(
     "Datadog RATE metric (stored per second) read from an OTel counter: a plain query -> rate(x[w]) (D-18, maths.md T3b); dashboards use w = $__rate_interval",
   ),

@@ -1,0 +1,92 @@
+# Standalone dd2dash0 executables (no Node needed), built with `bun build --compile`.
+#   pull request  -> build + smoke test every target, upload them as workflow artifacts (nothing is published)
+#   tag v*        -> the same, then a GitHub Release with one archive per OS
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths: ["src/**", "mappings/**", "package.json", "package-lock.json", "scripts/release/**", ".github/workflows/release.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: "1.4.4"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx tsc -p . --noEmit
+      - run: npx vitest run
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, target: bun-darwin-arm64, name: dd2dash0-macos-arm64, native: true }
+          - { runner: macos-latest, target: bun-darwin-x64, name: dd2dash0-macos-x64, native: false }
+          - { runner: ubuntu-latest, target: bun-linux-x64, name: dd2dash0-linux-x64, native: true }
+          - { runner: ubuntu-latest, target: bun-linux-arm64, name: dd2dash0-linux-arm64, native: false }
+          - { runner: ubuntu-latest, target: bun-windows-x64, name: dd2dash0-windows-x64, native: false, exe: .exe }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "${{ env.BUN_VERSION }}" }
+      - run: npm ci --omit=optional
+      - name: compile
+        run: |
+          out="dist/${{ matrix.name }}"
+          mkdir -p "$out"
+          bun build src/bin.ts --compile --minify --target ${{ matrix.target }} --outfile "$out/dd2dash0${{ matrix.exe }}"
+          cp -R mappings "$out/mappings"
+          cp scripts/release/README.txt "$out/README.txt"
+      - name: sign (ad hoc, required for Apple silicon)
+        if: startsWith(matrix.target, 'bun-darwin')
+        run: codesign --force --sign - "dist/${{ matrix.name }}/dd2dash0"
+      - name: smoke test (offline dry run on the fixtures)
+        if: matrix.native
+        run: |
+          bin="$PWD/dist/${{ matrix.name }}/dd2dash0"
+          "$bin" --version
+          tmp="$(mktemp -d)" && cd "$tmp"
+          "$bin" --yes --dry-run --input "$GITHUB_WORKSPACE/fixtures/datadog" < /dev/null
+          test -f dd2dash0-run/*/report.md
+      - name: archive
+        run: |
+          cd dist
+          if [ -n "${{ matrix.exe }}" ]; then zip -qr "${{ matrix.name }}.zip" "${{ matrix.name }}"; else tar czf "${{ matrix.name }}.tar.gz" "${{ matrix.name }}"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.name }}.*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "dd2dash0 $GITHUB_REF_NAME" --generate-notes
