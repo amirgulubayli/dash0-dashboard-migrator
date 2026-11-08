@@ -61,7 +61,7 @@ describe("log widgets through T5 with T4 + T12", () => {
   it("a log query in a stat panel uses the window form over the whole timeframe, shown as last-number (#26)", () => {
     const e = p("Error rate %");
     expect(e.placeholder).toBe(false);
-    expect(e.status).toBe("bounded");
+    expect(e.status).toBe("exact-under");
     expect(e.promql).toHaveLength(1);
     expect(e.promql[0]).toMatch(/^100 \* .*\[\$__range\].* \/ .*\[\$__range\]/);
     expect(e.promql[0]).not.toContain("$__interval");
@@ -73,7 +73,7 @@ describe("log widgets through T5 with T4 + T12", () => {
   it("a log query in a toplist uses the window form in a TimeSeriesTable (probed: shows the end-of-range value)", () => {
     const e = p("Top erroring services");
     expect(e.placeholder).toBe(false);
-    expect(e.status).toBe("bounded");
+    expect(e.status).toBe("exact-under");
     expect(e.promql).toHaveLength(1);
     expect(e.promql[0]).toMatch(/^topk\(5, sum by \(service_name\) \(increase\(.*\[\$__range\]/);
     expect(e.promql[0]).not.toContain("$__interval");

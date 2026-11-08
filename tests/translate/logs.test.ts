@@ -41,24 +41,24 @@ describe("log-search parser", () => {
 
 /** [rule, search, extra, expected PromQL, status] */
 const CASES: [string, string, Partial<DatadogLogQuery>, string, string][] = [
-  ["log.count", "", {}, `sum (increase(${L()}))`, "bounded"],
-  ["log.match.reserved", "service:checkout host:web-1", {}, `sum (increase(${L(', host_name="web-1", service_name="checkout"')}))`, "bounded"],
-  ["log.match.reserved.approx", "source:redis", {}, `sum (increase(${L(', source="redis"')}))`, "bounded"],
-  ["log.match.attr", "@http.status_code:502 @db.system:postgresql", {}, `sum (increase(${L(', db_system_name="postgresql", http_status_code="502"')}))`, "bounded"],
-  ["log.match.value", "@evt.name:(login* OR logout) -@usr.id:* -@http.method:GET", {}, `sum (increase(${L(', evt_name=~"^(login.*|logout)$", http_method!="GET", usr_id=""')}))`, "bounded"],
-  ["log.match.status", "status:(error OR warn)", {}, `sum (increase(${L(', otel_log_severity_range=~"^(ERROR|WARN)$"')}))`, "bounded"],
-  ["log.match.status.approx", "status:critical", {}, `sum (increase(${L(', otel_log_severity_range="FATAL"')}))`, "bounded"],
-  ["log.match.text", 'timeout -"card declined"', {}, `sum (increase(${L(', otel_log_body!~"(?i).*card declined.*", otel_log_body=~"(?i).*timeout.*"')}))`, "bounded"],
-  ["log.match.var", "$Host -$User", {}, `sum (increase(${L(', host_name=~"^($Host)$", usr_name!~"^($User)$"')}))`, "bounded"],
-  ["log.match.var.dropped", "service:a $scope", {}, `sum (increase(${L(', service_name="a"')}))`, "bounded"],
-  ["log.group_by", "service:a", { group_by: [{ facet: "@usr.name" }, { facet: "status" }] }, `sum by (otel_log_severity_range, usr_name) (increase(${L(', service_name="a"')}))`, "bounded"],
-  ["log.group_by.limit", "service:a", { group_by: [{ facet: "@usr.name", limit: 10, sort: { order: "asc" } }] }, `bottomk(10, sum by (usr_name) (increase(${L(', service_name="a"')})))`, "bounded"],
-  ["log.group_by.multi-limit", "", { group_by: [{ facet: "host", limit: 5 }, { facet: "service", limit: 3 }] }, `sum by (host_name, service_name) (increase(${L()}))`, "bounded"],
-  ["log.group_by.exclude-missing", "", { group_by: { fields: ["@policy_name"], limit: 10, sort: { order: "desc" }, should_exclude_missing: true } }, `topk(10, sum by (policy_name) (increase(${L(', policy_name!=""')})))`, "bounded"],
-  ["log.cardinality", "service:a", { compute: { aggregation: "cardinality", metric: "@usr.id" }, group_by: [{ facet: "host" }] }, `count by (host_name) (sum by (host_name, usr_id) (increase(${L(', service_name="a"')})) > 0)`, "bounded"],
-  ["log.indexes", "", { indexes: ["main", "security"] }, `sum (increase(${L()}))`, "bounded"],
-  ["log.range.integer", "@http.status_code:>=500", {}, `sum (increase(${L(', http_status_code=~"^([5-9]\\\\d{2}|[1-9]\\\\d{3,})$"')}))`, "bounded"],
-  ["log.or.inclusion-exclusion", "service:a OR host:b", {}, `sum (increase(${L(', service_name="a"')})) + sum (increase(${L(', host_name="b"')})) - sum (increase(${L(', host_name="b", service_name="a"')}))`, "bounded"],
+  ["log.count", "", {}, `sum (increase(${L()}))`, "exact-under"],
+  ["log.match.reserved", "service:checkout host:web-1", {}, `sum (increase(${L(', host_name="web-1", service_name="checkout"')}))`, "exact-under"],
+  ["log.match.reserved.approx", "source:redis", {}, `sum (increase(${L(', source="redis"')}))`, "exact-under"],
+  ["log.match.attr", "@http.status_code:502 @db.system:postgresql", {}, `sum (increase(${L(', db_system_name="postgresql", http_status_code="502"')}))`, "exact-under"],
+  ["log.match.value", "@evt.name:(login* OR logout) -@usr.id:* -@http.method:GET", {}, `sum (increase(${L(', evt_name=~"^(login.*|logout)$", http_method!="GET", usr_id=""')}))`, "exact-under"],
+  ["log.match.status", "status:(error OR warn)", {}, `sum (increase(${L(', otel_log_severity_range=~"^(ERROR|WARN)$"')}))`, "exact-under"],
+  ["log.match.status.approx", "status:critical", {}, `sum (increase(${L(', otel_log_severity_range="FATAL"')}))`, "exact-under"],
+  ["log.match.text", 'timeout -"card declined"', {}, `sum (increase(${L(', otel_log_body!~"(?i).*card declined.*", otel_log_body=~"(?i).*timeout.*"')}))`, "exact-under"],
+  ["log.match.var", "$Host -$User", {}, `sum (increase(${L(', host_name=~"^($Host)$", usr_name!~"^($User)$"')}))`, "exact-under"],
+  ["log.match.var.dropped", "service:a $scope", {}, `sum (increase(${L(', service_name="a"')}))`, "exact-under"],
+  ["log.group_by", "service:a", { group_by: [{ facet: "@usr.name" }, { facet: "status" }] }, `sum by (otel_log_severity_range, usr_name) (increase(${L(', service_name="a"')}))`, "exact-under"],
+  ["log.group_by.limit", "service:a", { group_by: [{ facet: "@usr.name", limit: 10, sort: { order: "asc" } }] }, `bottomk(10, sum by (usr_name) (increase(${L(', service_name="a"')})))`, "exact-under"],
+  ["log.group_by.multi-limit", "", { group_by: [{ facet: "host", limit: 5 }, { facet: "service", limit: 3 }] }, `sum by (host_name, service_name) (increase(${L()}))`, "exact-under"],
+  ["log.group_by.exclude-missing", "", { group_by: { fields: ["@policy_name"], limit: 10, sort: { order: "desc" }, should_exclude_missing: true } }, `topk(10, sum by (policy_name) (increase(${L(', policy_name!=""')})))`, "exact-under"],
+  ["log.cardinality", "service:a", { compute: { aggregation: "cardinality", metric: "@usr.id" }, group_by: [{ facet: "host" }] }, `count by (host_name) (sum by (host_name, usr_id) (increase(${L(', service_name="a"')})) > 0)`, "exact-under"],
+  ["log.indexes", "", { indexes: ["main", "security"] }, `sum (increase(${L()}))`, "exact-under"],
+  ["log.range.integer", "@http.status_code:>=500", {}, `sum (increase(${L(', http_status_code=~"^([5-9]\\\\d{2}|[1-9]\\\\d{3,})$"')}))`, "exact-under"],
+  ["log.or.inclusion-exclusion", "service:a OR host:b", {}, `sum (increase(${L(', service_name="a"')})) + sum (increase(${L(', host_name="b"')})) - sum (increase(${L(', host_name="b", service_name="a"')}))`, "exact-under"],
 ];
 
 describe("log queries: one exact PromQL string per rule", () => {
@@ -135,10 +135,10 @@ describe("formulas mixing log and metric queries", () => {
     if (!f.ok) throw new Error();
     const r = translateQuery(f.value, { ddKind: () => "count" }, env);
     expect(r.promql).toBe(
-      `100 * sum (increase(${L(', otel_log_severity_range="ERROR", service_name="api"')})) / sum (increase({otel_metric_name="trace.http.request.hits", service="api"}[$__rate_interval]))`,
+      `100 * sum (increase(${L(', otel_log_severity_range="ERROR", service_name="api"')})) / sum (increase({otel_metric_name="trace.http.request.hits", service="api"}[$__interval] anchored))`,
     );
-    expect(r.status).toBe("bounded");
-    expect(r.rules).toEqual(expect.arrayContaining(["log.count", "time.unmapped.counter"]));
+    expect(r.status).toBe("exact-under");
+    expect(r.rules).toEqual(expect.arrayContaining(["log.count", "time.unmapped.counter.anchored"]));
     expect(r.assumptions).toEqual(expect.arrayContaining(["A.log-count", "A.otel-counter"]));
   });
   it("a manual log query makes the formula manual", () => {
@@ -162,7 +162,7 @@ describe("scalar form (interval $__range): query_value, top list, table", () => 
     const r = sq("service:checkout status:error");
     expect(r.promql).toBe(`sum (increase(${S(', otel_log_severity_range="ERROR", service_name="checkout"')}))`);
     expect(r.rules).toContain("log.scalar.window");
-    expect(r.status).toBe("bounded");
+    expect(r.status).toBe("exact-under");
     expect(r.assumptions).toEqual(expect.arrayContaining(["A.log-count", "A.log-range"]));
   });
   it("compute.interval (a time-series setting) is ignored for a scalar", () => {
@@ -199,7 +199,7 @@ describe("scalar form (interval $__range): query_value, top list, table", () => 
     if (!f.ok) throw new Error();
     const r = translateQuery(f.value, {}, new Map([["a", logRef(a)], ["b", logRef(b)]]));
     expect(r.promql).toBe(`100 * sum (increase(${S(', otel_log_severity_range="ERROR", service_name="api"')})) / sum (increase(${S(', service_name="api"')}))`);
-    expect(r.status).toBe("bounded");
+    expect(r.status).toBe("exact-under");
   });
   it("fails closed when a scalar log count meets a per-interval value (metric or time-series log)", () => {
     const a = sq("service:api status:error");
@@ -218,7 +218,7 @@ describe("scalar form (interval $__range): query_value, top list, table", () => 
   it("the finding codes the scalar form raises resolve to catalog rows", () => {
     const codes = new Set(CATALOG.map((r) => r.findingCode ?? r.id));
     expect(codes.has("log.scalar.mixed")).toBe(true);
-    expect(CATALOG.find((r) => r.id === "log.scalar.window")).toMatchObject({ status: "bounded", state: "implemented" });
+    expect(CATALOG.find((r) => r.id === "log.scalar.window")).toMatchObject({ status: "exact-under", state: "implemented" });
   });
   it("every emitted scalar query parses", () => {
     for (const s of ["", "service:a", "@http.status_code:>=500", "service:a OR host:b"]) {

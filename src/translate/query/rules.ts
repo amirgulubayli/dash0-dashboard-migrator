@@ -13,6 +13,11 @@ export const ASSUMPTIONS = {
   "A.tag-default": "the Datadog tag maps to the OTel label of the same name with dots replaced by underscores (no tag-table entry)",
   "A.dd-per-unit":
     "Datadog's per_second/per_minute/per_hour on a gauge that holds a running total is its change per second/minute/hour between consecutive points, and the counter does not reset (Datadog docs; not yet checked against Datadog)",
+  "A.same-samples": "Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s)",
+  "A.no-reset":
+    "no counter reset inside the window (anchored increase adds the post-reset value; Datadog's treatment of a reset is unverified, maths.md T4)",
+  "A.regular-sampling":
+    "the sampling period is constant and divides the rollup width, so Datadog averaging its per-check points equals the time-weighted PromQL rate (maths.md T10a)",
   "A.no-gaps": "every rollup bucket has a sample, so Datadog's previous point is exactly one interval earlier",
   "A.kind-metadata": "the metric's kind is the one declared in its integration's metadata.csv (no curated mapping entry)",
   "A.otel-counter": "the OTel metric with this name is a cumulative counter (Datadog count/rate without a curated mapping entry)",
@@ -86,6 +91,41 @@ export const RULES = {
     assumptions: [],
     description: ".as_count().rollup(sum, s) -> increase(x[s]); .as_rate().rollup(avg, s) -> rate(x[s]) (maths.md T3b)",
   },
+  // Dashboard counter rules on Dash0's `anchored` modifier (probe:anchored = yes, maths.md T4, T4c, T10a): the window is the
+  // rollup width, the increase has no edge extrapolation, so these are exact under the listed assumptions. Monitors keep the
+  // extrapolated forms above (a check rule with `anchored` has not been probed).
+  "time.as_count.counter.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset"],
+    ".as_count() on a cumulative counter -> increase(x[w] anchored) (maths.md T4: the per-check deltas telescope)",
+  ),
+  "time.as_rate.counter.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    ".as_rate() on a cumulative counter -> rate(x[w] anchored) = increase(x[w] anchored) / w (maths.md T4, T10a)",
+  ),
+  "time.ddrate.plain.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    "Datadog RATE metric read from an OTel counter, plain query -> rate(x[w] anchored) (D-18, maths.md T10a)",
+  ),
+  "time.unmapped.counter.anchored": under(
+    ["A.kind-metadata", "A.otel-counter", "A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    "Datadog count/rate (metadata.csv) without a mapping entry: .as_count() -> increase(x[w] anchored), .as_rate() or a plain rate -> rate(x[w] anchored)",
+  ),
+  "time.unmapped.suffix-counter.anchored": under(
+    ["A.kind-suffix", "A.otel-counter", "A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    "no metadata.csv entry, name ends in .count/.total, queried with .as_count()/.as_rate(): a Datadog count, on anchored increase / rate",
+  ),
+  "time.count.default.anchored": under(
+    ["A.kind-metadata", "A.otel-counter", "A.dd-count-default", "A.same-samples", "A.align", "A.boundary", "A.no-reset"],
+    "Datadog COUNT metric (metadata.csv) queried without a modifier -> increase(x[w] anchored), the same as .as_count()",
+  ),
+  "time.count.counter.anchored": under(
+    ["A.dd-count-default", "A.same-samples", "A.align", "A.boundary", "A.no-reset"],
+    "curated mapping row: Datadog COUNT on an OTel cumulative counter, queried without a modifier -> increase(x[w] anchored) (maths.md T4c)",
+  ),
+  "time.rollup.counter.anchored": under(
+    ["A.same-samples", "A.align", "A.boundary", "A.no-reset", "A.regular-sampling"],
+    ".as_count().rollup(sum, s) -> increase(x[s] anchored); .as_rate().rollup(avg, s) -> rate(x[s] anchored) (maths.md T4, T10a)",
+  ),
   "time.fill.zero.single": exact(".fill(zero) on a single-series query -> q or vector(0) (the same as default_zero)"),
   "select.metric.approximate": bounded("the mapping table marks the OTel metric as approximate (see the entry's note)"),
   "select.labels": exact("mapping-table labels pick the series: redis.cpu.sys -> {otel_metric_name=\"redis.cpu.time\", state=\"sys\"}"),
