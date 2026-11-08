@@ -24,6 +24,7 @@ export const ASSUMPTIONS = {
   "A.same-key-and": "Datadog applies a literal tag filter and a template variable on the same key together (AND)",
   "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
+  "A.sumby-together": "the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs)",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
   // T12 (src/translate/logs, PR #13), text verbatim
   "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
@@ -33,7 +34,7 @@ export const ASSUMPTIONS = {
   "A.group-limit": "the number of groups stays within the widget's group limit, so Datadog shows every group too",
   "A.severity-map": "the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level)",
   "A.all-indexes": "every Datadog log index is queried (Dash0 has no indexes)",
-  "A.log-range": "the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (calculation last-number), so a scalar covers the same timeframe Datadog aggregates over",
+  "A.log-range": "the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (a stat uses calculation last-number; a TimeSeriesTable shows the last point), so a scalar covers the same timeframe Datadog aggregates over",
   // T17 additions
   "A.same-samples": "Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s)",
   "A.full-window": "every evaluated series has samples across the whole monitor window (Datadog require_full_window)",
@@ -51,6 +52,8 @@ export const ASSUMPTIONS = {
   "A.row-height": "one Dash0 grid row has the same height as one Datadog grid row (to confirm from the T0 golden export)",
   "A.var-values": "a label's values in Dash0 are the same set as the matching tag's values in Datadog",
   "A.table-single-query": "the table has one query, default sorting and no conditional formats",
+  "A.alt-view": "what the widget conveys is its value per group; the map or chart drawing is not part of that meaning",
+  "A.table-columns": "every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats",
   "A.top-uniform": "every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie",
   "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
   "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",
@@ -102,4 +105,5 @@ export const T4_ASSUMPTION_IDS = [
   "A.at-range",
   "A.monotonic",
   "A.query-threshold",
+  "A.sumby-together",
 ] as const satisfies readonly AssumptionId[];

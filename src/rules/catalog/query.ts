@@ -41,10 +41,15 @@ export const QUERY_RULES: RuleDef[] = [
   select("select.labels.clash", 40, "manual", "query filters on a label the mapping already fixes", "no output"),
   select("query.value-filter", 50, "manual", "distribution value filter (v: ...)", "no output: PromQL has no per-value filter"),
   select("metric.no_equivalent", 60, "manual", "mapping says the OTel receiver emits no equivalent", "no output; placeholder panel"),
-  select("metric.needs_transform", 62, "manual", "mapping entry with scale or sumBy (CONTRACT-002)", "no output until select.metric.transform ships"),
+  select("metric.needs_transform", 62, "manual", "mapping entry with scale <= 0, or sumBy labels the query filters or groups on, or sumBy under .rollup(min|max|count)", "no output: no exact rewrite (select.metric.transform covers the rest)"),
   select("metric.derived", 64, "manual", "mapping entry that is an expression over several OTel metrics", "no output until select.metric.derived ships"),
-  selectPlan("select.metric.transform", 66, "exact", "mapping entry with scale k and/or sumBy labels", "k * x, sum without(<sumBy>) (x): both exact rewrites", {
-    note: "Replaces metric.needs_transform. Each part is an exact identity; needs T4 support and a unit test per entry shape.",
+  select("select.metric.transform", 66, "exact", "mapping entry with scale k > 0 and/or sumBy labels L", "k * agg by (G) (sum without (L) (T(x))); k drops out under a count", {
+    note:
+      "T(k*y) = k*T(y) for every time aggregation T4 emits (count_over_time: unchanged), agg(k*y) = k*agg(y) for sum/avg/min/max with k > 0 (count: unchanged), and sum without (L) restores Datadog's series before its own aggregation. With sumBy, avg_over_time/rate/increase also apply select.metric.transform.sumby (A.sumby-together); min/max/count rollups fail closed (metric.needs_transform).",
+  }),
+  select("select.metric.transform.sumby", 67, "exact-under", "select.metric.transform with sumBy under avg_over_time, rate or increase", "sum without (L) (T(x)) inside the space aggregation", {
+    assumptions: ["A.sumby-together"],
+    note: "Applied together with select.metric.transform. sum_over_time is linear in any samples, so .rollup(sum) needs no assumption.",
   }),
   selectPlan("select.metric.derived", 68, "exact-under", "mapping entry with a derived expression over several OTel metrics", "the entry's PromQL expression, status from the entry's own claim", {
     assumptions: ["A.align"],
@@ -101,6 +106,7 @@ export const QUERY_RULES: RuleDef[] = [
   time("time.unmapped.counter", 92, "bounded", "Datadog count/rate (metadata.csv) without a mapping entry, with .as_count() / .as_rate() or plain", "increase(x[w]) / rate(x[w])", { assumptions: ["A.kind-metadata", "A.otel-counter"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
   time("time.unmapped.suffix-counter", 93, "bounded", "no metadata.csv entry, name ends in .count/.total, with .as_count()/.as_rate()", "treated as a Datadog count: increase / rate", { assumptions: ["A.kind-suffix", "A.otel-counter"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
   time("time.count.default", 94, "bounded", "Datadog COUNT metric (metadata.csv) without a modifier", "increase(x[w]), like .as_count()", { assumptions: ["A.kind-metadata", "A.otel-counter", "A.dd-count-default"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
+  time("time.count.counter", 96, "bounded", "Datadog COUNT metric on an OTel counter, from a curated mapping row, without a modifier", "increase(x[w]), like .as_count()", { assumptions: ["A.dd-count-default"], epsilon: EPS_RATE, evidence: ["unit", "proof:T4c"] }),
   timePlan("time.as_count.counter.anchored", 75, "exact-under", ".as_count() on a cumulative counter (or a Datadog RATE metric on an OTel counter)", "increase(x[w] anchored)", {
     assumptions: ["A.same-samples", "A.align", "A.boundary"],
     requires: ["probe:anchored"],
@@ -226,10 +232,13 @@ export const T4_TABLE_IDS = [
   "time.unmapped.counter",
   "time.unmapped.suffix-counter",
   "time.count.default",
+  "time.count.counter",
   "time.rollup.counter",
   "time.fill.zero.single",
   "select.metric.approximate",
   "select.labels",
+  "select.metric.transform",
+  "select.metric.transform.sumby",
   "time.ddrate.plain",
   "scope.all",
   "scope.tag.eq",

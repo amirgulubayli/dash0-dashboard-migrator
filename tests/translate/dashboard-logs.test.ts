@@ -36,6 +36,9 @@ const DASH = {
     widget(6, "timeseries", "Error rate over time", [{ response_format: "timeseries", queries: [logQ("a", "service:api status:error"), logQ("b", "service:api")], formulas: [{ formula: "100 * a / b" }] }], 4),
     widget(7, "toplist", "Top erroring services", [{ response_format: "scalar", queries: [{ ...logQ("q", "status:error", { group_by: [{ facet: "service", limit: 5, sort: { order: "desc" } }] }), aggregator: "sum" }], formulas: [{ formula: "q", limit: { count: 5, order: "desc" } }] }]),
     widget(8, "query_value", "Errors and commands", [{ response_format: "scalar", queries: [{ ...logQ("e", "status:error"), aggregator: "sum" }, { data_source: "metrics", name: "c", query: "sum:redis.net.commands{*}", aggregator: "sum" }], formulas: [{ formula: "e" }, { formula: "c" }] }]),
+    widget(9, "query_table", "Errors by service (table)", [{ response_format: "scalar", queries: [{ ...logQ("t", "status:error", { group_by: [{ facet: "service", limit: 20, sort: { order: "desc" } }] }), aggregator: "sum" }], formulas: [{ formula: "t" }] }]),
+    widget(10, "toplist", "Top services, logs and commands", [{ response_format: "scalar", queries: [{ ...logQ("e", "status:error", { group_by: [{ facet: "service" }] }), aggregator: "sum" }, { data_source: "metrics", name: "c", query: "sum:redis.net.commands{*} by {service}", aggregator: "sum" }], formulas: [{ formula: "e" }, { formula: "c" }] }]),
+    widget(11, "query_table", "Errors and total (two columns)", [{ response_format: "scalar", queries: [{ ...logQ("a", "status:error", { group_by: [{ facet: "service" }] }), aggregator: "sum" }, { ...logQ("b", "", { group_by: [{ facet: "service" }] }), aggregator: "sum" }], formulas: [{ formula: "a" }, { formula: "b" }] }]),
     { id: 5, layout: { x: 4, y: 2, width: 6, height: 4 }, definition: { type: "list_stream", title: "Error stream", requests: [{ response_format: "event_list", query: { data_source: "logs_stream", query_string: "status:error" } }] } },
   ],
 };
@@ -67,10 +70,41 @@ describe("log widgets through T5 with T4 + T12", () => {
     expect(e.panel.spec.plugin.spec.calculation).toBe("last-number");
   });
 
-  it("a log query in a toplist fails closed until the TimeSeriesTable display of [$__range] is probed", () => {
+  it("a log query in a toplist uses the window form in a TimeSeriesTable (probed: shows the end-of-range value)", () => {
     const e = p("Top erroring services");
+    expect(e.placeholder).toBe(false);
+    expect(e.status).toBe("bounded");
+    expect(e.promql).toHaveLength(1);
+    expect(e.promql[0]).toMatch(/^topk\(5, sum by \(service_name\) \(increase\(.*\[\$__range\]/);
+    expect(e.promql[0]).not.toContain("$__interval");
+    expect(e.rules).toContain("log.scalar.window");
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
+    // still an honest claim: every series is listed, nothing is ranked
+    expect(e.findings.some((f) => f.code === "widget.toplist.unranked")).toBe(true);
+  });
+
+  it("a single-query log table uses the window form too", () => {
+    const e = p("Errors by service (table)");
+    expect(e.placeholder).toBe(false);
+    expect(e.promql[0]).toContain("[$__range]");
+    expect(e.promql[0]).not.toContain("$__interval");
+    expect(e.rules).toContain("log.scalar.window");
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
+  });
+
+  it("a toplist mixing a window log count with a metric query fails closed (arith.scalar-log-mixed)", () => {
+    const e = p("Top services, logs and commands");
     expect(e).toMatchObject({ placeholder: true, status: "manual" });
-    expect(e.findings.some((f) => f.code === "query.datasource" && /toplist\/table/.test(f.message))).toBe(true);
+    expect(e.rules).toContain("arith.scalar-log-mixed");
+  });
+
+  it("a multi-column log table whose columns group by the same facet is one TimeSeriesTable (a probed join per group)", () => {
+    const e = p("Errors and total (two columns)");
+    expect(e.placeholder).toBe(false);
+    expect(e.panel.spec.plugin.kind).toBe("TimeSeriesTable");
+    expect(e.promql).toHaveLength(2);
+    expect(e.promql.every((x) => x.includes("[$__range]"))).toBe(true);
+    expect(e.rules).toEqual(expect.arrayContaining(["widget.query_table.columns", "log.scalar.window"]));
   });
 
   it("a stat panel mixing a window log count with a metric query fails closed (arith.scalar-log-mixed)", () => {

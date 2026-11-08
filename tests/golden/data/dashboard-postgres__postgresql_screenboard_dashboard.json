@@ -46,34 +46,18 @@
     "kind": "panel",
     "title": "Max connections in use",
     "widget_type": "query_value",
-    "status": "exact-under",
-    "promql": [
-      "max (avg_over_time({otel_metric_name=\"postgresql.percent_usage_connections\"}[$__interval])) * 100"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
-      "space.agg",
-      "arith.number",
-      "widget.query_value",
-      "panel.conditional-format",
+      "widget.unknown",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
-      "A.var-default",
-      "A.style"
-    ],
+    "assumptions": [],
     "findings": [
-      "exact-under metric.unmapped",
-      "exact-under panel.conditional-format",
-      "exact-under scope.var.free-form",
-      "exact-under widget.query_value"
+      "manual metric.derived"
     ]
   },
   {
@@ -81,13 +65,14 @@
     "kind": "panel",
     "title": "Rows fetched / returned",
     "widget_type": "query_value",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"postgresql.rows_fetched\"}[$__interval])) / (sum (avg_over_time({otel_metric_name=\"postgresql.rows_fetched\"}[$__interval])) + sum (avg_over_time({otel_metric_name=\"postgresql.rows_returned\"}[$__interval]))) * 100"
+      "sum (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__rate_interval])) / (sum (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__rate_interval])) + sum (rate({otel_metric_name=\"postgresql.tup_returned\"}[$__rate_interval]))) * 100"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "arith.same-groups",
       "arith.div",
@@ -99,14 +84,13 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.nonzero-denominator",
-      "A.var-default"
+      "A.var-default",
+      "A.align",
+      "A.boundary"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under widget.query_value"
     ]
@@ -116,12 +100,14 @@
     "kind": "panel",
     "title": "Dead rows",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"postgresql.dead_rows\"}[$__interval]))"
+      "sum (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"dead\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
       "time.rollup.default",
       "space.agg",
       "widget.timeseries",
@@ -133,11 +119,10 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form"
     ]
   },
@@ -146,14 +131,22 @@
     "kind": "panel",
     "title": "Resources by table",
     "widget_type": "query_table",
-    "status": "manual",
-    "promql": [],
+    "status": "bounded",
+    "promql": [
+      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.table.size\"}[$__interval]))",
+      "avg by (table) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))",
+      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"live\"}[$__interval]))",
+      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"dead\"}[$__interval]))"
+    ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
       "time.rollup.default",
       "space.agg",
       "label.default",
-      "widget.query_table.complex",
+      "select.metric.approximate",
+      "time.ddrate.plain",
+      "select.labels",
+      "widget.query_table.columns",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
@@ -162,14 +155,15 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
-      "A.var-default"
+      "A.var-default",
+      "A.table-columns"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
-      "exact-under tag.unmapped"
+      "exact-under tag.unmapped",
+      "exact-under widget.query_table.columns"
     ]
   },
   {
@@ -177,13 +171,14 @@
     "kind": "panel",
     "title": "Temp bytes",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"postgresql.temp_bytes\"}[$__interval]))"
+      "sum (rate({otel_metric_name=\"postgresql.temp.io\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -192,13 +187,10 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form"
     ]
   },
@@ -207,13 +199,14 @@
     "kind": "panel",
     "title": "Most frequently scanned indexes",
     "widget_type": "toplist",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (index) (avg_over_time({otel_metric_name=\"postgresql.index_scans\"}[$__interval]))"
+      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.toplist.unranked",
@@ -223,15 +216,12 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
       "exact-under widget.toplist.unranked"
@@ -242,13 +232,14 @@
     "kind": "panel",
     "title": "Least frequently scanned indexes",
     "widget_type": "toplist",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (index) (avg_over_time({otel_metric_name=\"postgresql.index_scans\"}[$__interval]))"
+      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.toplist.unranked",
@@ -258,15 +249,12 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
       "exact-under widget.toplist.unranked"
@@ -279,10 +267,10 @@
     "widget_type": "toplist",
     "status": "exact-under",
     "promql": [
-      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.total_size\"}[$__interval]))"
+      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.table.size\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
       "time.rollup.default",
       "space.agg",
       "label.default",
@@ -295,13 +283,11 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
     ],
     "findings": [
-      "exact-under metric.unmapped",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
       "exact-under widget.toplist.unranked"
@@ -312,12 +298,14 @@
     "kind": "panel",
     "title": "Tables with most live rows",
     "widget_type": "toplist",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.live_rows\"}[$__interval]))"
+      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"live\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
       "time.rollup.default",
       "space.agg",
       "label.default",
@@ -330,13 +318,12 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
       "exact-under widget.toplist.unranked"
@@ -347,12 +334,13 @@
     "kind": "panel",
     "title": "Locks by lock mode",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "topk(5, sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.locks\"}[$__interval])))"
+      "topk(5, sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.database.locks\"}[$__interval])))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.metric.approximate",
       "time.rollup.default",
       "space.agg",
       "label.default",
@@ -366,13 +354,12 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.top-stable",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped"
     ]
@@ -382,12 +369,13 @@
     "kind": "panel",
     "title": "Locks by lock mode",
     "widget_type": "toplist",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.locks\"}[$__interval]))"
+      "sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.database.locks\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.metric.approximate",
       "time.rollup.default",
       "space.agg",
       "label.default",
@@ -400,13 +388,12 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
       "exact-under widget.toplist.unranked"
@@ -450,13 +437,14 @@
     "kind": "panel",
     "title": "Inserted",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_inserted\"}[$__interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -466,14 +454,11 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped"
     ]
@@ -483,13 +468,14 @@
     "kind": "panel",
     "title": "Updated",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_updated\"}[$__interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -499,14 +485,11 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped"
     ]
@@ -516,30 +499,34 @@
     "kind": "panel",
     "title": "Actions",
     "widget_type": "query_table",
-    "status": "manual",
-    "promql": [],
+    "status": "bounded",
+    "promql": [
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__rate_interval]))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__rate_interval]))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__rate_interval]))"
+    ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
-      "widget.query_table.complex",
+      "widget.query_table.columns",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
-      "A.var-default"
+      "A.var-default",
+      "A.table-columns"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
-      "exact-under tag.unmapped"
+      "exact-under tag.unmapped",
+      "exact-under widget.query_table.columns"
     ]
   },
   {
@@ -547,13 +534,14 @@
     "kind": "panel",
     "title": "Deleted",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_deleted\"}[$__interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -563,14 +551,11 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped"
     ]
@@ -580,13 +565,15 @@
     "kind": "panel",
     "title": "Heap-only updates",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.rows_hot_updated\"}[$__interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.operations\", operation=\"hot_upd\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -596,14 +583,11 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped"
     ]
@@ -613,13 +597,14 @@
     "kind": "panel",
     "title": "Connections per database",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (db) (max_over_time({otel_metric_name=\"postgresql.connections\"}[$__interval]))",
-      "min by (db) (avg_over_time({otel_metric_name=\"postgresql.max_connections\"}[$__interval]))"
+      "avg by (db) (max_over_time({otel_metric_name=\"postgresql.backends\"}[$__interval]))",
+      "min by (db) (avg_over_time({otel_metric_name=\"postgresql.connection.max\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.metric.approximate",
       "time.rollup.explicit",
       "space.agg",
       "label.default",
@@ -633,12 +618,11 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped"
     ]
@@ -648,12 +632,13 @@
     "kind": "panel",
     "title": "Most connected databases",
     "widget_type": "toplist",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "max by (db) (avg_over_time({otel_metric_name=\"postgresql.connections\"}[$__interval]))"
+      "max by (db) (avg_over_time({otel_metric_name=\"postgresql.backends\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
+      "select.metric.mapped",
+      "select.metric.approximate",
       "time.rollup.default",
       "space.agg",
       "label.default",
@@ -666,13 +651,12 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
       "exact-under widget.toplist.unranked"
@@ -704,14 +688,15 @@
     "kind": "panel",
     "title": "Sequential scans vs index scans",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.index_scans\"}[$__interval]))",
-      "avg by (db) (avg_over_time({otel_metric_name=\"postgresql.seq_scans\"}[$__interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -721,14 +706,11 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped"
     ]
@@ -738,30 +720,33 @@
     "kind": "panel",
     "title": "Top table scans",
     "widget_type": "query_table",
-    "status": "manual",
-    "promql": [],
+    "status": "bounded",
+    "promql": [
+      "avg by (db) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval]))"
+    ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
-      "widget.query_table.complex",
+      "widget.query_table.columns",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
-      "A.var-default"
+      "A.var-default",
+      "A.table-columns"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
-      "exact-under tag.unmapped"
+      "exact-under tag.unmapped",
+      "exact-under widget.query_table.columns"
     ]
   },
   {
@@ -769,14 +754,15 @@
     "kind": "panel",
     "title": "Sequential scans vs. week before",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"postgresql.seq_scans\"}[$__interval]))",
-      "sum (avg_over_time({otel_metric_name=\"postgresql.seq_scans\"}[$__interval] offset 1w))"
+      "sum (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval]))",
+      "sum (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval] offset 1w))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "map.timeshift",
       "widget.timeseries",
@@ -786,13 +772,10 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form"
     ]
   },
@@ -801,13 +784,14 @@
     "kind": "panel",
     "title": "Top function calls",
     "widget_type": "toplist",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "avg by (function) (avg_over_time({otel_metric_name=\"postgresql.function.calls\"}[$__interval]))"
+      "avg by (function) (rate({otel_metric_name=\"postgresql.function.calls\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.ddrate.plain",
       "space.agg",
       "label.default",
       "widget.toplist.unranked",
@@ -817,15 +801,12 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
       "exact-under widget.toplist.unranked"
@@ -836,30 +817,18 @@
     "kind": "panel",
     "title": "Number of hosts with replication delay",
     "widget_type": "timeseries",
-    "status": "exact-under",
-    "promql": [
-      "count (sum by (host_name) (avg_over_time({otel_metric_name=\"postgresql.replication_delay_bytes\"}[$__interval])) != 0) or vector(0)"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
-      "space.agg",
-      "fn.count_nonzero",
-      "widget.timeseries",
+      "widget.unknown",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
-      "A.var-default"
-    ],
+    "assumptions": [],
     "findings": [
-      "exact-under metric.unmapped",
-      "exact-under scope.var.free-form"
+      "manual metric.no_equivalent"
     ]
   },
   {
@@ -867,31 +836,18 @@
     "kind": "panel",
     "title": "Max replication delay",
     "widget_type": "toplist",
-    "status": "exact-under",
-    "promql": [
-      "max by (host_name) (avg_over_time({otel_metric_name=\"postgresql.replication_delay\"}[$__interval]))"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
-      "space.agg",
-      "widget.toplist.unranked",
+      "widget.unknown",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
-      "A.var-default",
-      "A.top-unlimited"
-    ],
+    "assumptions": [],
     "findings": [
-      "exact-under metric.unmapped",
-      "exact-under scope.var.free-form",
-      "exact-under widget.toplist.unranked"
+      "manual metric.no_equivalent"
     ]
   },
   {
@@ -901,13 +857,14 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoints_timed\"}[$__rate_interval]))",
-      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoints_requested\"}[$__rate_interval]))",
-      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoints_requested\"}[$__rate_interval]))"
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"scheduled\"}[$__rate_interval]))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__rate_interval]))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.unmapped.counter",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
       "time.as_count.counter",
       "space.agg",
       "widget.timeseries",
@@ -917,12 +874,10 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.kind-metadata",
-      "A.otel-counter",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form"
     ]
   },

@@ -7,7 +7,7 @@ import { migrate } from "../../src/pipeline/migrate.js";
 import { writeReport } from "../../src/report/index.js";
 import { reportToEvents } from "../../src/report/events.js";
 import { narrate } from "../../src/report/narrate.js";
-import { startServer } from "../../src/serve/server.js";
+import { startServer } from "../serve/server.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const out = mkdtempSync(join(tmpdir(), "t8s-"));
@@ -16,10 +16,10 @@ writeReport(run.report, out);
 
 describe("events and narration", () => {
   const ev = reportToEvents(run.report);
-  it("one event per item, framed by run.start / run.done, in sequence", () => {
+  it("one event per panel and alert (group items are structure only), framed by run.start / run.done, in sequence", () => {
     expect(ev[0]!.type).toBe("run.start");
     expect(ev.at(-1)!.type).toBe("run.done");
-    expect(ev.filter((e) => e.type === "item.done")).toHaveLength(run.report.items.length);
+    expect(ev.filter((e) => e.type === "item.done")).toHaveLength(run.report.items.filter((i) => i.kind !== "group").length);
     expect(ev.map((e) => e.seq)).toEqual(ev.map((_, i) => i));
   });
   it("is deterministic", () => expect(JSON.stringify(reportToEvents(run.report))).toBe(JSON.stringify(ev)));
@@ -27,7 +27,9 @@ describe("events and narration", () => {
     const done = ev.at(-1)!;
     if (done.type !== "run.done") throw new Error();
     expect(done.topGaps.map((g) => g.code)).not.toContain("scope.var.free-form");
-    expect(done.topGaps[0]!.code).toBe("metric.unmapped");
+    // Every top gap is a reason on some bounded/manual/unsupported item.
+    const gapCodes = new Set(run.report.items.filter((i) => !["exact", "exact-under"].includes(i.status)).flatMap((i) => i.reason_codes));
+    for (const g of done.topGaps) expect(gapCodes.has(g.code), g.code).toBe(true);
   });
   it("narrates milestones and problems, stays quiet on routine exact panels", () => {
     const said = ev.map(narrate);

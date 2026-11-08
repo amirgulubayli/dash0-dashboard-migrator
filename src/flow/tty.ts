@@ -1,0 +1,127 @@
+// Terminal I/O for the guided flow.
+// - On a TTY: a small raw-mode line reader. We print the question ourselves and echo keystrokes ourselves, so nothing
+//   (like readline's default "> " prompt redraw) can paint over the question. Secrets echo nothing at all.
+// - Piped stdin: plain line reading; answers are echoed (never secrets) so a transcript reads right.
+import { createInterface } from "node:readline";
+import type { KeyIO } from "./keys.js";
+
+export type TerminalIO = KeyIO & { close: () => void };
+
+export function terminalIO(input: NodeJS.ReadStream = process.stdin, output: NodeJS.WriteStream = process.stdout): TerminalIO {
+  return input.isTTY === true && typeof input.setRawMode === "function" ? ttyIO(input, output) : pipedIO(input, output);
+}
+
+/** Apply one chunk of raw keystrokes to the current answer. Exported for tests. */
+export function applyKeys(
+  state: { buf: string },
+  chunk: string,
+  secret: boolean,
+): { echo: string; done: "enter" | "eof" | "interrupt" | null; rest: string } {
+  let echo = "";
+  for (let i = 0; i < chunk.length; i++) {
+    const ch = chunk[i]!;
+    if (ch === "\r" || ch === "\n") {
+      // A pasted "\r\n" counts as one Enter.
+      const next = chunk[i + 1] === "\n" && ch === "\r" ? i + 2 : i + 1;
+      return { echo, done: "enter", rest: chunk.slice(next) };
+    }
+    if (ch === "\u0003") return { echo, done: "interrupt", rest: "" };
+    if (ch === "\u0004") {
+      if (!state.buf) return { echo, done: "eof", rest: "" };
+      continue;
+    }
+    if (ch === "\u007f" || ch === "\b") {
+      if (state.buf) {
+        state.buf = [...state.buf].slice(0, -1).join("");
+        if (!secret) echo += "\b \b";
+      }
+      continue;
+    }
+    if (ch === "\u0015") {
+      // Ctrl+U: clear the line.
+      if (!secret) echo += "\b \b".repeat([...state.buf].length);
+      state.buf = "";
+      continue;
+    }
+    if (ch === "\u001b") {
+      // Escape sequence (arrows, bracketed-paste markers): skip it.
+      const m = /^\u001b(?:\[[0-9;?]*[ -/]*[@-~]|O.|.)?/.exec(chunk.slice(i));
+      i += (m?.[0].length ?? 1) - 1;
+      continue;
+    }
+    if (ch < " ") continue; // other control characters
+    state.buf += ch;
+    if (!secret) echo += ch;
+  }
+  return { echo, done: null, rest: "" };
+}
+
+function ttyIO(input: NodeJS.ReadStream, output: NodeJS.WriteStream): TerminalIO {
+  let pending = ""; // typed ahead of the next question
+  const ask = (prompt: string, secret: boolean) =>
+    new Promise<string | null>((resolve) => {
+      output.write(prompt);
+      const state = { buf: "" };
+      const finish = (v: string | null) => {
+        input.off("data", onData);
+        input.setRawMode(false);
+        input.pause();
+        output.write("\n");
+        resolve(v);
+      };
+      const onData = (data: Buffer | string) => {
+        const r = applyKeys(state, typeof data === "string" ? data : data.toString("utf8"), secret);
+        if (r.echo) output.write(r.echo);
+        if (r.done === "enter") {
+          pending = r.rest;
+          finish(state.buf);
+        } else if (r.done === "eof") finish(null);
+        else if (r.done === "interrupt") {
+          input.setRawMode(false);
+          output.write("\n");
+          process.exit(130);
+        }
+      };
+      input.setRawMode(true);
+      input.resume();
+      input.on("data", onData);
+      if (pending) {
+        const p = pending;
+        pending = "";
+        onData(p);
+      }
+    });
+  return {
+    ask: (p) => ask(p, false),
+    askSecret: (p) => ask(p.replace(/:\s*$/, " (hidden as you type): "), true),
+    print: (l) => output.write(l + "\n"),
+    close: () => {
+      if (input.isRaw) input.setRawMode(false);
+      input.pause();
+    },
+  };
+}
+
+function pipedIO(input: NodeJS.ReadStream, output: NodeJS.WriteStream): TerminalIO {
+  const rl = createInterface({ input, terminal: false });
+  const lines: string[] = [];
+  let waiting: ((l: string | null) => void) | null = null;
+  let closed = false;
+  rl.on("line", (l) => (waiting ? (waiting(l), (waiting = null)) : lines.push(l)));
+  rl.on("close", () => {
+    closed = true;
+    if (waiting) waiting(null);
+  });
+  const ask = (prompt: string, secret: boolean) =>
+    new Promise<string | null>((res) => {
+      output.write(prompt);
+      const done = (l: string | null) => {
+        output.write(l === null || secret ? "\n" : `${l}\n`);
+        res(l);
+      };
+      if (lines.length) done(lines.shift()!);
+      else if (closed) done(null);
+      else waiting = done;
+    });
+  return { ask: (p) => ask(p, false), askSecret: (p) => ask(p, true), print: (l) => output.write(l + "\n"), close: () => rl.close() };
+}

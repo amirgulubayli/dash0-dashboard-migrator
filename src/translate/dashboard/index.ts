@@ -20,30 +20,12 @@ export type { AttributeFilter, LogTableSpec, LogTableTranslation } from "./logta
 
 export const ROW_SCALE = 3;
 
-/** Scalar widgets whose log queries have no verified window form yet: Dash0's TimeSeriesTable display of a
- *  [$__range] query is unprobed. Stat panels use the window form (log.scalar.window + calculation last-number,
- *  probe:range-var). */
-const SCALAR_PENDING_KINDS = new Set<string>(["toplist", "table"]);
-
-/** A log query in a toplist/table widget: manual, with the reason, until the TimeSeriesTable display is probed. */
-const scalarLogPending: TranslateLog = (q, t) => ({
-  status: "manual",
-  promql: null,
-  rules: [],
-  assumptions: [],
-  findings: [
-    {
-      status: "manual",
-      code: "query.datasource",
-      message: "log query in a toplist/table widget: Datadog evaluates it over the whole timeframe; the per-interval form would show a per-bucket value, and how a TimeSeriesTable shows the window form ([$__range]) is not probed yet",
-      itemKind: "query",
-      itemId: t.where,
-      ...(q.search?.query !== undefined && { original: q.search.query }),
-    },
-  ],
-  node: null,
-  groups: null,
-});
+/**
+ * Widgets that show ONE value (or one value per group) for the whole timeframe: stat, toplist, single-query table.
+ * Their log queries use T12's window form ([$__range], rule log.scalar.window). Probed live: a StatChart with
+ * calculation last-number and a TimeSeriesTable both show the end-of-range value (probe:range-var).
+ */
+const WINDOW_FORM_KINDS = new Set<string>(["stat", "toplist", "table"]);
 const AUTO = { w: 12, h: 6 };
 
 export interface DashboardTranslation {
@@ -94,16 +76,10 @@ export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: 
   };
   const convert = (p: Panel, itemId: string): { key: string; layout: Layout | null } => {
     // Scalar widgets evaluate a log query over the whole timeframe in Datadog; T12's per-interval
-    // increase(...[$__interval]) would show a per-bucket value (Ali's review of #19). Stat panels get T12's
-    // window form ([$__range], log.scalar.window) and calculation last-number; toplist/table fail closed
-    // until the TimeSeriesTable display of a [$__range] query is probed.
-    const logFor: TranslateLog | undefined = !translateLog
-      ? undefined
-      : p.kind === "stat"
-        ? (lq, t) => translateLog(lq, { ...t, scalar: true })
-        : SCALAR_PENDING_KINDS.has(p.kind)
-          ? scalarLogPending
-          : translateLog;
+    // increase(...[$__interval]) would show a per-bucket value (Ali's review of #19). These widgets get T12's window
+    // form ([$__range], log.scalar.window); stat panels show it with calculation last-number, a TimeSeriesTable shows
+    // the last point by itself.
+    const logFor: TranslateLog | undefined = !translateLog ? undefined : WINDOW_FORM_KINDS.has(p.kind) ? (lq, t) => translateLog(lq, { ...t, scalar: true }) : translateLog;
     const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId, logFor);
     const logs = p.kind === "logs" && logAttributes ? translateLogStream(p, logAttributes, variables, itemId) : undefined;
     const r = toPersesPanel(p, itemId, q, logs);

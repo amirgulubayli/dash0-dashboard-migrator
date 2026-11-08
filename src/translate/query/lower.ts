@@ -384,7 +384,7 @@ class Lowerer {
       const why = this.ctx.availability?.(m.metric) ?? "unmapped";
       if (why === "no_equivalent") this.manual("metric.no_equivalent", `${m.metric}: the OTel receiver emits no equivalent metric`);
       if (why === "derived") this.manual("metric.derived", `${m.metric}: the equivalent is an expression over several OTel metrics (not translated yet)`);
-      if (why === "needs_transform") this.manual("metric.needs_transform", `${m.metric}: the mapping needs a scale or sumBy transform that T4 doesn't apply yet`);
+      if (why === "needs_transform") this.manual("metric.needs_transform", `${m.metric}: the mapping needs a scale or sumBy transform, but the context did not pass it to T4`);
     }
     // Datadog's declared kind (metadata.csv) for a metric without a curated entry.
     let hint = mapping ? undefined : this.ctx.ddKind?.(m.metric);
@@ -429,16 +429,33 @@ class Lowerer {
     if (clash) this.manual("select.labels.clash", `the query filters on '${clash.label}', which the mapping already fixes`);
     const matchers: PMatcher[] = [{ label: "otel_metric_name", op: "=", value: mapping.otel }, ...labelMatchers, ...scopeMatchers];
 
+    // select.metric.transform: Datadog value = scale × OTel value, and the OTel metric splits Datadog's series by the
+    // extra sumBy labels. Guards that need only the selector run here; the time-aggregation guard runs below.
+    const scale = mapping.scale;
+    const sumBy = [...new Set(mapping.sumBy ?? [])].sort();
+    const transform = scale !== undefined || sumBy.length > 0;
+    if (scale !== undefined && !(scale > 0 && Number.isFinite(scale)))
+      this.manual("metric.needs_transform", `${m.metric}: scale ${scale} is not positive; min/max would swap under it, so no exact rewrite is applied`);
+    if (sumBy.length) {
+      const by = new Set(m.groupBy.map((t) => this.ctx.tag?.(t) ?? t.replace(/[^A-Za-z0-9_]/g, "_")));
+      const hit = sumBy.find((l) => by.has(l) || matchers.some((x) => x.label === l));
+      if (hit !== undefined)
+        this.manual("metric.needs_transform", `${m.metric}: the query filters or groups on '${hit}', which the mapping sums away (Datadog has no such tag)`);
+    }
+
     // Effective kind. Datadog's own kind decides the time aggregation when the table gives it (T1 kindTransform):
     // a Datadog gauge stays a gauge even when the OTel receiver emits a counter; a Datadog RATE on an OTel counter
     // means a plain query already shows per-second values, so it needs rate() (D-18).
     let kind = mapping.kind;
     let ddRate = false;
     const unmappedCounter = !mapped && hint !== undefined && hint !== "gauge";
+    // A curated row saying Datadog COUNT on an OTel counter (kinds checked against the sources by the mapping logic
+    // gates): the per-interval deltas telescope to increase() over the bucket (maths.md T4c), like time.count.default.
+    const curatedCount = mapped && mapping.ddKind === "count" && kind === "counter";
     if (mapping.ddKind !== undefined) {
       if (mapping.ddKind === "gauge" && kind !== "histogram") kind = "gauge";
       else if (mapping.ddKind === "rate" && kind === "counter") ddRate = true;
-      else if (!(unmappedCounter && mapping.ddKind === "count"))
+      else if (!(unmappedCounter && mapping.ddKind === "count") && !curatedCount)
         this.manual("time.kind", `Datadog ${mapping.ddKind} stored as an OTel ${kind}: no tested rule yet`);
     }
     if (unmappedCounter) this.use("time.unmapped.counter");
@@ -490,10 +507,10 @@ class Lowerer {
       this.use("time.ddrate.plain");
       counterMode = "rate";
     }
-    if (unmappedCounter && hint === "count" && !counterMode) {
+    if (((unmappedCounter && hint === "count") || curatedCount) && !counterMode) {
       if (explicitRollup && fn !== "sum") this.manual("time.rollup.counter", `.rollup(${fn}) on a COUNT metric has no rule`);
       if (explicitRollup) this.use("time.rollup.counter");
-      this.use("time.count.default");
+      this.use(curatedCount ? "time.count.counter" : "time.count.default");
       counterMode = "increase";
     }
     if ((kind === "counter" && !counterMode) || kind === "histogram" || (kind === "delta" && fn !== "sum"))
@@ -519,6 +536,15 @@ class Lowerer {
       this.use(this.monitor ? "time.rollup.monitor-bucket" : explicitRollup ? "time.rollup.explicit" : "time.rollup.default");
       inner = { k: "call", fn: `${fn}_over_time`, args: [sel] };
     }
+    // sumBy: Datadog rolls up the SUM over the split series. sum_over_time, avg_over_time, rate and increase are linear
+    // in the samples, so sum_L f(x_L) = f(sum_L x_L) (sum_over_time always; the others when the split series share
+    // sample timestamps, A.sumby-together). min/max/count_over_time are not linear: fail closed.
+    if (sumBy.length && !counterMode && (fn === "min" || fn === "max" || fn === "count"))
+      this.manual("metric.needs_transform", `${m.metric}: .rollup(${fn}) over a series the mapping sums by ${sumBy.join(", ")}: ${fn}_over_time does not commute with the sum`);
+    if (transform) {
+      this.use("select.metric.transform");
+      if (sumBy.length && (counterMode || fn !== "sum")) this.use("select.metric.transform.sumby");
+    }
 
     // Space aggregation.
     let agg = m.spaceAgg;
@@ -528,7 +554,24 @@ class Lowerer {
     } else if (!SPACE_AGGS.has(agg)) this.manual("space.agg", `space aggregator ${agg}: needs a histogram mapping`);
     else this.use("space.agg");
     const by = [...new Set(m.groupBy.map((t) => this.label(t)))].sort();
-    const node: PNode = { k: "agg", op: agg as "avg", by, expr: inner };
+    // Why select.metric.transform is exact (k = scale > 0, L = sumBy):
+    //   per series  Datadog's series is d = k * sum_L x_L. Every time aggregation T4 emits is homogeneous of degree 1
+    //               for k > 0: f(k*y) = k*f(y) for avg/sum/min/max_over_time, rate and increase (rate's reset check
+    //               compares neighbours and its extrapolation clamp uses value ratios: both unchanged by k > 0);
+    //               count_over_time is unchanged (degree 0). Linearity in L is the guard above.
+    //   space       sum without (L) leaves exactly Datadog's series (the same labels minus L), so the outer
+    //               avg/sum/min/max/count by (G) runs over Datadog's population. sum/avg/min/max are homogeneous for
+    //               k > 0 (min/max keep their order; k < 0 would swap them, so it fails closed); count is unchanged.
+    //   so          agg_G(T(k * sum_L x)) = k * agg_G(sum without (L) (T(x))) unless T or agg is a count, where the
+    //               scale drops out. k is applied once, outermost on the metric query.
+    const spaceIn: PNode = sumBy.length ? { k: "agg", op: "sum", by: sumBy, without: true, expr: inner } : inner;
+    const scaled = scale !== undefined && agg !== "count" && (counterMode !== null || fn !== "count");
+    const withScale = (n: PNode): PNode => (scaled ? { k: "binary", op: "*", lhs: { k: "num", value: scale! }, rhs: n } : n);
+    const node: PNode = withScale({ k: "agg", op: agg as "avg", by, expr: spaceIn });
+    const rateOf = (range: Duration): PNode => {
+      const r: PNode = { k: "call", fn: "rate", args: [{ k: "selector", matchers, range }] };
+      return withScale({ k: "agg", op: agg as "avg", by, expr: sumBy.length ? { k: "agg", op: "sum", by: sumBy, without: true, expr: r } : r });
+    };
     // For per_second() and friends: the derivative of a sum/avg of running totals is the sum/avg of their rates.
     const runningTotal = mapping.ddKind === "gauge" && mapping.kind === "counter" && !counterMode && !explicitRollup;
     if (fillZero) {
@@ -542,13 +585,11 @@ class Lowerer {
     }
     if (kind === "gauge" && !counterMode && !explicitRollup && !runningTotal && (agg === "sum" || agg === "avg")) {
       const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
-      const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
-      return { node, groups: by, rateForm, rateFormGauge: true };
+      return { node, groups: by, rateForm: rateOf(rateRange), rateFormGauge: true };
     }
     if ((runningTotal || (kind === "counter" && counterMode !== null && !explicitRollup)) && (agg === "sum" || agg === "avg")) {
       const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
-      const rateForm: PNode = { k: "agg", op: agg, by, expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range: rateRange }] } };
-      return { node, groups: by, rateForm };
+      return { node, groups: by, rateForm: rateOf(rateRange) };
     }
     return { node, groups: by };
   }
@@ -677,8 +718,12 @@ class Lowerer {
 /** True if every space aggregation is sum/avg and the arithmetic is linear (± of terms, scaling by constants). */
 function linearInSeries(n: PNode): boolean {
   switch (n.k) {
-    case "agg":
-      return (n.op === "sum" || n.op === "avg") && n.expr.k === "call" && /_over_time$|^rate$|^increase$/.test(n.expr.fn);
+    case "agg": {
+      if (n.without || (n.op !== "sum" && n.op !== "avg")) return false;
+      // select.metric.transform's sum without (sumBy) (...) is linear too.
+      const e = n.expr.k === "agg" && n.expr.op === "sum" && n.expr.without ? n.expr.expr : n.expr;
+      return e.k === "call" && /_over_time$|^rate$|^increase$/.test(e.fn);
+    }
     case "neg":
       return linearInSeries(n.expr);
     case "binary":
