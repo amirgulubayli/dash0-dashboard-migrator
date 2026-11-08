@@ -30,6 +30,8 @@ export interface ImportResult {
   readBack: ReadBack;
   errors: string[];
   traceId?: string;
+  /** Check rules: the enabled state that was (or would be) sent. */
+  enabled?: boolean;
 }
 
 export interface Manifest {
@@ -61,14 +63,16 @@ export async function importAll(items: { dashboards: DashboardDefinition[]; rule
   for (const raw of items.rules) {
     const id = raw.id;
     if (!id) throw new Error(`check rule '${raw.name}' has no id; re-runs would duplicate it`);
-    const r: PrometheusAlertRule = { ...raw, enabled: raw.enabled ?? opts.enableRules ?? false };
-    results.push(
-      await one("check-rule", id, r.name, r, preflightCheckRule(r), opts, client, async (c) => {
-        await c.importCheckRule(r);
-        const back = await c.getCheckRule(id);
-        return back ? compareCheckRule(r, back) : { state: "missing" };
-      }),
-    );
+    const preflight = preflightCheckRule(raw);
+    // Only look up the current state for a rule that will actually be sent.
+    const enabled = await ruleEnabled(raw, opts, preflight.length ? null : client);
+    const r: PrometheusAlertRule = { ...raw, enabled };
+    const res = await one("check-rule", id, r.name, r, preflight, opts, client, async (c) => {
+      await c.importCheckRule(r);
+      const back = await c.getCheckRule(id);
+      return back ? compareCheckRule(r, back) : { state: "missing" };
+    });
+    results.push({ ...res, enabled });
   }
 
   results.sort((a, b) => (a.kind + a.id < b.kind + b.id ? -1 : 1));
@@ -89,6 +93,25 @@ export async function importAll(items: { dashboards: DashboardDefinition[]; rule
   mkdirSync(opts.outDir, { recursive: true });
   writeFileSync(join(opts.outDir, "import-manifest.json"), canonicalJson(manifest) + "\n");
   return manifest;
+}
+
+/**
+ * The enabled state to send for a check rule (D-30: no surprise paging, and no surprise silencing either):
+ *   - on when asked (opts.enableRules, or the payload itself says enabled: true);
+ *   - otherwise, a rule that already exists in Dash0 keeps its current on/off state, so a re-run never switches off
+ *     a rule someone turned on (or on one they turned off);
+ *   - a new rule starts disabled.
+ * T6 payloads carry enabled: false, so the payload's false does not override an explicit enableRules.
+ */
+async function ruleEnabled(raw: PrometheusAlertRule, opts: TargetOptions, client: Dash0Client | null): Promise<boolean> {
+  if (opts.enableRules === true || raw.enabled === true) return true;
+  if (!client || !raw.id) return false;
+  try {
+    const existing = await client.getCheckRule(raw.id);
+    return existing?.enabled === true;
+  } catch {
+    return false; // can't read it: be safe; the import itself will report the problem
+  }
 }
 
 async function one(

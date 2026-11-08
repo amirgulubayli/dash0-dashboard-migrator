@@ -884,6 +884,379 @@
      "attributes": {}
     }
    }
+  },
+  "system": {
+   "source": "opentelemetry-collector-contrib v0.164.0 receiver/hostmetricsreceiver/internal/scraper/{cpu,load,memory,network,disk,filesystem}scraper/metadata.yaml",
+   "metrics": {
+    "system.cpu.frequency": {
+     "kind": "gauge",
+     "unit": "Hz",
+     "enabledByDefault": false,
+     "attributes": {
+      "cpu": null
+     }
+    },
+    "system.cpu.load_average.15m": {
+     "kind": "gauge",
+     "unit": "{thread}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "system.cpu.load_average.1m": {
+     "kind": "gauge",
+     "unit": "{thread}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "system.cpu.load_average.5m": {
+     "kind": "gauge",
+     "unit": "{thread}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "system.cpu.logical.count": {
+     "kind": "updowncounter",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "system.cpu.physical.count": {
+     "kind": "updowncounter",
+     "unit": "{cpu}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.cpu.time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": true,
+     "attributes": {
+      "cpu": null,
+      "state": [
+       "idle",
+       "interrupt",
+       "nice",
+       "softirq",
+       "steal",
+       "system",
+       "user",
+       "wait"
+      ]
+     }
+    },
+    "system.cpu.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {
+      "cpu": null,
+      "state": [
+       "idle",
+       "interrupt",
+       "nice",
+       "softirq",
+       "steal",
+       "system",
+       "user",
+       "wait"
+      ]
+     }
+    },
+    "system.disk.io": {
+     "kind": "counter",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "read",
+       "write"
+      ]
+     }
+    },
+    "system.disk.io_time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null
+     }
+    },
+    "system.disk.merged": {
+     "kind": "counter",
+     "unit": "{operations}",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "read",
+       "write"
+      ]
+     }
+    },
+    "system.disk.operation_time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "read",
+       "write"
+      ]
+     }
+    },
+    "system.disk.operations": {
+     "kind": "counter",
+     "unit": "{operations}",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "read",
+       "write"
+      ]
+     }
+    },
+    "system.disk.pending_operations": {
+     "kind": "updowncounter",
+     "unit": "{operations}",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null
+     }
+    },
+    "system.disk.weighted_io_time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null
+     }
+    },
+    "system.filesystem.inodes.usage": {
+     "kind": "updowncounter",
+     "unit": "{inodes}",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "mode": null,
+      "mountpoint": null,
+      "type": null,
+      "state": [
+       "free",
+       "reserved",
+       "used"
+      ]
+     }
+    },
+    "system.filesystem.usage": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "mode": null,
+      "mountpoint": null,
+      "type": null,
+      "state": [
+       "free",
+       "reserved",
+       "used"
+      ]
+     }
+    },
+    "system.filesystem.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {
+      "device": null,
+      "mode": null,
+      "mountpoint": null,
+      "type": null
+     }
+    },
+    "system.linux.memory.available": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.linux.memory.dirty": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.limit": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.linux.hugepages.limit": {
+     "kind": "updowncounter",
+     "unit": "{page}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.linux.hugepages.page_size": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.linux.hugepages.reserved": {
+     "kind": "updowncounter",
+     "unit": "{page}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.linux.hugepages.surplus": {
+     "kind": "updowncounter",
+     "unit": "{page}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.linux.hugepages.usage": {
+     "kind": "updowncounter",
+     "unit": "{page}",
+     "enabledByDefault": false,
+     "attributes": {
+      "system.memory.linux.hugepages.state": [
+       "free",
+       "used"
+      ]
+     }
+    },
+    "system.memory.linux.hugepages.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {
+      "system.memory.linux.hugepages.state": [
+       "free",
+       "used"
+      ]
+     }
+    },
+    "system.memory.linux.shared": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.page_size": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.memory.usage": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {
+      "state": [
+       "buffered",
+       "cached",
+       "inactive",
+       "free",
+       "slab_reclaimable",
+       "slab_unreclaimable",
+       "used"
+      ]
+     }
+    },
+    "system.memory.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {
+      "state": [
+       "buffered",
+       "cached",
+       "inactive",
+       "free",
+       "slab_reclaimable",
+       "slab_unreclaimable",
+       "used"
+      ]
+     }
+    },
+    "system.network.connections": {
+     "kind": "updowncounter",
+     "unit": "{connections}",
+     "enabledByDefault": true,
+     "attributes": {
+      "protocol": [
+       "tcp"
+      ],
+      "state": null
+     }
+    },
+    "system.network.conntrack.count": {
+     "kind": "updowncounter",
+     "unit": "{entries}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.network.conntrack.max": {
+     "kind": "updowncounter",
+     "unit": "{entries}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "system.network.dropped": {
+     "kind": "counter",
+     "unit": "{packets}",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    },
+    "system.network.errors": {
+     "kind": "counter",
+     "unit": "{errors}",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    },
+    "system.network.io": {
+     "kind": "counter",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    },
+    "system.network.packets": {
+     "kind": "counter",
+     "unit": "{packets}",
+     "enabledByDefault": true,
+     "attributes": {
+      "device": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    }
+   }
   }
  }
 }

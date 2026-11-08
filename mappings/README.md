@@ -49,4 +49,24 @@ receivers:
 
 **NGINX** (`nginxreceiver`): needs `stub_status` exposed (for example `location /status { stub_status; }`) and `endpoint: http://<host>/status`. The mapped metrics (`nginx.connections_current`, `nginx.requests`) are enabled by default.
 
-**Host metrics** (`system.*`): not mapped. Those panels stay `metric.unmapped`.
+**Host metrics** (`system.*`, `hostmetricsreceiver`, `datadog/system.yaml`; Datadog side from the datadog-agent 7.60.0 core checks). Scrapers needed: `cpu`, `load`, `memory`, `disk`, `network`. These mapped metrics are **disabled by default** and must be enabled:
+
+```yaml
+receivers:
+  hostmetrics:
+    collection_interval: 10s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization: { enabled: true }   # system.cpu.idle/iowait/stolen (+ derived user/system/interrupt)
+      load: {}
+      memory:
+        metrics:
+          system.memory.limit: { enabled: true }            # system.mem.total
+          system.linux.memory.available: { enabled: true }  # system.mem.usable (Linux only)
+          system.memory.linux.shared: { enabled: true }     # system.mem.shared
+      disk: {}
+      network: {}
+```
+- `system.cpu.utilization` is averaged over CPUs by default (`attributes: [state]`, `aggregation_strategy: avg`), which is what Datadog's `system.cpu.*` percent means. Don't opt in the `cpu` attribute, or the series must be averaged again.
+- Rows with `scale` (CPU percent = fraction x 100, memory MiB = bytes / 1048576) stay `metric.needs_transform` (manual) until `select.metric.transform` ships. Rows with `derived` (`system.cpu.user`/`system`/`interrupt`, `system.io.util`, `system.mem.used`, ...) stay manual until derived expressions are translated.

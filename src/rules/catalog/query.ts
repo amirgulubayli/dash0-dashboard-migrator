@@ -166,10 +166,19 @@ export const QUERY_RULES: RuleDef[] = [
     requires: ["probe:at-modifier", "probe:range-var"],
     note: "Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105).",
   }),
-  fnPlan("fn.histogram.quantile", 150, "bounded", "pXX:metric on a distribution", "histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w])))", {
-    epsilon: "width of the histogram bucket containing the quantile, plus DDSketch's 1% relative error on the Datadog side",
-    note: "Depends on how the metric is ingested (explicit buckets vs exponential histogram).",
+  fn("fn.histogram.quantile", 150, "bounded", "pXX:metric{f} by {g} (p50, p95, p99.9, ...) on a metric the mapping (otelKind histogram) or metadata.csv (distribution) marks as a distribution", "histogram_quantile(0.XX, sum by (le, <g>) (rate({otel_metric_name=\"<otel>\", <f>}[w]))); w = $__rate_interval on dashboards, 1m inside a monitor's subquery", {
+    assumptions: ["A.histogram-buckets", "A.histogram-samples", "A.finite-quantile"],
+    epsilon:
+      "w_b + g + 1%·x (maths.md §12, T11b): the width of the bucket holding the quantile + the gap between the samples Datadog's and Prometheus's rank rules pick (0 when they agree, T11c) + DDSketch's 1% of the value; unbounded if the quantile is in the +Inf bucket (T11d, excluded by A.finite-quantile)",
+    evidence: ["unit", "proof:T11", "property:T11"],
+    source: "docs/research/maths.md §12 (Theorem T11); tests/semantics/histogram-quantile.test.ts; T4 lower.ts percentile()",
+    note:
+      "Property test: tests/semantics/histogram-quantile.test.ts (T11a-d). Bucket form: Dash0's documented dashboard example queries histogram_quantile on {otel_metric_name=...} with no _bucket suffix (native histogram); `sum by (le, g)` also works if Dash0 exposes classic le-labelled buckets under the same name. Not yet probed live on a collector-emitted histogram (A.histogram-buckets). If Dash0 ingests exponential histograms, the bucket width w_b becomes relative (maths.md §12 remark). scale k > 0 multiplies the quantile; sumBy labels are summed away by sum by (le, g).",
   }),
+  fn("fn.histogram.kind-unknown", 151, "manual", "pXX: on a metric with no mapping entry and no metadata.csv kind", "no output: nothing says the metric has buckets"),
+  fn("fn.histogram.kind", 152, "manual", "pXX: on a metric the mapping marks as an OTel gauge/counter, or as a Datadog gauge/count/rate", "no output: a percentile needs a histogram"),
+  fn("fn.histogram.modifier", 153, "manual", "pXX: query with a postfix modifier (.rollup(), .fill(), .as_count() ...)", "no output: no tested rule for a modifier on a percentile"),
+  fn("fn.histogram.le", 154, "manual", "pXX: query that groups by a tag mapped to the label `le`", "no output: `le` is histogram_quantile's bucket label"),
   fn("fn.per_unit.kind", 160, "manual", "per_second / per_minute / per_hour / derivative on a metric that is neither a counter nor a growing gauge", "no output; deriv() is a least-squares slope, not Datadog's point difference"),
   // T4's generic fallback (`fn.<name>`) for Datadog functions with no rule; one row each so the report can explain them.
   fn("fn.cumsum", 180, "manual", "cumsum(q)", "no output: a running total over the visible window has no fixed PromQL window"),
@@ -296,6 +305,7 @@ export const T4_TABLE_IDS = [
   "fn.max_min.scalar",
   "fn.max_min.series",
   "map.timeshift",
+  "fn.histogram.quantile",
   "arith.number",
   "arith.same-groups",
   "arith.div",

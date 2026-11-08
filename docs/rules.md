@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 70 | 55 | 15 | 55 | 195 |
-| planned | 16 | 28 | 3 | 11 | 58 |
+| implemented | 70 | 55 | 16 | 59 | 200 |
+| planned | 16 | 28 | 2 | 11 | 57 |
 
 ## Pipeline order
 
@@ -22,7 +22,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
 | 7 | `time` Time aggregation | postfix or rollup call | no | 34 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
-| 9 | `function` Functions | function call | yes | 41 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
+| 9 | `function` Functions | function call | yes | 45 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 9 | Formulas over named queries, constants, division. |
 | 11 | `monitor` Monitor query | monitor query part (window, time aggregation, comparator) | yes | 12 | The monitor's window, time aggregation and comparator around the translated inner query. |
 | 12 | `alert` Check-rule assembly | monitor field or option | yes | 19 | Thresholds, ids, labels and every monitor option. Each option is a rule; none is dropped. |
@@ -211,7 +211,11 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 135 | `fn.max_min.series` | max(a, b) / min(a, b) of two queries with the same group-by | a >= b or b / a <= b or b (pointwise) | exact-under(A.both-present) | unit | — | T4 | implemented |
 | 140 | `fn.top.window` | top(q, N, 'mean'\|'max'\|'min'\|'sum', 'desc'\|'asc') | x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc) | exact-under(A.top-uniform) | — | probe:at-modifier, probe:range-var | T4 | planned |
 | 145 | `fn.top` | top(q, N, method, order) / topN / bottomN | topk(N, q) / bottomk(N, q) | exact-under(A.top-stable) | unit | — | T4 | implemented |
-| 150 | `fn.histogram.quantile` | pXX:metric on a distribution | histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w]))) | bounded(ε) | — | — | T4 | planned |
+| 150 | `fn.histogram.quantile` | pXX:metric{f} by {g} (p50, p95, p99.9, ...) on a metric the mapping (otelKind histogram) or metadata.csv (distribution) marks as a distribution | histogram_quantile(0.XX, sum by (le, <g>) (rate({otel_metric_name="<otel>", <f>}[w]))); w = $__rate_interval on dashboards, 1m inside a monitor's subquery | bounded(ε) | unit, proof:T11, property:T11 | — | T4 | implemented |
+| 151 | `fn.histogram.kind-unknown` | pXX: on a metric with no mapping entry and no metadata.csv kind | no output: nothing says the metric has buckets | manual | unit | — | T4 | implemented |
+| 152 | `fn.histogram.kind` | pXX: on a metric the mapping marks as an OTel gauge/counter, or as a Datadog gauge/count/rate | no output: a percentile needs a histogram | manual | unit | — | T4 | implemented |
+| 153 | `fn.histogram.modifier` | pXX: query with a postfix modifier (.rollup(), .fill(), .as_count() ...) | no output: no tested rule for a modifier on a percentile | manual | unit | — | T4 | implemented |
+| 154 | `fn.histogram.le` | pXX: query that groups by a tag mapped to the label `le` | no output: `le` is histogram_quantile's bucket label | manual | unit | — | T4 | implemented |
 | 160 | `fn.per_unit.kind` | per_second / per_minute / per_hour / derivative on a metric that is neither a counter nor a growing gauge | no output; deriv() is a least-squares slope, not Datadog's point difference | manual | unit | — | T4 | implemented |
 | 180 | `fn.cumsum` | cumsum(q) | no output: a running total over the visible window has no fixed PromQL window | manual | unit | — | T4 | implemented |
 | 181 | `fn.integral` | integral(q) | no output: accumulates over the visible window | manual | unit | — | T4 | implemented |
@@ -232,7 +236,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 - `fn.derivative.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `fn.top.window`: Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105).
 - `fn.top`: fn.top.window (planned, priority 140) drops A.top-stable by ranking once over the window.
-- `fn.histogram.quantile`: ε: width of the histogram bucket containing the quantile, plus DDSketch's 1% relative error on the Datadog side. Depends on how the metric is ingested (explicit buckets vs exponential histogram).
+- `fn.histogram.quantile`: ε: w_b + g + 1%·x (maths.md §12, T11b): the width of the bucket holding the quantile + the gap between the samples Datadog's and Prometheus's rank rules pick (0 when they agree, T11c) + DDSketch's 1% of the value; unbounded if the quantile is in the +Inf bucket (T11d, excluded by A.finite-quantile). Property test: tests/semantics/histogram-quantile.test.ts (T11a-d). Bucket form: Dash0's documented dashboard example queries histogram_quantile on {otel_metric_name=...} with no _bucket suffix (native histogram); `sum by (le, g)` also works if Dash0 exposes classic le-labelled buckets under the same name. Not yet probed live on a collector-emitted histogram (A.histogram-buckets). If Dash0 ingests exponential histograms, the bucket width w_b becomes relative (maths.md §12 remark). scale k > 0 multiplies the quantile; sumBy labels are summed away by sum by (le, g).
 
 ## Arithmetic and formulas (`arith`)
 
@@ -480,6 +484,9 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.at-range` | the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live) | 1 |
 | `A.monotonic` | the gauge only increases between resets (a running total), so its change per second is rate() | 1 |
 | `A.sumby-together` | the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs) | 1 |
+| `A.histogram-buckets` | Dash0 exposes the OTel histogram under {otel_metric_name="<otel>"} so that histogram_quantile over sum by (le, ...) (rate(...)) reads its buckets: Dash0's own dashboard-source example queries histogram_quantile(q, sum by (service_name) (rate({otel_metric_name="dash0.spans.duration"}[w]))) with no _bucket suffix (native histogram); not yet checked live on a collector-emitted explicit-bucket histogram | 1 |
+| `A.histogram-samples` | the Datadog distribution and the OTel histogram record the same samples in each window (maths.md §12, A.same-samples for distributions) | 1 |
+| `A.finite-quantile` | the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d) | 1 |
 | `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
 | `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 6 |
 | `A.log-source` | logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent | 1 |
@@ -553,7 +560,6 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `fn.max_min.series` (exact-under(A.both-present), implemented, T4)
 - `fn.top.window` (exact-under(A.top-uniform), planned, T4)
 - `fn.top` (exact-under(A.top-stable), implemented, T4)
-- `fn.histogram.quantile` (bounded(ε), planned, T4)
 - `arith.group-subset` (exact-under(A.nonzero-denominator), planned, T4)
 - `monitor.threshold.mismatch` (exact-under(A.query-threshold), implemented, T4)
 - `alert.defaults` (exact-under(A.eval-1m), implemented, T6)

@@ -2,8 +2,8 @@
 // dd2dash0 CLI (T8; HOT: post a CONTRACT before changing flags).
 // `dd2dash0` with no arguments runs the one guided flow (src/flow/run.ts). plan / review / apply / migrate stay as
 // advanced commands for scripting.
-import { writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { configFromEnv } from "./targets/dash0/index.js";
 import { migrate, overallOk } from "./pipeline/migrate.js";
 import { summaryLines, writeReport } from "./report/index.js";
@@ -16,6 +16,17 @@ import { guided, terminalIO } from "./flow/run.js";
 import { createInterface } from "node:readline/promises";
 
 export const VERSION = "0.3.0";
+
+/**
+ * The mapping tables: $DD2DASH0_MAPPINGS, else a mappings/ folder next to the executable (the release download),
+ * else the package's own mappings/ (running from source).
+ */
+export function defaultMappingsDir(): string {
+  if (process.env.DD2DASH0_MAPPINGS) return resolve(process.env.DD2DASH0_MAPPINGS);
+  const besideExe = join(dirname(process.execPath), "mappings");
+  if (existsSync(join(besideExe, "metrics.yaml")) || existsSync(join(besideExe, "tags.yaml"))) return besideExe;
+  return join(import.meta.dirname, "..", "mappings");
+}
 
 const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards and monitors to Dash0
 
@@ -99,7 +110,7 @@ async function runGuided(args: string[]): Promise<number> {
       ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
       dryRun: r.b.has("--dry-run"),
       version: VERSION,
-      mappingsDir: join(import.meta.dirname, "..", "mappings"),
+      mappingsDir: defaultMappingsDir(),
       io,
     });
   } catch (e) {
@@ -124,7 +135,7 @@ interface Flags {
 }
 
 export function parseFlags(args: string[]): Flags | string {
-  const f: Flags = { api: false, dryRun: false, noImport: false, out: "out", enableRules: false, mappings: join(import.meta.dirname, "..", "mappings") };
+  const f: Flags = { api: false, dryRun: false, noImport: false, out: "out", enableRules: false, mappings: defaultMappingsDir() };
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     const val = () => {
@@ -265,7 +276,7 @@ async function runPlanCmd(args: string[]): Promise<number> {
     const p = await runPlan({
       config,
       outDir: out,
-      defaultMappingsDir: join(import.meta.dirname, "..", "mappings"),
+      defaultMappingsDir: defaultMappingsDir(),
       ...(config.source.kind === "folder" ? { resolvedInput: resolve(config.source.path) } : {}),
       ...(only ? { only: only as "dashboards" | "monitors" } : {}),
       version: VERSION,

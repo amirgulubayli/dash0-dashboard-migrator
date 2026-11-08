@@ -33,6 +33,9 @@ const TOP_SHORTCUT = /^(top|bottom)(\d+)?(?:_(mean|min|max|last|area|l2norm|norm
 
 const PER_UNIT: Record<string, number> = { per_second: 1, per_minute: 60, per_hour: 3600 };
 
+/** Datadog percentile aggregator: p50, p95, p99.9 ... */
+const PERCENTILE = /^p(\d+(?:\.\d+)?)$/;
+
 class Lowerer {
   rules: RuleId[] = [];
   /** Merged from formula refs translated elsewhere (LoweredRef). */
@@ -395,6 +398,7 @@ class Lowerer {
     let hint = mapping ? undefined : this.ctx.ddKind?.(m.metric);
     // No metadata.csv entry: an OpenMetrics-style counter name (.count/.total) queried with .as_count()/.as_rate()
     // carries two independent signals that it is a monotonic count.
+    const percentile = PERCENTILE.exec(m.spaceAgg ?? "");
     const countModifier = calls.some((c) => c.name === "as_count" || c.name === "as_rate");
     if (!mapping && hint === undefined && this.ctx.ddKind && countModifier && /\.(count|total)$/.test(m.metric)) {
       hint = "count";
@@ -402,13 +406,20 @@ class Lowerer {
     }
     if (mapping) this.use("select.metric.mapped");
     else if (hint) {
-      if (hint === "distribution") this.manual("metric.distribution", `${m.metric} is a Datadog distribution; no histogram rule yet`);
+      // A distribution only has a rule for its percentiles (fn.histogram.quantile); avg:/sum:/... on it stay manual.
+      if (hint === "distribution" && !percentile)
+        this.manual("metric.distribution", `${m.metric} is a Datadog distribution; only pXX: on it has a rule (fn.histogram.quantile)`);
       this.use("select.metric.kind-metadata");
       this.find("exact-under", "metric.unmapped", `no mapping for ${m.metric}; kept the Datadog name, kind ${hint} from metadata.csv`, {
         ruleId: "select.metric.kind-metadata",
         assumptions: ["A.kind-metadata"],
       });
-      mapping = hint === "gauge" ? { otel: m.metric, kind: "gauge", ddKind: "gauge" } : { otel: m.metric, kind: "counter", ddKind: hint };
+      mapping =
+        hint === "gauge"
+          ? { otel: m.metric, kind: "gauge", ddKind: "gauge" }
+          : hint === "distribution"
+            ? { otel: m.metric, kind: "histogram", ddKind: "distribution" }
+            : { otel: m.metric, kind: "counter", ddKind: hint };
     } else {
       this.use("select.metric.unmapped");
       this.find("exact-under", "metric.unmapped", `no mapping for ${m.metric}; kept the Datadog name and assumed a gauge`, {
@@ -447,6 +458,8 @@ class Lowerer {
       if (hit !== undefined)
         this.manual("metric.needs_transform", `${m.metric}: the query filters or groups on '${hit}', which the mapping sums away (Datadog has no such tag)`);
     }
+
+    if (percentile) return this.percentile(m, percentile[1]!, mapping, kindKnown, matchers, calls, scale, sumBy);
 
     // Effective kind. Datadog's own kind decides the time aggregation when the table gives it (T1 kindTransform):
     // a Datadog gauge stays a gauge even when the OTel receiver emits a counter; a Datadog RATE on an OTel counter
@@ -606,6 +619,51 @@ class Lowerer {
       const rateRange: Duration = width === "$__interval" ? "$__rate_interval" : width;
       return { node, groups: by, rateForm: rateOf(rateRange) };
     }
+    return { node, groups: by };
+  }
+
+  /**
+   * fn.histogram.quantile (maths.md §12, Theorem T11): Datadog `pXX:m{f} by {g}` on a distribution merges every matching
+   * series per group into one DDSketch and reads the XX-th percentile. The PromQL counterpart merges the OTel histogram's
+   * buckets per group the same way and interpolates inside the bucket holding the rank:
+   *   histogram_quantile(0.XX, sum by (le, g) (rate({otel_metric_name="<otel>", f}[w])))
+   * T11a: the quantile depends only on the ratios of the bucket counts, so rate/increase/raw counts give the same value
+   * and the window w only picks which samples are in. T11b: |P - DD| <= w_b + g + 1%·x. Bounded, never exact.
+   * `sum by (le, g)` works whether Dash0 serves the histogram natively (no le label: Dash0's own documented example) or
+   * as le-labelled buckets under the same name; a `_bucket`-suffixed name would not (A.histogram-buckets).
+   */
+  percentile(
+    m: MetricQuery,
+    digits: string,
+    mapping: MetricMapping,
+    kindKnown: boolean,
+    matchers: PMatcher[],
+    calls: { name: string; args: import("../../parse/index.js").Arg[] }[],
+    scale: number | undefined,
+    sumBy: string[],
+  ): Lowered {
+    const agg = m.spaceAgg!;
+    if (!kindKnown)
+      this.manual("fn.histogram.kind-unknown", `${agg}:${m.metric}: no mapping entry or metadata.csv kind says it is a distribution, so there are no buckets to take the quantile from`);
+    if (mapping.kind !== "histogram")
+      this.manual("fn.histogram.kind", `${agg}:${m.metric}: the mapping says it is an OTel ${mapping.kind}; a percentile needs an OTel histogram`);
+    if (mapping.ddKind !== undefined && mapping.ddKind !== "distribution")
+      this.manual("fn.histogram.kind", `${agg}:${m.metric}: the mapping says Datadog stores it as a ${mapping.ddKind}; pXX: needs a Datadog distribution`);
+    if (calls.length) this.manual("fn.histogram.modifier", `.${calls[0]!.name}() on a percentile query (${agg}:) has no tested rule`);
+    // 99.9 / 100 is 0.9990000000000001 in floating point: round to the digits Datadog's name can carry.
+    const q = Number((Number(digits) / 100).toFixed(digits.length + 2));
+    if (!(q > 0 && q < 1)) this.manual("fn.histogram.kind", `${agg}: the quantile must be strictly between p0 and p100`);
+    const by = [...new Set(m.groupBy.map((t) => this.label(t)))].sort();
+    if (by.includes("le")) this.manual("fn.histogram.le", `${agg}: grouping by 'le' clashes with histogram_quantile's bucket label`);
+    // Window: rate() needs two samples, so dashboards use $__rate_interval; a monitor's inner query runs on 1m buckets.
+    const range: Duration = this.interval === "$__interval" ? "$__rate_interval" : this.interval;
+    // scale k > 0: the quantile of k·x is k times the quantile of x (bucket bounds scale with the values). sumBy labels
+    // need nothing: sum by (le, g) already adds up every series that differs only in labels outside g.
+    if (scale !== undefined || sumBy.length) this.use("select.metric.transform");
+    this.use("fn.histogram.quantile");
+    const merged: PNode = { k: "agg", op: "sum", by: ["le", ...by], expr: { k: "call", fn: "rate", args: [{ k: "selector", matchers, range }] } };
+    const hq: PNode = { k: "call", fn: "histogram_quantile", args: [{ k: "num", value: q }, merged] };
+    const node: PNode = scale !== undefined ? { k: "binary", op: "*", lhs: { k: "num", value: scale }, rhs: hq } : hq;
     return { node, groups: by };
   }
 

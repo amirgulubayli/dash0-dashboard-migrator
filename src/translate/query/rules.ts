@@ -34,6 +34,12 @@ export const ASSUMPTIONS = {
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
   "A.sumby-together": "the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs)",
+  "A.histogram-buckets":
+    "Dash0 exposes the OTel histogram under {otel_metric_name=\"<otel>\"} so that histogram_quantile over sum by (le, ...) (rate(...)) reads its buckets: Dash0's own dashboard-source example queries histogram_quantile(q, sum by (service_name) (rate({otel_metric_name=\"dash0.spans.duration\"}[w]))) with no _bucket suffix (native histogram); not yet checked live on a collector-emitted explicit-bucket histogram",
+  "A.histogram-samples":
+    "the Datadog distribution and the OTel histogram record the same samples in each window (maths.md §12, A.same-samples for distributions)",
+  "A.finite-quantile":
+    "the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d)",
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;
@@ -203,6 +209,12 @@ export const RULES = {
   "fn.max_min.scalar": exact("max(q, n) -> clamp_min(x, n); min(q, n) -> clamp_max(x, n)"),
   "fn.max_min.series": under(["A.both-present"], "max(a, b) -> a >= b or b; min(a, b) -> a <= b or b (pointwise, same group-by)"),
   "map.timeshift": exact("timeshift(q, -s) / hour_before(q) / ... -> offset s on every selector"),
+  "fn.histogram.quantile": {
+    status: "bounded",
+    assumptions: ["A.histogram-buckets", "A.histogram-samples", "A.finite-quantile"],
+    description:
+      "pXX:m{f} by {g} on a distribution / OTel histogram -> histogram_quantile(0.XX, sum by (le, g) (rate(m[w]))) (maths.md §12, T11)",
+  },
   "arith.number": exact("arithmetic with a constant"),
   "arith.same-groups": exact("arithmetic between queries with identical group-by labels (one-to-one matching)"),
   "arith.div": under(["A.nonzero-denominator"], "division between queries"),
