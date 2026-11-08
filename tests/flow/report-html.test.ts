@@ -1,7 +1,7 @@
 // report.html: one offline, deterministic page; headline, attention first, Datadog next to PromQL, plain words from
 // src/rules/plain.ts, monitors with thresholds, a legend, accessible meters, and a working dry-run state.
 import { describe, expect, it } from "vitest";
-import { reportHtml } from "../../src/flow/report-html.js";
+import { REPORT_CSS, reportBody, reportFilterCss, reportHtml } from "../../src/flow/report-html.js";
 import { scoreOf, type Row, type RunFacts } from "../../src/flow/score.js";
 import { explainPlain } from "../../src/rules/plain.js";
 
@@ -23,6 +23,16 @@ describe("report.html", () => {
     expect(reportHtml(scoreOf(rows), rows, facts)).toBe(html);
     expect(html).not.toMatch(/<script|<link|src=|href="http|@import|url\(/i);
     expect(html).toContain("&lt;b&gt;");
+  });
+
+  it("is the shell around the exported REPORT_CSS, filter rules and reportBody (for pages that reuse the look)", () => {
+    const body = reportBody(scoreOf(rows), rows, facts);
+    expect(body.startsWith('<a class="skip"')).toBe(true);
+    expect(body).not.toMatch(/<html|<head|<style|<body/);
+    expect(REPORT_CSS).toContain("--accent:#a78bfa");
+    expect(REPORT_CSS).toContain("@media print");
+    const head = html.slice(0, html.indexOf("<style>\n") + 8);
+    expect(html).toBe(`${head}${REPORT_CSS}\n${reportFilterCss(rows)}\n</style></head><body id="top">${body}</body></html>\n`);
   });
 
   it("leads with the headline and accessible meters", () => {

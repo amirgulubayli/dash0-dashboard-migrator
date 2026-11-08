@@ -58,14 +58,17 @@ function queries(r: Row): string {
 const todo = (r: Row) => (r.manualActions.length ? `<ul class="todo">${r.manualActions.map((a) => `<li><span class="warn">to do</span> ${esc(a)}</li>`).join("")}</ul>` : "");
 const codes = (r: Row) => (r.reasons.length ? `<p class="codes"><span class="dim">codes</span> ${r.reasons.map((c) => `<code>${esc(c)}</code>`).join(" ")}</p>` : "");
 
+const isAttentionRow = (r: Row) => !r.translated || r.landed === false || r.live === "missing" || r.live === "error";
+
 type Group = { key: string; title: string; hint: string; rows: Row[] };
 
-export function reportHtml(score: Score, rows: Row[], facts: RunFacts): string {
+/** The report's inner HTML (everything inside <body>), without <html>/<head>. reportHtml() wraps it with REPORT_CSS. */
+export function reportBody(score: Score, rows: Row[], facts: RunFacts): string {
   const idOf = new Map(rows.map((r, i) => [r, `i${i + 1}`]));
   const panels = rows.filter((r) => r.kind === "panel");
   const dashboards = [...new Set(panels.map((r) => r.dashboard ?? "(no dashboard)"))];
   const monitors = rows.filter((r) => r.kind === "alert");
-  const isAttention = (r: Row) => !r.translated || r.landed === false || r.live === "missing" || r.live === "error";
+  const isAttention = isAttentionRow;
   const measured = score.success !== null;
   const dry = facts.mode !== "live";
   const lc = score.liveCounts;
@@ -127,13 +130,6 @@ ${
   const claimCounts = CLAIMS.map((c) => [c, rows.filter((r) => r.status === c).length] as const).filter(([, n]) => n > 0);
   const filters: [string, string, number][] = [["all", "all", rows.length], ["att", "needs attention", attentionCount], ...claimCounts.map(([c, n]) => [c, c, n] as [string, string, number])];
   const filterBar = `<div class="filter" role="radiogroup" aria-label="Show items">${filters.map(([k, label, n], i) => `<input type="radio" name="show" id="f-${k}" value="${k}"${i === 0 ? " checked" : ""}><label for="f-${k}">${esc(label)} <span class="n">${n}</span></label>`).join("")}</div>`;
-  const filterCss = filters
-    .slice(1)
-    .map(([k]) => {
-      const keep = k === "att" ? `[data-att="1"]` : `[data-claim="${k}"]`;
-      return `main:has(#f-${k}:checked) .item:not(${keep}),main:has(#f-${k}:checked) .dash:not(:has(.item${keep})){display:none}main:has(#f-${k}:checked) #monitors:not(:has(.item${keep})) .none-match{display:block}`;
-    })
-    .join("\n");
 
   // ---------------------------------------------------------------- per dashboard
   const dashSection = (d: string, n: number) => {
@@ -200,10 +196,42 @@ ${monitors.length ? `<li><a href="#monitors">Monitors <span class="n">${monitors
 <li><a href="#run">Run</a></li></ol></nav>`;
 
   const when = esc(facts.startedAt.replace("T", " ").slice(0, 19));
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>dd2dash0 report · ${esc(facts.startedAt.slice(0, 16).replace("T", " "))}</title><meta name="color-scheme" content="dark light">
-<style>
-:root{--bg:#13131c;--raise:#1c1b29;--fg:#ecebf4;--dim:#a3a2b5;--line:#2d2b40;--accent:#a78bfa;--ok:#5fd787;--warn:#f0a43a;--bad:#f2738f;--sel:#a78bfa40;color-scheme:dark}
+  return `<a class="skip" href="#main">Skip to report</a><div class="shell">
+${nav}
+<main id="main">
+<div class="frame"><div class="t"><span class="accent" aria-hidden="true">◆</span> <b>dd2dash0</b> <span class="dim">${esc(facts.version)} · migration report</span></div>
+<div class="dim">${esc(facts.source)} → ${esc(facts.target)}</div>
+<div class="dim">${plural(score.panels, "panel")} · ${plural(score.monitors, "monitor")} · ${dry ? "dry run, nothing imported" : "live import"} · ${when} UTC</div></div>
+<nav class="jump" aria-label="Jump to"><a href="#attention">needs attention (${attentionCount})</a>${dashboards.length ? `<a href="#dashboards">dashboards (${dashboards.length})</a>` : ""}${monitors.length ? `<a href="#monitors">monitors (${monitors.length})</a>` : ""}<a href="#legend">how to read this</a></nav>
+<section id="summary" aria-labelledby="h-sum">
+${headline}
+<div class="meters">
+${meter("mk-s", "success", score.success, "translated, landed and not missing data", true)}
+${meter("mk-t", "translated", score.translated, "exact, exact-under or approved bounded")}
+${meter("mk-l", "landed", score.landed, "imported and read back from Dash0")}
+${meter("mk-v", "live", score.live, `Dash0 returns data when Datadog does (last ${facts.windowSeconds / 60} min)`)}
+</div>
+${mixBar}
+<div class="runline"><div>⎿ ${funnel}</div>
+${lc ? `<div>⎿ live check: <b>${lc.live}</b> live · <b>${lc.missing}</b> missing in Dash0 · <b>${lc.error}</b> query errors · ${lc["no-data"]} no data either side · ${lc["n/a"]} no query</div>` : ""}
+${score.topGaps.length ? `<div>⎿ top gaps: ${score.topGaps.map(([c, n]) => `<code class="il">${esc(c)}</code> ×${n}`).join(" · ")}</div>` : ""}</div>
+</section>
+${attentionSection}
+${filterBar}
+${dashboards.length ? `<section id="dashboards" aria-labelledby="h-dash"><h2 id="h-dash"><span class="dot" aria-hidden="true">●</span> Dashboards <span class="dim">· ${dashboards.length} · ${plural(panels.length, "panel")}</span></h2>
+${dashboards.map((d, i) => dashSection(d, i + 1)).join("\n")}</section>` : ""}
+${monSection}
+${legend}
+<footer id="run"><div><span class="accent" aria-hidden="true">◆</span> dd2dash0 ${esc(facts.version)} · plan ${esc(facts.planHash.slice(0, 16))} · input ${esc(facts.inputHash.slice(0, 16))} · output ${esc(facts.outputHash.slice(0, 16))}</div>
+<div>Same input and same version give the same output hash. Translation is deterministic: parsers, rules and mapping tables, no AI.</div></footer>
+</main></div>`;
+}
+
+/**
+ * The page's stylesheet: the deck palette tokens (dark by default, light under prefers-color-scheme), layout, small
+ * screens, reduced motion and print. Static; the per-run filter rules come from reportFilterCss().
+ */
+export const REPORT_CSS = `:root{--bg:#13131c;--raise:#1c1b29;--fg:#ecebf4;--dim:#a3a2b5;--line:#2d2b40;--accent:#a78bfa;--ok:#5fd787;--warn:#f0a43a;--bad:#f2738f;--sel:#a78bfa40;color-scheme:dark}
 @media (prefers-color-scheme:light){:root{--bg:#ffffff;--raise:#f4f1fc;--fg:#13131c;--dim:#5c5b6b;--line:#e4dcf7;--accent:#6d28d9;--ok:#17703d;--warn:#b45309;--bad:#b4224a;--sel:#6d28d930;color-scheme:light}}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:64px}html,body{margin:0;background:var(--bg);color:var(--fg)}
 body{font:13.5px/1.6 ui-monospace,"SF Mono",SFMono-Regular,"Cascadia Mono",Menlo,Consolas,monospace;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
@@ -294,36 +322,26 @@ footer{color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-
  body{font-size:12px}.shell{display:block;padding:0;max-width:none}.toc,.jump,.filter,.skip{display:none}
  details::details-content{content-visibility:visible;display:block}details>summary::before{display:none}
  .item,.ag li,.mon{break-inside:avoid}h2,h3{break-after:avoid}a{text-decoration:none}
+}`;
+
+/** The claim-filter rules for this run's items (radio + :has, no script): one rule set per filter but "all". */
+export function reportFilterCss(rows: Row[]): string {
+  const keys = ["att", ...CLAIMS.filter((c) => rows.some((r) => r.status === c))];
+  return keys
+    .map((k) => {
+      const keep = k === "att" ? `[data-att="1"]` : `[data-claim="${k}"]`;
+      return `main:has(#f-${k}:checked) .item:not(${keep}),main:has(#f-${k}:checked) .dash:not(:has(.item${keep})){display:none}main:has(#f-${k}:checked) #monitors:not(:has(.item${keep})) .none-match{display:block}`;
+    })
+    .join("\n");
 }
-${filterCss}
-</style></head><body id="top"><a class="skip" href="#main">Skip to report</a><div class="shell">
-${nav}
-<main id="main">
-<div class="frame"><div class="t"><span class="accent" aria-hidden="true">◆</span> <b>dd2dash0</b> <span class="dim">${esc(facts.version)} · migration report</span></div>
-<div class="dim">${esc(facts.source)} → ${esc(facts.target)}</div>
-<div class="dim">${plural(score.panels, "panel")} · ${plural(score.monitors, "monitor")} · ${dry ? "dry run, nothing imported" : "live import"} · ${when} UTC</div></div>
-<nav class="jump" aria-label="Jump to"><a href="#attention">needs attention (${attentionCount})</a>${dashboards.length ? `<a href="#dashboards">dashboards (${dashboards.length})</a>` : ""}${monitors.length ? `<a href="#monitors">monitors (${monitors.length})</a>` : ""}<a href="#legend">how to read this</a></nav>
-<section id="summary" aria-labelledby="h-sum">
-${headline}
-<div class="meters">
-${meter("mk-s", "success", score.success, "translated, landed and not missing data", true)}
-${meter("mk-t", "translated", score.translated, "exact, exact-under or approved bounded")}
-${meter("mk-l", "landed", score.landed, "imported and read back from Dash0")}
-${meter("mk-v", "live", score.live, `Dash0 returns data when Datadog does (last ${facts.windowSeconds / 60} min)`)}
-</div>
-${mixBar}
-<div class="runline"><div>⎿ ${funnel}</div>
-${lc ? `<div>⎿ live check: <b>${lc.live}</b> live · <b>${lc.missing}</b> missing in Dash0 · <b>${lc.error}</b> query errors · ${lc["no-data"]} no data either side · ${lc["n/a"]} no query</div>` : ""}
-${score.topGaps.length ? `<div>⎿ top gaps: ${score.topGaps.map(([c, n]) => `<code class="il">${esc(c)}</code> ×${n}`).join(" · ")}</div>` : ""}</div>
-</section>
-${attentionSection}
-${filterBar}
-${dashboards.length ? `<section id="dashboards" aria-labelledby="h-dash"><h2 id="h-dash"><span class="dot" aria-hidden="true">●</span> Dashboards <span class="dim">· ${dashboards.length} · ${plural(panels.length, "panel")}</span></h2>
-${dashboards.map((d, i) => dashSection(d, i + 1)).join("\n")}</section>` : ""}
-${monSection}
-${legend}
-<footer id="run"><div><span class="accent" aria-hidden="true">◆</span> dd2dash0 ${esc(facts.version)} · plan ${esc(facts.planHash.slice(0, 16))} · input ${esc(facts.inputHash.slice(0, 16))} · output ${esc(facts.outputHash.slice(0, 16))}</div>
-<div>Same input and same version give the same output hash. Translation is deterministic: parsers, rules and mapping tables, no AI.</div></footer>
-</main></div></body></html>
+
+/** The whole offline page: shell + REPORT_CSS + reportFilterCss(rows) + reportBody(...). */
+export function reportHtml(score: Score, rows: Row[], facts: RunFacts): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dd2dash0 report · ${esc(facts.startedAt.slice(0, 16).replace("T", " "))}</title><meta name="color-scheme" content="dark light">
+<style>
+${REPORT_CSS}
+${reportFilterCss(rows)}
+</style></head><body id="top">${reportBody(score, rows, facts)}</body></html>
 `;
 }
