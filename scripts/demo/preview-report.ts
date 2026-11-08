@@ -6,10 +6,12 @@
 //   <outDir>/keys.html          the `--browser` key page (static copy; the real one is served on 127.0.0.1)
 //   <outDir>/live/report.html   the same items with SIMULATED landing and live-check results, so the live-only parts
 //                               of the page (success, live column, failures) can be looked at without a Dash0 tenant.
-//                               The simulated values are picked deterministically from the item id; they are not real.
+//                               The simulated values are picked deterministically from the item id; they are not real,
+//                               and the page carries a SIMULATED banner above the headline and in its title.
 // Default outDir: <os tmp>/dd2dash0-preview. The page itself is built by src/flow/report-html.ts, unchanged.
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -21,14 +23,23 @@ import { _keysPage } from "../../src/flow/keys-web.js";
 const root = resolve(import.meta.dirname, "../..");
 const out = resolve(process.argv[2] ?? join(tmpdir(), "dd2dash0-preview"));
 
-const r = await migrate({ ingest: { input: join(root, "fixtures/datadog") }, source: { kind: "folder", site: null, path: "fixtures/datadog" }, mappingsDir: join(root, "mappings"), outDir: join(out, "work"), mode: "none", version: "preview" });
+const r = await migrate({ ingest: { input: join(root, "fixtures/datadog") }, source: { kind: "folder", site: null, path: "fixtures/datadog" }, mappingsDir: join(root, "mappings"), outDir: join(out, "work"), mode: "none", version: (JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string }).version });
 const report = r.report;
 const items = report.items;
 const review = { file: "", boundedApproved: 0, boundedFlagged: 0, acknowledged: 0, rulesApproved: items.filter((i) => i.kind === "alert" && (i.status === "exact" || i.status === "exact-under" || i.status === "bounded")).map((i) => i.id), rulesRejected: [], manualMonitors: [] };
 const decisions = decisionsOf(review, items);
+// The checkout this preview was built from ("-dirty" when tracked files differ from it); null outside a git checkout.
+function gitHead(): string | null {
+  try {
+    const git = (...a: string[]) => execFileSync("git", a, { cwd: root, encoding: "utf8" }).trim();
+    return git("rev-parse", "--short=12", "HEAD") + (git("status", "--porcelain", "--untracked-files=no") ? "-dirty" : "");
+  } catch {
+    return null;
+  }
+}
 const facts = (mode: RunFacts["mode"]): RunFacts => ({
   version: report.run.version,
-  source: "Datadog fixtures/datadog",
+  source: "folder fixtures/datadog",
   target: mode === "live" ? "Dash0 demo / default (simulated results)" : "Dash0 (dry run)",
   mode,
   inputHash: report.run.inputHash,
@@ -36,6 +47,7 @@ const facts = (mode: RunFacts["mode"]): RunFacts => ({
   planHash: createHash("sha256").update(report.run.outputHash).digest("hex"),
   windowSeconds: 3600,
   startedAt: "2026-11-08T10:00:00.000Z",
+  toolCommit: report.run.toolCommit ?? gitHead(),
 });
 
 // Dry run: exactly what the guided flow writes without an import.
@@ -57,6 +69,11 @@ const liveRows: Row[] = dryRows.map((row) => {
 });
 mkdirSync(join(out, "live"), { recursive: true });
 const live = writeRunReport(join(out, "live"), scoreOf(liveRows), liveRows, facts("live"));
+// Mark the simulated page so nobody reads its numbers as real: a banner above the headline and in the title.
+const banner = `<div role="alert" style="border:2px solid var(--bad);color:var(--bad);border-radius:8px;padding:10px 14px;margin:0 0 20px;font-weight:600;max-width:980px">SIMULATED: landing, live and success below are made up from the item ids to preview the layout. They are not results of a real import. The dry-run page is the real one.</div>`;
+const liveHtml = readFileSync(live.html, "utf8");
+if (!liveHtml.includes('<h1 id="h-sum">')) throw new Error("preview: headline not found, cannot add the SIMULATED banner");
+writeFileSync(live.html, liveHtml.replace('<h1 id="h-sum">', `${banner}<h1 id="h-sum">`).replace("<title>dd2dash0 report", "<title>SIMULATED · dd2dash0 report"));
 
 // The one-time key page (served by `--browser` with a strict CSP; here a static copy for looking at it).
 const keys = join(out, "keys.html");
