@@ -16,7 +16,7 @@ export interface MetricLookup {
   labels: Record<string, string>;
   ddKind: DatadogKind;
   /** "rate" when the translator must wrap the selector in rate() to match what Datadog stores. */
-  transform: "none" | "rate";
+  transform: "none" | "rate" | "increase";
   status: "exact" | "approximate";
   note?: string;
 }
