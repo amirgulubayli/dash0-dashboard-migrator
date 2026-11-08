@@ -9,7 +9,28 @@ Translation is **deterministic**: a Datadog query parser, rule tables and metric
 
 > Work in progress for the Dash0 hackathon challenge. Setup, usage and known limitations will be documented here before the PR.
 
-## Quick start
+## Download (no Node needed)
+Grab the build for your machine from [Releases](https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest), or in a terminal:
+
+```bash
+# macOS, Apple silicon (M1-M4)
+curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-macos-arm64.tar.gz | tar xz && cd dd2dash0-macos-arm64 && ./dd2dash0
+```
+```bash
+# macOS, Intel
+curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-macos-x64.tar.gz | tar xz && cd dd2dash0-macos-x64 && ./dd2dash0
+```
+```bash
+# Linux x64 (use dd2dash0-linux-arm64 on ARM)
+curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-linux-x64.tar.gz | tar xz && cd dd2dash0-linux-x64 && ./dd2dash0
+```
+Windows: download `dd2dash0-windows-x64.zip`, unzip it, and run `.\dd2dash0.exe` in PowerShell.
+
+Each archive holds the `dd2dash0` executable, its `mappings/` folder (keep them together) and a short README. `SHA256SUMS.txt` on the release lists the checksums. If macOS refuses a browser download ("cannot be opened"), run `xattr -d com.apple.quarantine dd2dash0` once.
+
+Maintainers: pushing a tag `v<version>` builds every target and publishes the release (`.github/workflows/release.yml`); pull requests build and smoke-test them without publishing.
+
+## Run from source
 ```bash
 npm ci
 npx tsx src/cli.ts        # or `dd2dash0` once built
