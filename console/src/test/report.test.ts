@@ -19,6 +19,7 @@ describe("Report normalization", () => {
       logPanels: 2,
       logsUnsupported: 2,
       checkRules: 1,
+      checkRulesTranslated: 1,
     });
   });
   it.each([

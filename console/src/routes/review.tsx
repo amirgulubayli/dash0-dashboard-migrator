@@ -11,7 +11,7 @@ import { ReviewerInput, ExportButton, PlanSummary } from "@/components/ImportPla
 import { useReport } from "@/lib/report-store";
 import { displayTitle, fidelityLabel } from "@/lib/report";
 import { canAcknowledgeAll, reviewQueue } from "@/lib/review-queue";
-import { reasonLabel, typeLabel } from "@/lib/presentation";
+import { reasonLabel, thresholdsText, typeLabel } from "@/lib/presentation";
 import { ReasonChips } from "@/components/items/ReasonChips";
 import { cn } from "@/lib/utils";
 import { COPY } from "@/lib/status";
@@ -73,7 +73,7 @@ function ReviewPage() {
       anchor: status,
     })),
     { label: "Export", items: queue, anchor: "export" },
-  ];
+  ].filter((s) => s.anchor === "export" || s.items.length > 0); // no empty "0 / 0" steps
   const current = steps.findIndex((s) => s.items.some((i) => !review.decisions[i.id]));
   return (
     <div className="flex min-h-full flex-col">
@@ -188,10 +188,9 @@ function ReviewPage() {
                   </Button>
                   <code className="my-2 block text-xs text-muted-foreground">{i.id}</code>
                   <StatusBadge status={i.status} label={fidelityLabel(i)} />
-                  <p className="mt-3 text-sm text-body">
-                    Warning {i.thresholds?.degraded ?? "n/a"}%, critical{" "}
-                    {i.thresholds?.failed ?? "n/a"}%
-                  </p>
+                  {thresholdsText(i.thresholds) && (
+                    <p className="mt-3 text-sm text-body">{thresholdsText(i.thresholds)}</p>
+                  )}
                   <div className="mt-3">
                     <ReasonChips codes={i.reason_codes} />
                   </div>
@@ -240,7 +239,7 @@ function ReviewPage() {
                       </Button>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                         <code>{i.id}</code>
-                        <span>{i.group ?? "n/a"}</span>
+                        {i.group && <span>{i.group}</span>}
                         <span className="font-mono">{typeLabel(i)}</span>
                       </div>
                     </div>

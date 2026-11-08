@@ -76,7 +76,7 @@ function WidgetBox({ item, style }: { item: ReportItem; style: React.CSSProperti
         </div>
         {item.reason_codes.map((rc) => (
           <div key={rc} className="mt-1 text-xs">
-            <p>{explainCode(rc) ?? "No explanation supplied."}</p>
+            {explainCode(rc) && <p>{explainCode(rc)}</p>}
             <code className="block font-mono text-xs opacity-80">{rc}</code>
           </div>
         ))}

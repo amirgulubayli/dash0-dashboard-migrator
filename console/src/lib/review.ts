@@ -1,4 +1,4 @@
-import type { Report, ReportItem } from "./report";
+import { isTranslatedMonitor, type Report, type ReportItem } from "./report";
 
 export type Decision = "approved" | "flagged" | "acknowledged";
 export interface DecisionEntry {
@@ -84,8 +84,11 @@ export function importPlan(report: Report, state: ReviewState): ImportPlan {
       if (!d) pending++;
     }
     if (i.kind === "monitor") {
-      checkRules.total++;
-      if (d === "approved") checkRules.approved++;
+      // Only a translated monitor becomes a check rule; a manual one is not imported.
+      if (isTranslatedMonitor(i)) {
+        checkRules.total++;
+        if (d === "approved") checkRules.approved++;
+      }
       continue;
     }
     if (i.status === "exact") translated++;

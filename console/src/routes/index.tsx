@@ -73,36 +73,41 @@ function Overview() {
         : null,
     },
   ];
-  const current = stages.reduce((last, s, index) => (s.value !== null ? index : last), -1);
-  const notRecorded = (v: string | undefined) => v ?? "not recorded";
-  const footer = [
-    ["Source file", notRecorded(report.run.source)],
-    ["Commit", notRecorded(report.run.source_commit)],
-    ["Mapping version", notRecorded(report.run.mapping_version)],
-    ["Tool version", notRecorded(report.run.tool_version)],
-    ["Schema version", notRecorded(report.schema_version)],
-    ["Loaded file", sourceName],
-    ["Report SHA256", sha],
-    ...Object.entries(report.summary.verification).map(([k, v]) => [
-      k.replace(/_/g, " "),
-      v === null ? "not run" : String(v),
-    ]),
-  ];
+  // Stages and facts the CLI did not record are left out instead of showing "not run" / "not recorded".
+  const shownStages = stages.filter((s) => s.value !== null);
+  const footer = (
+    [
+      ["Source file", report.run.source],
+      ["Commit", report.run.source_commit],
+      ["Mapping version", report.run.mapping_version],
+      ["Tool version", report.run.tool_version],
+      ["Schema version", report.schema_version],
+      ["Loaded file", sourceName],
+      ["Report SHA256", sha],
+      ...Object.entries(report.summary.verification).map(([k, v]) => [
+        k.replace(/_/g, " "),
+        v === null ? undefined : String(v),
+      ]),
+    ] as [string, string | null | undefined][]
+  ).filter(
+    (row): row is [string, string] => row[1] !== undefined && row[1] !== null && row[1] !== "",
+  );
   return (
     <div className="overview-page">
       <section className="px-8 pt-7 pb-6">
         <div className="section-label mb-3">
-          Migration report · {report.run.source ?? "source not recorded"}
+          Migration report{report.run.source ? ` · ${report.run.source}` : ""}
         </div>
         <h2 className="text-4xl font-semibold leading-tight">
           {widgets} widgets assessed. Every translation accounted for.
         </h2>
-        <p className="mt-2 text-sm text-body">{metricWidgetsLine(counts)}.</p>
-        <p className="mt-1 text-sm text-body">
+        <p className="mt-2 text-base text-body">{metricWidgetsLine(counts)}.</p>
+        <p className="mt-1 text-base text-body">
           {textAndLogsLine(counts)}.{" "}
           {report.items.filter((i) => i.kind === "group").length > 0 &&
             `${report.items.filter((i) => i.kind === "group").length} layout groups, reported separately. `}
-          {counts.checkRules} monitor, translated as a Dash0 check rule.
+          {counts.checkRules} monitor{counts.checkRules === 1 ? "" : "s"},{" "}
+          {counts.checkRulesTranslated} translated as a Dash0 check rule.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {[
@@ -118,43 +123,41 @@ function Overview() {
         </div>
       </section>
       <section className="mx-8 border-t border-rule py-6">
-        <div className="grid grid-cols-6">
-          {stages.map((stage, index) => (
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${Math.max(shownStages.length, 1)}, minmax(0, 1fr))`,
+          }}
+        >
+          {shownStages.map((stage, index) => (
             <div key={stage.label} className="min-w-0 border-t border-border pr-3">
               <span
                 className={cn(
                   "-mt-3 mb-3 flex size-6 items-center justify-center border font-mono text-[10px]",
-                  index === current
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-muted-foreground",
+                  "border-border bg-background text-muted-foreground",
                 )}
               >
                 {String(index + 1).padStart(2, "0")}
               </span>
               <h3 className="text-lg font-medium uppercase">{stage.label}</h3>
-              <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                {stage.value ?? "not run"}
-              </p>
+              <p className="mt-1 font-mono text-sm text-muted-foreground">{stage.value}</p>
             </div>
           ))}
         </div>
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 font-mono text-[10px] text-body">
-          <code>dd2dash0 migrate --from datadog --input ./exports --dry-run</code>
-          <code>export review.json</code>
-          <code>dd2dash0 migrate --from datadog --input ./exports</code>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">Commands provisional.</p>
       </section>
       <section className="mx-8 grid grid-cols-4 divide-x divide-border border-t border-rule py-5">
         {[
           { value: counts.metrics, label: "metric widgets" },
           { value: counts.differences, label: "translated with known differences" },
           { value: counts.manual, label: "can't migrate automatically" },
-          { value: counts.checkRules, label: "check rule" },
+          {
+            value: counts.checkRulesTranslated,
+            label: `of ${counts.checkRules} monitor${counts.checkRules === 1 ? "" : "s"} became a check rule`,
+          },
         ].map((n) => (
           <div key={n.label} className="min-w-0 px-5 first:pl-0">
             <div className="console-number">{n.value}</div>
-            <p className="mt-2 font-mono text-[11px] uppercase">{n.label}</p>
+            <p className="mt-2 font-mono text-sm uppercase">{n.label}</p>
           </div>
         ))}
       </section>
@@ -164,30 +167,30 @@ function Overview() {
           <h3 className="mt-2 mb-4 text-2xl font-semibold">{example.title}</h3>
           <div className="grid grid-cols-3 divide-x divide-border bg-band-panel p-5">
             <div className="min-w-0 pr-5">
-              <h4 className="mb-3 font-mono text-[11px] uppercase">Source · Datadog</h4>
+              <h4 className="mb-3 font-mono text-sm uppercase">Source · Datadog</h4>
               {example.source_queries.map((q, i) => (
                 <div key={i} className="mb-2 query-line">
                   <span className="text-band-highlight">query{i + 1} </span>
                   {q}
                 </div>
               ))}
-              <p className="query-line">formula {example.source_formula.join(", ") || "n/a"}</p>
+              {example.source_formula.length > 0 && (
+                <p className="query-line">formula {example.source_formula.join(", ")}</p>
+              )}
             </div>
             <div className="min-w-0 px-5">
-              <h4 className="mb-3 font-mono text-[11px] uppercase">Rules applied</h4>
+              <h4 className="mb-3 font-mono text-sm uppercase">Rules applied</h4>
               {example.reason_codes.map((code, i) => (
                 <div key={code} className="mb-2 text-sm">
                   <span className="mr-2 text-band-highlight">{i + 1}.</span>
                   {explainCode(code)}
-                  <code className="mt-1 block font-mono text-[10px] text-band-highlight">
-                    {code}
-                  </code>
+                  <code className="mt-1 block font-mono text-xs text-band-highlight">{code}</code>
                 </div>
               ))}
             </div>
             <div className="min-w-0 pl-5">
               <div className="border-t-2 border-band-highlight pt-3">
-                <h4 className="font-mono text-[11px] uppercase">Verdict</h4>
+                <h4 className="font-mono text-sm uppercase">Verdict</h4>
                 <h3 className="mt-2 text-xl font-semibold text-band-highlight">
                   {metaFor(example.status).label}
                 </h3>
@@ -240,8 +243,8 @@ function Overview() {
         {footer.map(([label, value]) => (
           <div key={label} className="min-w-0">
             <div className="section-label mb-1">{label}</div>
-            <p className="truncate font-mono text-[11px] text-body" title={value ?? undefined}>
-              {value ?? "not run"}
+            <p className="truncate font-mono text-sm text-body" title={value}>
+              {value}
             </p>
           </div>
         ))}

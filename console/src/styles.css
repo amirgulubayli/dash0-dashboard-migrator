@@ -427,6 +427,7 @@
 }
 .detail-sections .query-line {
   font-size: 12px;
+  overflow-wrap: anywhere; /* long metric names must wrap inside the drawer, not run off its edge */
 }
 .detail-sections .verdict textarea {
   min-height: 40px;

@@ -162,10 +162,12 @@ function ItemsPage() {
                     )}
                     <span className="truncate text-sm font-medium">{displayTitle(i)}</span>
                   </div>
-                  <code className="whitespace-nowrap text-[11px] text-muted-foreground">
+                  <code className="min-w-0 truncate text-[11px] text-muted-foreground" title={i.id}>
                     {i.id}
                   </code>
-                  <span className="truncate text-body">{i.group ?? "n/a"}</span>
+                  <span className="truncate text-body" title={i.group ?? undefined}>
+                    {i.group ?? "–"}
+                  </span>
                   <span className="font-mono text-[10px] uppercase text-muted-foreground">
                     {typeLabel(i)}
                   </span>
@@ -176,16 +178,12 @@ function ItemsPage() {
                     )}
                   </div>
                   <span className="break-words font-mono text-[11px] leading-4 text-body">
-                    {i.target_panel ?? "n/a"}
+                    {i.target_panel ?? "–"}
                   </span>
                   <div>
                     {isReviewable(i) ? (
                       <ReviewBadge item={i} decision={review.decisions[i.id]?.decision} />
-                    ) : (
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        Not required
-                      </span>
-                    )}
+                    ) : null}
                   </div>
                   <ArrowRight className="size-3 text-muted-foreground" />
                 </div>

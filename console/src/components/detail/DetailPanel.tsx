@@ -8,6 +8,7 @@ import { StatusBadge, ReviewBadge, NA } from "@/components/status-ui";
 import { useReport } from "@/lib/report-store";
 import { displayTitle, fidelityLabel, noSamplesYet, type ReportItem } from "@/lib/report";
 import { metaFor, COPY } from "@/lib/status";
+import { thresholdsText, verdictCopy } from "@/lib/presentation";
 import { explainCode } from "@/lib/reason-codes";
 import {
   allowedDecisions,
@@ -49,7 +50,7 @@ export function ReasonList({ codes }: { codes: string[] }) {
         <li key={c} className="text-sm">
           <p>
             <span className="mr-2 font-mono text-primary">{index + 1}.</span>
-            {explainCode(c) ?? "No explanation supplied."}
+            {explainCode(c)}
           </p>
           <code className="mt-0.5 block font-mono text-xs text-muted-foreground">{c}</code>
         </li>
@@ -233,13 +234,10 @@ export function DetailPanel({ item, className }: { item: ReportItem; className?:
               </Field>
             </div>
           )}
-          <Field label="Group">{item.group ?? "n/a"}</Field>
+          {item.group && <Field label="Group">{item.group}</Field>}
           <Field label="Type">{item.widget_type ?? sourceNoun(item)}</Field>
-          {item.thresholds && (
-            <Field label="Thresholds">
-              Warning {item.thresholds.degraded ?? "n/a"}%, critical{" "}
-              {item.thresholds.failed ?? "n/a"}%
-            </Field>
+          {thresholdsText(item.thresholds) && (
+            <Field label="Thresholds">{thresholdsText(item.thresholds)}</Field>
           )}
         </section>
         <section className="detail-section">
@@ -267,7 +265,7 @@ export function DetailPanel({ item, className }: { item: ReportItem; className?:
             />
             {fidelityLabel(item) ?? meta.label}
           </div>
-          <p className="mb-3 text-sm">{meta.copy}</p>
+          <p className="mb-3 text-sm">{verdictCopy(item)}</p>
           <Field label="TARGET">{item.target_panel ?? targetNoun(item)}</Field>
           <Field label="REVIEW">
             {review.decisions[item.id]?.decision ??

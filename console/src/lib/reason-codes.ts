@@ -41,4 +41,9 @@ export const REASON_CODES: Record<string, string> = {
     "The evaluation schedule uses Dash0 defaults: interval 1m, for 0s, keep firing for 0s.",
 };
 
-export const explainCode = (code: string): string | undefined => REASON_CODES[code];
+/** Datadog functions the translator has no rule for (anomalies, forecast, autosmooth, ...) are all reported as fn.<name>. */
+export const explainCode = (code: string): string | undefined =>
+  REASON_CODES[code] ??
+  (code.startsWith("fn.")
+    ? `The Datadog function ${code.slice(3)}() has no automatic translation, so this item is not translated.`
+    : undefined);

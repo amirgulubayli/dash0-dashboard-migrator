@@ -48,7 +48,7 @@ function MapPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="section-label mb-2 break-words">
-              Source dashboard · {report.run.source ?? "not recorded"}
+              Source dashboard{report.run.source ? ` · ${report.run.source}` : ""}
             </div>
             <h2 className="text-[32px] font-semibold leading-tight">
               What survived the migration?
@@ -63,12 +63,7 @@ function MapPage() {
                   Open live dashboard in Dash0
                 </a>
               </Button>
-            ) : (
-              <Button variant="outline" disabled>
-                <ExternalLink />
-                Not imported yet
-              </Button>
-            )}
+            ) : null}
           </div>
         </div>
         <div className="mt-5 grid grid-cols-[minmax(0,62fr)_minmax(0,38fr)] gap-6">
@@ -81,15 +76,17 @@ function MapPage() {
               ].map((n) => (
                 <div key={n.label} className="min-w-0 px-4 first:pl-0">
                   <div className="console-number">{n.value}</div>
-                  <p className="mt-2 font-mono text-[10px] uppercase leading-4">{n.label}</p>
+                  <p className="mt-2 font-mono text-xs uppercase leading-4">{n.label}</p>
                 </div>
               ))}
             </div>
-            <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+            <p className="mt-3 font-mono text-sm text-muted-foreground">
               {metricWidgetsLine(counts)}
             </p>
-            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-              {textAndLogsLine(counts)} · {counts.checkRules} check rule
+            <p className="mt-1 font-mono text-sm text-muted-foreground">
+              {textAndLogsLine(counts)} · {counts.checkRules} monitor
+              {counts.checkRules === 1 ? "" : "s"}, {counts.checkRulesTranslated} translated as a
+              check rule
             </p>
           </div>
           <div

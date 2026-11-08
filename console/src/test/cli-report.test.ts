@@ -162,6 +162,7 @@ describe("counts lines", () => {
       logPanels: 0,
       logsUnsupported: 0,
       checkRules: 0,
+      checkRulesTranslated: 0,
     };
     expect(metricWidgetsLine(b)).toBe(
       "3 metric widgets: 2 exact, 0 exact if a condition holds, 1 approximate, 0 can't migrate automatically",

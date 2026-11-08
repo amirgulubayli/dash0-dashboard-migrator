@@ -450,6 +450,9 @@ export const isLogPanel = (i: ReportItem) =>
   i.widget_type === "list_stream" || i.widget_type === "log_stream";
 export const isMetricWidget = (i: ReportItem) =>
   i.kind === "widget" && !isTextNote(i) && !isLogPanel(i);
+/** A monitor becomes a Dash0 check rule only when the CLI translated it (exact or approximate). Manual ones stay as notes. */
+export const isTranslatedMonitor = (i: ReportItem) =>
+  i.kind === "monitor" && (i.status === "exact" || i.status === "approximate");
 export function widgetBreakdown(items: ReportItem[]) {
   const metrics = items.filter(isMetricWidget);
   return {
@@ -465,6 +468,7 @@ export function widgetBreakdown(items: ReportItem[]) {
       (i) => i.kind === "widget" && isLogPanel(i) && i.status === "unsupported",
     ).length,
     checkRules: items.filter((i) => i.kind === "monitor").length,
+    checkRulesTranslated: items.filter((i) => isTranslatedMonitor(i)).length,
   };
 }
 export const fidelityLabel = (i: ReportItem): string | undefined =>
