@@ -34,6 +34,8 @@ export interface Row {
   promql: string[];
   thresholds?: { failed: number; degraded?: number };
   enabled?: boolean;
+  /** The item's plain sentence from report.json (src/rules/plain.ts templates), shown in report.html. */
+  plain?: string;
 }
 
 export interface Num {
@@ -102,6 +104,7 @@ export function rowsOf(applied: Report, decisions: Map<string, string>, live: Ma
       promql: i.promql,
       ...(i.thresholds ? { thresholds: i.thresholds } : {}),
       ...(i.kind === "alert" && i.target ? { enabled: enabled.has(i.target.dash0Id) } : {}),
+      ...(i.explain?.plain ? { plain: i.explain.plain } : {}),
     });
   }
   return rows;
