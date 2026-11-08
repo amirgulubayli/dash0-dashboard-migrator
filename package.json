@@ -1,6 +1,6 @@
 {
   "name": "dash0-dashboard-migrator",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Deterministic Datadog -> Dash0 migrator: dashboards to Perses, queries to PromQL, monitors to Dash0 check rules.",
   "type": "module",
   "private": true,
