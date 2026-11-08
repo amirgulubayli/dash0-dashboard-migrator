@@ -7,8 +7,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | | exact | exact-under | bounded | manual | total |
 |---|---|---|---|---|---|
-| implemented | 70 | 43 | 19 | 55 | 187 |
-| planned | 16 | 29 | 3 | 11 | 59 |
+| implemented | 70 | 46 | 21 | 55 | 192 |
+| planned | 16 | 28 | 3 | 11 | 58 |
 
 ## Pipeline order
 
@@ -20,7 +20,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 4 | `select` Select the metric | metric reference | yes | 13 | Datadog metric → OTel metric through the mapping table. |
 | 5 | `scope` Scope filters | filter term | no | 17 | Datadog tag filters → PromQL label matchers. The parser's grammar enumerates the forms. |
 | 6 | `kind` Metric-kind check | metric reference | no | 3 | Plan 03 §3: the source kind decides which time aggregation is legal. |
-| 7 | `time` Time aggregation | postfix or rollup call | no | 27 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
+| 7 | `time` Time aggregation | postfix or rollup call | no | 31 | Rollups, .as_count(), .as_rate(), fill(). Datadog aggregates time first. |
 | 8 | `space` Space aggregation | aggregation | no | 2 | avg/sum/min/max/count by {tags}, applied after time aggregation. |
 | 9 | `function` Functions | function call | yes | 41 | Pointwise and window functions. Every Datadog function is listed; unknown ones are manual. |
 | 10 | `arith` Arithmetic and formulas | binary or unary operation | no | 9 | Formulas over named queries, constants, division. |
@@ -155,6 +155,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 170 | `time.rollup.args` | .rollup() with too many arguments | no output | manual | unit | — | T4 | implemented |
 | 180 | `time.rollup.counter` | .as_count().rollup(sum, s) / .as_rate().rollup(avg, s) | increase(x[s]) / rate(x[s]) | bounded(ε) | unit, proof:T3 | — | T4 | implemented |
 | 190 | `time.fill` | .fill() other than null (zero, last, linear) | no output: PromQL does not fill gaps | manual | unit | — | T4 | implemented |
+| 200 | `time.window.rollup` | the value over the whole visible window, aggregated avg\|sum\|min\|max (toplist aggregator, top() method), of a query made of rollup buckets | agg_over_time((Q)[$__range:w] @ end()), w = the rollup width | exact-under(A.align, A.boundary, A.window) | unit | probe:at-modifier, probe:range-var | T4 | implemented |
+| 202 | `time.window.last` | the last value over the visible window (toplist aggregator last, top() method last) | Q with every selector at @ end() | exact-under(A.window) | unit | probe:at-modifier | T4 | implemented |
+| 204 | `time.window.counter.sum` | sum over the visible window of per-bucket counts (increase), or avg of per-bucket rates (rate), summed over series | increase(x[$__range] @ end()) / rate(x[$__range] @ end()) in place of each bucket | bounded(ε) | unit | probe:at-modifier, probe:range-var | T4 | implemented |
+| 206 | `time.window.counter.avg` | the same, with the series averaged instead of summed | the same rewrite under avg by (...) | bounded(ε) | unit | probe:at-modifier, probe:range-var | T4 | implemented |
 
 - `time.ddrate.plain`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.as_count.counter.anchored`: Replaces time.as_count.counter (bounded) once Dash0 accepts `anchored`. Priority 75 so it wins when enabled.
@@ -167,6 +171,10 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 - `time.count.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.rollup.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `time.fill`: fill(zero): `or vector(0)` loses label sets; fill(last): last_over_time changes staleness. No claim yet.
+- `time.window.rollup`: The subquery evaluates Q once per rollup bucket and then reduces, Datadog's order (time rollup, space aggregation, then the reducer over the timeframe), like monitor.window. Every bucket Q covers must have the same width w.
+- `time.window.last`: Q @ end() is Q's last point, the bucket ending at the end of the range; @ end() makes it the same value at every step.
+- `time.window.counter.sum`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). Per-bucket increases telescope to the increase over the window (maths.md T4c); the mean of equal-width bucket rates is the rate over the window. The error is the one of increase()/rate() itself.
+- `time.window.counter.avg`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b). Averaging over series and over time commute only when every series reports in every bucket (maths.md T5).
 
 ## Space aggregation (`space`)
 
@@ -203,7 +211,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 133 | `fn.round` | round(q) | round(x) | exact | unit | — | T4 | implemented |
 | 134 | `fn.max_min.scalar` | max(q, n) / min(q, n) | clamp_min(x, n) / clamp_max(x, n) | exact | unit | — | T4 | implemented |
 | 135 | `fn.max_min.series` | max(a, b) / min(a, b) of two queries with the same group-by | a >= b or b / a <= b or b (pointwise) | exact-under(A.both-present) | unit | — | T4 | implemented |
-| 140 | `fn.top.window` | top(q, N, 'mean'\|'max'\|'min'\|'sum', 'desc'\|'asc') | x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc) | exact-under(A.top-uniform) | — | probe:at-modifier, probe:range-var | T4 | planned |
+| 140 | `fn.top.window` | top(q, N, 'mean'\|'max'\|'min'\|'sum'\|'last', 'desc'\|'asc') / topN on a dashboard, or a toplist's top-N limit, when the window value has a time.window.* rule | x and on(<labels>) topk(N, W(x)) for top(); topk(N, W(x)) for a toplist (bottomk for asc), W = the time.window.* form | exact-under(A.top-tie) | unit | probe:at-modifier, probe:range-var | T4 | implemented |
 | 145 | `fn.top` | top(q, N, method, order) / topN / bottomN | topk(N, q) / bottomk(N, q) | exact-under(A.top-stable) | unit | — | T4 | implemented |
 | 150 | `fn.histogram.quantile` | pXX:metric on a distribution | histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w]))) | bounded(ε) | — | — | T4 | planned |
 | 160 | `fn.per_unit.kind` | per_second / per_minute / per_hour / derivative on a metric that is neither a counter nor a growing gauge | no output; deriv() is a least-squares slope, not Datadog's point difference | manual | unit | — | T4 | implemented |
@@ -224,8 +232,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 - `fn.per_unit.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `fn.per_unit.gauge`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
 - `fn.derivative.counter`: ε: |r̂ − r| ≤ g·Δr per window: g = uncovered edge time (< one scrape interval), Δr = rate change inside the window (maths.md T3b).
-- `fn.top.window`: Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105).
-- `fn.top`: fn.top.window (planned, priority 140) drops A.top-stable by ranking once over the window.
+- `fn.top.window`: Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105). Falls back to fn.top (per step, A.top-stable) when W has no rule: area/l2norm/norm methods, mixed or other parts, monitors.
+- `fn.top`: The fallback for fn.top.window (priority 140), which drops A.top-stable by ranking once over the window.
 - `fn.histogram.quantile`: ε: width of the histogram bucket containing the quantile, plus DDSketch's 1% relative error on the Datadog side. Depends on how the metric is ingested (explicit buckets vs exponential histogram).
 
 ## Arithmetic and formulas (`arith`)
@@ -319,8 +327,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 20 | `widget.query_value` | query_value with aggregator avg\|max\|min\|sum\|last | StatChart with the matching calculation | exact-under(A.align, A.boundary) | — | probe:statchart-calculation | T5 | planned |
 | 21 | `widget.query_value.default-agg` | query_value with no aggregator, or one StatChart has no calculation for | StatChart with calculation mean (Datadog's default avg) | exact-under(A.agg-default) | — | — | T5 | planned |
 | 22 | `widget.query_value.multi` | query_value with more than one query | StatChart; Dash0 shows the first query | exact-under(A.stat-first) | — | — | T5 | planned |
-| 30 | `widget.toplist` | toplist | TimeSeriesTable sorted by value, limited to N (uses fn.top.window for the ranking) | exact-under(A.top-uniform) | — | probe:at-modifier | T5 | planned |
-| 31 | `widget.toplist.unranked` | toplist while fn.top.window is not shipped | TimeSeriesTable of every series, without the top-N limit and ranking | exact-under(A.top-unlimited) | — | — | T5 | planned |
+| 30 | `widget.toplist` | toplist with one metric query (optionally scaled by a positive constant), a top-N limit or an outer top(), and an aggregator with a time.window.* rule | TimeSeriesTable of topk(N, W(q)) @ end(): the N series and their whole-window values (uses fn.top.window); the row order is Dash0's | exact-under(A.log-range, A.top-tie) | — | probe:at-modifier, probe:range-var | T5 | planned |
+| 31 | `widget.toplist.unranked` | toplist that can't be ranked over the window (several queries or formulas, a formula over several queries, a log query, no limit, an aggregator or query kind without a time.window.* rule) | TimeSeriesTable of every series, without the top-N limit and ranking | exact-under(A.top-unlimited) | — | — | T5 | planned |
 | 40 | `widget.query_table` | query_table | TimeSeriesTable | exact-under(A.table-single-query) | — | — | T5 | planned |
 | 41 | `widget.query_table.columns` | query_table with several metric or log columns that all group by the same labels, no conditional formats | TimeSeriesTable with one query per column | exact-under(A.table-columns) | — | — | T5 | planned |
 | 45 | `widget.query_table.complex` | query_table with several queries, custom sort or conditional formats | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
@@ -339,7 +347,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | 999 (fallback) | `widget.unknown` | any other widget type | Markdown panel with the original query and the reason | manual | — | — | T5 | planned |
 
 - `widget.query_value.default-agg`: T5 panels.ts. With an explicit aggregator that has no StatChart calculation the finding message names it.
-- `widget.toplist.unranked`: T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.
+- `widget.toplist.unranked`: T5 panels.ts fallback; the finding says why the window form did not apply.
 - `widget.query_table.columns`: Probed on a rendered table: several queries with the same group-by show as one row per group with one value column each. Column headers are Dash0 defaults.
 - `widget.alert_graph`: Reuses the monitor's query translation; status = worst(this, that query).
 - `widget.geomap`: The values per group are kept; the map drawing is not. Multi-level, ungrouped or other-source geomaps stay placeholders (widget.unsupported).
@@ -452,8 +460,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 
 | Id | Statement | Used by |
 |---|---|---|
-| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 9 |
-| `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 9 |
+| `A.align` | PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned (maths.md T8, A1-A2) | 10 |
+| `A.boundary` | no sample lies exactly on a bucket boundary (maths.md T8, A3) | 10 |
 | `A.kind-gauge` | the metric is a gauge; there is no mapping-table entry to confirm its kind | 1 |
 | `A.monitor-rollup-60s` | Datadog evaluates the monitor's inner query on 60 s buckets | 2 |
 | `A.nonzero-denominator` | the denominator is never 0 (Datadog drops the point, PromQL yields ±Inf/NaN) | 2 |
@@ -473,6 +481,9 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.same-key-and` | Datadog applies a literal tag filter and a template variable on the same key together (AND) | 1 |
 | `A.at-range` | the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live) | 1 |
 | `A.monotonic` | the gauge only increases between resets (a running total), so its change per second is rate() | 1 |
+| `A.window` | the dashboard substitutes $__range with its visible time range and end() is the end of that range (read live on StatChart and TimeSeriesTable panels), so a [$__range] @ end() window covers the timeframe Datadog aggregates over | 4 |
+| `A.balanced` | every series in a group reports in every rollup bucket of the window, so averaging over series and over time commute (maths.md T5) | 1 |
+| `A.top-tie` | no two series tie at the N-th place of the ranking, so topk/bottomk over the window value keep the same N series as Datadog (the order in which Dash0 lists them is Dash0's) | 2 |
 | `A.sumby-together` | the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs) | 1 |
 | `A.both-present` | both arguments have a value at the step (Datadog's max/min of a missing point is the other argument) | 1 |
 | `A.log-count` | Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side) | 6 |
@@ -482,7 +493,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.group-limit` | the number of groups stays within the widget's group limit, so Datadog shows every group too | 1 |
 | `A.severity-map` | the Datadog status maps to the OTel severity range listed in mappings/log-attributes.yaml (no 1:1 level) | 1 |
 | `A.all-indexes` | every Datadog log index is queried (Dash0 has no indexes) | 1 |
-| `A.log-range` | the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (a stat uses calculation last-number; a TimeSeriesTable shows the last point), so a scalar covers the same timeframe Datadog aggregates over | 1 |
+| `A.log-range` | the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (a stat uses calculation last-number; a TimeSeriesTable shows the last point), so a scalar covers the same timeframe Datadog aggregates over | 2 |
 | `A.same-samples` | Datadog and Dash0 see the same samples of the counter (maths.md T4 model: a RATE point is (vᵢ − vᵢ₋₁)/s) | 1 |
 | `A.full-window` | every evaluated series has samples across the whole monitor window (Datadog require_full_window) | 1 |
 | `A.no-new-groups` | no new group (host, tag value) appears during the monitor's new_group_delay / new_host_delay | 1 |
@@ -501,8 +512,7 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | `A.table-single-query` | the table has one query, default sorting and no conditional formats | 1 |
 | `A.alt-view` | what the widget conveys is its value per group; the map or chart drawing is not part of that meaning | 1 |
 | `A.table-columns` | every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats | 1 |
-| `A.top-uniform` | every ranked series has samples on the same uniform grid over the dashboard range, and no two window means tie | 2 |
-| `A.top-unlimited` | showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships | 1 |
+| `A.top-unlimited` | showing every series, unranked and without the top-N limit, is acceptable where the toplist can't be ranked over the window (the finding says why) | 1 |
 | `A.agg-default` | a query_value request without an aggregator uses Datadog's default, avg | 1 |
 | `A.stat-first` | only the first query of a multi-query stat panel matters | 1 |
 
@@ -511,8 +521,8 @@ The formal definition (what a rule is, the axioms, how rules are admitted) is pl
 | Probe | Question | How | Rules waiting |
 |---|---|---|---|
 | `probe:anchored` (open) | Does Dash0 accept increase(x[1m] anchored)? | maths.md §11 probe 1: run it in the Dash0 query API | `time.as_count.counter.anchored` |
-| `probe:at-modifier` (yes) | Does Dash0 accept the @ end() modifier in queries? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted by the query API; 935/935 queries with the new constructs accepted (hub #278). That test did NOT show that a dashboard substitutes $__range: see probe:range-var. | `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist` |
-| `probe:range-var` (yes) | Does a Dash0 dashboard substitute $__range with its visible time range in panel queries (and a stat panel with calculation last-number show the value at the end of that range)? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), visual check on a throwaway dashboard (the query API does not substitute variables, so only a rendered panel can answer): a StatChart (calculation last-number) over sum(increase({otel_metric_name="dash0.logs", service_name="frontend"}[$__range])) equalled the same query over a fixed [5m] with the picker at 5m (about 3k) and over a fixed [1h] with the picker at 1h (about 32k). 15m was not read. Import also accepted calculation last-number, and it rendered the last value. TimeSeriesTable (spec {}, what T5 emits for top lists and tables), same org, 1h picker, read by Ali: the panel `time() - E` showed 212 = seconds since E at the moment the page was loaded, i.e. the table shows the LAST point of the range, not the first or the mean; and sum by (service_name) (increase({otel_metric_name="dash0.logs"}[$__range])) equalled the fixed-[1h] control to the digit (frontend-proxy 57.013K, frontend 31.783K, product-catalog 20.981K, checkout 8.174K) and differed from the fixed-[5m] control. The table was read at 1h only. | `fn.default_zero.grouped`, `fn.top.window`, `log.scalar.window` |
+| `probe:at-modifier` (yes) | Does Dash0 accept the @ end() modifier in queries? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben): @ end() accepted by the query API; 935/935 queries with the new constructs accepted (hub #278). That test did NOT show that a dashboard substitutes $__range: see probe:range-var. | `time.window.rollup`, `time.window.last`, `time.window.counter.sum`, `time.window.counter.avg`, `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist` |
+| `probe:range-var` (yes) | Does a Dash0 dashboard substitute $__range with its visible time range in panel queries (and a stat panel with calculation last-number show the value at the end of that range)? | LIVE 2026-11-07 (Ali, org thinc_bavarian_big_ben), visual check on a throwaway dashboard (the query API does not substitute variables, so only a rendered panel can answer): a StatChart (calculation last-number) over sum(increase({otel_metric_name="dash0.logs", service_name="frontend"}[$__range])) equalled the same query over a fixed [5m] with the picker at 5m (about 3k) and over a fixed [1h] with the picker at 1h (about 32k). 15m was not read. Import also accepted calculation last-number, and it rendered the last value. TimeSeriesTable (spec {}, what T5 emits for top lists and tables), same org, 1h picker, read by Ali: the panel `time() - E` showed 212 = seconds since E at the moment the page was loaded, i.e. the table shows the LAST point of the range, not the first or the mean; and sum by (service_name) (increase({otel_metric_name="dash0.logs"}[$__range])) equalled the fixed-[1h] control to the digit (frontend-proxy 57.013K, frontend 31.783K, product-catalog 20.981K, checkout 8.174K) and differed from the fixed-[5m] control. The table was read at 1h only. | `time.window.rollup`, `time.window.counter.sum`, `time.window.counter.avg`, `fn.default_zero.grouped`, `fn.top.window`, `widget.toplist`, `log.scalar.window` |
 | `probe:lt-threshold` (open) | How does Dash0 compare $__threshold for `<` expressions (is higher always worse)? | maths.md §11 probe 5, T0 check-rule export | `monitor.cmp.lt` |
 | `probe:threshold-label` (open) | Does Dash0 expose which threshold fired (failed / degraded) as a label usable in annotation templates? | T0: fire a test rule and read its notification payload | `alert.msg.conditional.label` |
 | `probe:statchart-calculation` (open) | Which StatChart `calculation` names does Dash0 accept (mean, max, min, sum, last)? | T0: export a StatChart with each calculation | `widget.query_value`, `widget.alert_value` |
@@ -539,12 +549,16 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `scope.var.free-form` (exact-under(A.var-default), implemented, T4)
 - `time.as_rate.delta.sum` (exact-under(A.align, A.boundary), planned, T4)
 - `time.weighted` (exact-under(A.static-tags), implemented, T4)
+- `time.window.rollup` (exact-under(A.align, A.boundary, A.window), implemented, T4)
+- `time.window.last` (exact-under(A.window), implemented, T4)
+- `time.window.counter.sum` (bounded(ε), implemented, T4)
+- `time.window.counter.avg` (bounded(ε), implemented, T4)
 - `fn.diff` (exact-under(A.align, A.no-gaps), implemented, T4)
 - `fn.default_zero.grouped` (exact-under(A.at-range), implemented, T4)
 - `fn.default_zero.grouped.monitor` (exact-under(A.monitor-rollup-60s), implemented, T4)
 - `fn.monotonic_diff` (exact-under(A.align, A.no-gaps, A.mono-diff), implemented, T4)
 - `fn.max_min.series` (exact-under(A.both-present), implemented, T4)
-- `fn.top.window` (exact-under(A.top-uniform), planned, T4)
+- `fn.top.window` (exact-under(A.top-tie), implemented, T4)
 - `fn.top` (exact-under(A.top-stable), implemented, T4)
 - `fn.histogram.quantile` (bounded(ε), planned, T4)
 - `arith.group-subset` (exact-under(A.nonzero-denominator), planned, T4)
@@ -565,7 +579,7 @@ Exact-under and bounded claims whose only evidence is a unit test or nothing. Th
 - `widget.query_value` (exact-under(A.align, A.boundary), planned, T5)
 - `widget.query_value.default-agg` (exact-under(A.agg-default), planned, T5)
 - `widget.query_value.multi` (exact-under(A.stat-first), planned, T5)
-- `widget.toplist` (exact-under(A.top-uniform), planned, T5)
+- `widget.toplist` (exact-under(A.log-range, A.top-tie), planned, T5)
 - `widget.toplist.unranked` (exact-under(A.top-unlimited), planned, T5)
 - `widget.query_table` (exact-under(A.table-single-query), planned, T5)
 - `widget.query_table.columns` (exact-under(A.table-columns), planned, T5)

@@ -23,13 +23,13 @@ export const DASHBOARD_RULES: RuleDef[] = [
     note: "T5 panels.ts. With an explicit aggregator that has no StatChart calculation the finding message names it.",
   }),
   w("widget.query_value.multi", 22, "exact-under", "query_value with more than one query", "StatChart; Dash0 shows the first query", { assumptions: ["A.stat-first"] }),
-  w("widget.toplist", 30, "exact-under", "toplist", "TimeSeriesTable sorted by value, limited to N (uses fn.top.window for the ranking)", {
-    assumptions: ["A.top-uniform"],
-    requires: ["probe:at-modifier"],
+  w("widget.toplist", 30, "exact-under", "toplist with one metric query (optionally scaled by a positive constant), a top-N limit or an outer top(), and an aggregator with a time.window.* rule", "TimeSeriesTable of topk(N, W(q)) @ end(): the N series and their whole-window values (uses fn.top.window); the row order is Dash0's", {
+    assumptions: ["A.log-range", "A.top-tie"],
+    requires: ["probe:at-modifier", "probe:range-var"],
   }),
-  w("widget.toplist.unranked", 31, "exact-under", "toplist while fn.top.window is not shipped", "TimeSeriesTable of every series, without the top-N limit and ranking", {
+  w("widget.toplist.unranked", 31, "exact-under", "toplist that can't be ranked over the window (several queries or formulas, a formula over several queries, a log query, no limit, an aggregator or query kind without a time.window.* rule)", "TimeSeriesTable of every series, without the top-N limit and ranking", {
     assumptions: ["A.top-unlimited"],
-    note: "T5 panels.ts interim form; widget.toplist replaces it once fn.top.window ships.",
+    note: "T5 panels.ts fallback; the finding says why the window form did not apply.",
   }),
   w("widget.query_table", 40, "exact-under", "query_table", "TimeSeriesTable", { assumptions: ["A.table-single-query"] }),
   w("widget.query_table.columns", 41, "exact-under", "query_table with several metric or log columns that all group by the same labels, no conditional formats", "TimeSeriesTable with one query per column", {

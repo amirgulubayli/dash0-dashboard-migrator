@@ -80,7 +80,9 @@ export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: 
     // form ([$__range], log.scalar.window); stat panels show it with calculation last-number, a TimeSeriesTable shows
     // the last point by itself.
     const logFor: TranslateLog | undefined = !translateLog ? undefined : WINDOW_FORM_KINDS.has(p.kind) ? (lq, t) => translateLog(lq, { ...t, scalar: true }) : translateLog;
-    const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId, logFor);
+    // A plain toplist (not a sunburst pie or a geomap table) is ranked over the window where T4 has a rule (fn.top.window).
+    const rank = p.kind === "toplist" && p.options.display !== "pie" && p.options.display !== "geomap";
+    const q = p.kind === "markdown" || p.kind === "unsupported" || p.kind === "logs" ? null : translateRequests(p.requests, translate, variables, itemId, logFor, { rank });
     const logs = p.kind === "logs" && logAttributes ? translateLogStream(p, logAttributes, variables, itemId) : undefined;
     const r = toPersesPanel(p, itemId, q, logs);
     const k = key(p.id);

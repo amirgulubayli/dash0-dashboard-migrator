@@ -15,15 +15,16 @@ export type PNode =
   | { k: "call"; fn: string; args: PNode[] }
   /** `by` lists the grouping labels; with `without: true` they are the labels aggregated away instead (`sum without (db) (x)`). */
   | { k: "agg"; op: "avg" | "sum" | "min" | "max" | "count"; by: string[]; without?: boolean; expr: PNode }
-  | { k: "binary"; op: "+" | "-" | "*" | "/" | ">" | ">=" | "<" | "<=" | "==" | "!=" | "or"; lhs: PNode; rhs: PNode }
+  /** `on` (only with "and"): match on these labels only, e.g. `x and on (host) topk(...)`. */
+  | { k: "binary"; op: "+" | "-" | "*" | "/" | ">" | ">=" | "<" | "<=" | "==" | "!=" | "or" | "and"; lhs: PNode; rhs: PNode; on?: string[] }
   | { k: "num"; value: number }
   | { k: "neg"; expr: PNode }
-  | { k: "subquery"; expr: PNode; range: Duration; step: Duration }
+  | { k: "subquery"; expr: PNode; range: Duration; step: Duration; at?: "end()" | "start()" }
   /** A placeholder Dash0 substitutes, e.g. `$__threshold`. */
   | { k: "placeholder"; name: `$${string}` };
 
-// PromQL precedence, loosest first: or < comparisons < + - < * /.
-const PREC: Record<string, number> = { or: 0, ">": 1, ">=": 1, "<": 1, "<=": 1, "==": 1, "!=": 1, "+": 2, "-": 2, "*": 3, "/": 3 };
+// PromQL precedence, loosest first: or < and < comparisons < + - < * /.
+const PREC: Record<string, number> = { or: 0, and: 0.5, ">": 1, ">=": 1, "<": 1, "<=": 1, "==": 1, "!=": 1, "+": 2, "-": 2, "*": 3, "/": 3 };
 
 export function formatDuration(d: Duration): string {
   if (typeof d === "string") return d;
@@ -92,7 +93,7 @@ export function render(n: PNode): string {
       return n.expr.k === "binary" ? `-(${inner})` : `-${inner}`;
     }
     case "subquery":
-      return `(${render(n.expr)})[${formatDuration(n.range)}:${formatDuration(n.step)}]`;
+      return `(${render(n.expr)})[${formatDuration(n.range)}:${formatDuration(n.step)}]${n.at ? ` @ ${n.at}` : ""}`;
     case "binary": {
       const p = PREC[n.op]!;
       const side = (c: PNode, right: boolean) => {
@@ -102,7 +103,8 @@ export function render(n: PNode): string {
         // Left-associative: parenthesise a lower-precedence child, or an equal-precedence right child.
         return cp < p || (right && cp === p) ? `(${s})` : s;
       };
-      return `${side(n.lhs, false)} ${n.op} ${side(n.rhs, true)}`;
+      const op = n.on ? `${n.op} on (${[...n.on].sort().join(", ")})` : n.op;
+      return `${side(n.lhs, false)} ${op} ${side(n.rhs, true)}`;
     }
   }
 }

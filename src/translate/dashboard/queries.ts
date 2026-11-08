@@ -4,7 +4,7 @@
 // so this module depends only on the parser and the IR, not on T4's module.
 import { formatParseError, parseFormula, parseQuery, parseQueryList, type Expr } from "../../parse/index.js";
 import { worst, type Finding, type QuerySet, type Status } from "../../ir/index.js";
-import type { FormulaEnv } from "../query/types.js";
+import type { FormulaEnv, ToplistWindow } from "../query/types.js";
 import { logRef, type DatadogLogQuery, type LogTranslation } from "../logs/index.js";
 
 /** What T4 returns per expression (structurally; findings may still be in T4's older shape). */
@@ -14,6 +14,8 @@ export interface ExprTranslation {
   rules: string[];
   assumptions: string[];
   findings: unknown[];
+  /** T4's answer to TranslateOptions.window: ranked over the window, or why not. */
+  window?: { applied: boolean; reason?: string };
 }
 
 export interface TranslateOptions {
@@ -22,6 +24,8 @@ export interface TranslateOptions {
   /** Dashboard variables for T4: name -> the tag key it filters, or null (free-form / pinned). */
   variables: Record<string, { tag: string | null }>;
   where: string;
+  /** A toplist: rank once over the visible window (T4 fn.top.window). Pass it on to T4 as ctx.window. */
+  window?: ToplistWindow;
 }
 
 export type TranslateExpr = (e: Expr, o: TranslateOptions) => ExprTranslation;
@@ -46,6 +50,8 @@ export interface RequestTranslation {
   rules: string[];
   assumptions: string[];
   findings: Finding[];
+  /** Only when `rank` was asked for: whether the toplist's query was ranked over the window, and if not, why. */
+  window?: { ranked: boolean; reason?: string };
 }
 
 export function translateRequests(
@@ -54,9 +60,25 @@ export function translateRequests(
   variables: TranslateOptions["variables"],
   itemId: string,
   translateLog?: TranslateLog,
+  /** rank: a toplist; its single query is ranked over the window when T4 has a rule for it. */
+  opts: { rank?: boolean } = {},
 ): RequestTranslation {
   const out: RequestTranslation = { queries: [], status: "exact", rules: [], assumptions: [], findings: [] };
+  // Only a toplist with ONE request and ONE plotted query or formula is ranked: Dash0 shows several as columns.
+  let rankWith: (refs: Set<string> | null, f?: { limit?: ToplistWindow["limit"] }, q?: { aggregator?: string }) => ToplistWindow | undefined = () => undefined;
+  if (opts.rank) {
+    const set = sets[0];
+    const plotted = set ? (set.formulas.length ? set.formulas.length : set.queries.filter((x) => !x.hidden).length) : 0;
+    if (sets.length !== 1 || plotted !== 1) out.window = { ranked: false, reason: `the toplist plots ${sets.length !== 1 ? `${sets.length} requests` : `${plotted} queries`}, not one` };
+    else
+      rankWith = (refs, f, q) => {
+        // The aggregator of the query the formula reads (one ref), or of the plotted query itself.
+        const agg = q?.aggregator ?? (refs && refs.size === 1 ? set!.queries.find((x) => refs.has(x.refId))?.aggregator : undefined);
+        return { ...(agg !== undefined && { aggregator: agg }), ...(f?.limit && { limit: f.limit }) };
+      };
+  }
   const add = (r: ExprTranslation, where: string, legend?: string) => {
+    if (r.window) out.window = { ranked: r.window.applied, ...(r.window.reason !== undefined && { reason: r.window.reason }) };
     out.status = worst(out.status, r.status);
     for (const x of r.rules) if (!out.rules.includes(x)) out.rules.push(x);
     for (const x of r.assumptions) if (!out.assumptions.includes(x)) out.assumptions.push(x);
@@ -111,7 +133,8 @@ export function translateRequests(
           manual("query.parse_error", pe && !pe.ok ? `query ${bad!.refId} does not parse: ${formatParseError(pe.error)}` : `formula references unknown queries ${missing.join(", ")}`, bad?.expr ?? f.expr);
           continue;
         }
-        add(translate(p.value, { env, variables, where }), where, f.alias);
+        const window = rankWith(refs, f);
+        add(translate(p.value, { env, variables, where, ...(window && { window }) }), where, f.alias);
       }
       continue;
     }
@@ -120,6 +143,7 @@ export function translateRequests(
       if (q.hidden) continue;
       const lt = logs.get(q.refId);
       if (lt) {
+        if (opts.rank && !out.window) out.window = { ranked: false, reason: "a log query keeps T12's window form; ranking it is not implemented" };
         add(lt, where);
         continue;
       }
@@ -132,7 +156,9 @@ export function translateRequests(
         manual("query.parse_error", `query ${q.refId} does not parse: ${formatParseError(p.error)}`, q.expr);
         continue;
       }
-      for (const e of p.value) add(translate(e, { env, variables, where }), where);
+      const window = p.value.length === 1 ? rankWith(null, undefined, q) : undefined;
+      if (opts.rank && !window && !out.window) out.window = { ranked: false, reason: `the query holds ${p.value.length} expressions, not one` };
+      for (const e of p.value) add(translate(e, { env, variables, where, ...(window && { window }) }), where);
     }
   }
   if (out.queries.length === 0 && out.status !== "manual") manual("query.empty", "the widget has no query to translate");

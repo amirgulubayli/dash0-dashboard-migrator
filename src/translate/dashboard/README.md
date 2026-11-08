@@ -11,7 +11,8 @@ const translate: TranslateExpr = (e, o) => translateQuery(e, { metric: metricLoo
 |---|---|---|
 | timeseries | `TimeSeriesChart` | all-bars → `visual.display: bar`; area/mixed styles → `panel.style` (bounded) |
 | query_value (stat) | `StatChart` | `calculation` from the aggregator: avg→mean, sum, min, max, last→last-number. Precision → `format.decimalPlaces`. Conditional colours are reported |
-| toplist, query_table | `TimeSeriesTable` | bounded: Dash0 has no bar list, and the top-N limit and ranking aren't applied |
+| toplist | `TimeSeriesTable` of `topk(N, W(q))` at `end()` | widget.toplist: the N series ranked over the whole window, each with its window value (row order is Dash0's); widget.toplist.unranked (every series, per-interval) where T4 has no window rule, with the reason |
+| query_table | `TimeSeriesTable` | exact-under for one query or same-grouping columns; sorting and limits are not applied |
 | note | `Markdown` | text kept |
 | log_stream / list_stream | Markdown placeholder | `logs.not_translated` (log search → `dash0.logs` / LogTable is plan 01 T12) |
 | anything else | Markdown placeholder | keeps the original queries and points at the report item |

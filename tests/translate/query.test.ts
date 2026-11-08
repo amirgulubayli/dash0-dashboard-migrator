@@ -63,6 +63,8 @@ function mon(src: string, opts: { critical?: number; warning?: number } = {}, ct
 }
 
 const SEL = (name: string, extra = "") => `{otel_metric_name="${name}"${extra}}`;
+const CPU = `avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))`;
+const NGX = `sum by (host_name) (rate(${SEL("nginx.requests")}[$__rate_interval]))`;
 const used = new Set<string>();
 const track = <T extends { rules: string[] }>(r: T): T => {
   r.rules.forEach((x) => used.add(x));
@@ -120,10 +122,17 @@ const CASES: [string, string, string, string][] = [
   ["time.unmapped.counter", "sum:dd.count.hits{*} by {host}.as_count()", `sum by (host_name) (increase(${SEL("dd.count.hits")}[$__rate_interval]))`, "bounded"],
   ["time.unmapped.counter", "sum:dd.count.hits{*}.as_rate()", `sum (rate(${SEL("dd.count.hits")}[$__rate_interval]))`, "bounded"],
   ["time.unmapped.counter", "avg:dd.rate.bytes{*}", `avg (rate(${SEL("dd.rate.bytes")}[$__rate_interval]))`, "bounded"],
-  ["fn.top", "top(avg:system.cpu.user{*} by {host}, 10, 'mean', 'desc')", `topk(10, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
-  ["fn.top", "top(avg:system.cpu.user{*} by {host}, 5, 'max', 'asc')", `bottomk(5, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
-  ["fn.top", "bottom5_max(avg:system.cpu.user{*} by {host})", `bottomk(5, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
-  ["fn.top", "top10(avg:system.cpu.user{*} by {host})", `topk(10, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))`, "exact-under"],
+  // top() ranks once over the whole window (fn.top.window): the series stay per step, the ranking is at end().
+  ["fn.top.window", "top(avg:system.cpu.user{*} by {host}, 10, 'mean', 'desc')", `${CPU} and on (host_name) topk(10, avg_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under"],
+  ["fn.top.window", "top(avg:system.cpu.user{*} by {host}, 5, 'max', 'asc')", `${CPU} and on (host_name) bottomk(5, max_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under"],
+  ["fn.top.window", "bottom5_max(avg:system.cpu.user{*} by {host})", `${CPU} and on (host_name) bottomk(5, max_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under"],
+  ["time.window.rollup", "top10(avg:system.cpu.user{*} by {host})", `${CPU} and on (host_name) topk(10, avg_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under"],
+  ["time.window.last", "top(avg:system.cpu.user{*} by {host}, 3, 'last', 'desc')", `${CPU} and on (host_name) topk(3, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval] @ end())))`, "exact-under"],
+  ["time.window.counter.sum", "top(sum:nginx.requests{*} by {host}.as_rate(), 5, 'mean', 'desc')", `${NGX} and on (host_name) topk(5, sum by (host_name) (rate(${SEL("nginx.requests")}[$__range] @ end())))`, "bounded"],
+  ["time.window.counter.avg", "top(avg:redis.net.commands{*} by {host}, 5)", `avg by (host_name) (rate(${SEL("redis.commands.processed")}[$__rate_interval])) and on (host_name) topk(5, avg by (host_name) (rate(${SEL("redis.commands.processed")}[$__range] @ end())))`, "bounded"],
+  // No window rule for the method or the query kind: topk per step (fn.top, A.top-stable).
+  ["fn.top", "top(avg:system.cpu.user{*} by {host}, 10, 'area', 'desc')", `topk(10, ${CPU})`, "exact-under"],
+  ["fn.top", "top(sum:nginx.requests{*} by {host}.as_rate(), 5, 'max', 'desc')", `topk(5, ${NGX})`, "bounded"],
   ["fn.cutoff", "cutoff_min(avg:system.cpu.user{*}, 5)", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) >= 5`, "exact-under"],
   ["fn.cutoff", "cutoff_max(avg:system.cpu.user{*}, 95)", `avg (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])) <= 95`, "exact-under"],
   ["fn.count_not_null", "count_not_null(avg:system.cpu.user{*} by {host})", `count (avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval]))) or vector(0)`, "exact-under"],
@@ -463,6 +472,91 @@ describe("monitors", () => {
       expect(r.findings.some((f) => f.code === code)).toBe(true);
     });
   }
+});
+
+describe("toplist: ranked once over the whole window (ctx.window, fn.top.window)", () => {
+  const tw = (src: string, window: TranslateContext["window"], refs: Record<string, string> = {}) => {
+    const env = new Map<string, Expr>();
+    for (const [k, s] of Object.entries(refs)) {
+      const p = parseQuery(s);
+      if (!p.ok) throw new Error(p.error.message);
+      env.set(k, p.value);
+    }
+    const f = Object.keys(refs).length ? parseFormula(src) : parseQuery(src);
+    if (!f.ok) throw new Error(f.error.message);
+    return track(translateQuery(f.value, { ...CTX, window }, env));
+  };
+  const top5 = { count: 5, order: "desc" as const };
+
+  // [what, query or formula, refs, window, expected PromQL, status, rules it must cite]
+  const RANKED: [string, string, Record<string, string>, TranslateContext["window"], string, string, string[]][] = [
+    ["gauge, aggregator avg: mean of the rollup buckets", "avg:system.cpu.user{*} by {host}", {}, { aggregator: "avg", limit: top5 }, `topk(5, avg_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under", ["fn.top.window", "time.window.rollup", "time.rollup.default"]],
+    ["gauge, aggregator max, ascending limit", "avg:system.cpu.user{*} by {host}", {}, { aggregator: "max", limit: { count: 3, order: "asc" } }, `bottomk(3, max_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under", ["fn.top.window", "time.window.rollup"]],
+    ["gauge, aggregator sum", "sum:system.cpu.user{*} by {host}", {}, { aggregator: "sum", limit: top5 }, `topk(5, sum_over_time((sum by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval])))[$__range:$__interval] @ end()))`, "exact-under", ["time.window.rollup"]],
+    ["gauge, aggregator min", "avg:system.cpu.user{*} by {host}", {}, { aggregator: "min", limit: top5 }, `topk(5, min_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under", ["time.window.rollup"]],
+    ["explicit rollup: the subquery steps by the rollup width", "avg:redis.mem.used{*} by {host}.rollup(max, 300)", {}, { aggregator: "avg", limit: top5 }, `topk(5, avg_over_time((avg by (host_name) (max_over_time(${SEL("redis.memory.used")}[5m])))[$__range:5m] @ end()))`, "exact-under", ["time.window.rollup", "time.rollup.explicit"]],
+    ["aggregator last: Q at end()", "avg:system.cpu.user{*} by {host}", {}, { aggregator: "last", limit: top5 }, `topk(5, avg by (host_name) (avg_over_time(${SEL("system.cpu.utilization")}[$__interval] @ end())))`, "exact-under", ["time.window.last"]],
+    ["counter .as_count(), aggregator sum: increase over the window", "sum:nginx.requests{*} by {host}.as_count()", {}, { aggregator: "sum", limit: { count: 10, order: "desc" } }, `topk(10, sum by (host_name) (increase(${SEL("nginx.requests")}[$__range] @ end())))`, "bounded", ["time.window.counter.sum", "time.as_count.counter"]],
+    ["Datadog RATE on a counter, aggregator avg: rate over the window", "sum:redis.net.commands{*} by {host}", {}, { aggregator: "avg", limit: top5 }, `topk(5, sum by (host_name) (rate(${SEL("redis.commands.processed")}[$__range] @ end())))`, "bounded", ["time.window.counter.sum", "time.ddrate.plain"]],
+    ["formula: one query scaled by a constant", "query1 / 1000", { query1: "avg:system.cpu.user{*} by {host}" }, { aggregator: "avg", limit: top5 }, `topk(5, avg_over_time((${CPU} / 1000)[$__range:$__interval] @ end()))`, "exact-under", ["fn.top.window", "arith.number"]],
+    ["legacy top() inside the toplist query, method = aggregator", "top(avg:system.cpu.user{*} by {host}, 10, 'mean', 'desc')", {}, { aggregator: "avg" }, `topk(10, avg_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under", ["fn.top.window"]],
+    ["legacy top() whose method differs from the aggregator: shown by one, ranked by the other", "top(avg:system.cpu.user{*} by {host}, 10, 'mean', 'desc')", {}, { aggregator: "max" }, `max_over_time((${CPU})[$__range:$__interval] @ end()) and on (host_name) topk(10, avg_over_time((${CPU})[$__range:$__interval] @ end()))`, "exact-under", ["fn.top.window"]],
+  ];
+  for (const [what, src, refs, window, promql, status, rules] of RANKED) {
+    it(what, () => {
+      const r = tw(src, window, refs);
+      expect(r.window).toEqual({ applied: true });
+      expect(r.promql).toBe(promql);
+      expect(r.status).toBe(status);
+      expect(r.rules).toEqual(expect.arrayContaining(rules));
+      expect(r.rules).not.toContain("fn.top");
+      expect(validatePromQL(r.promql!).ok).toBe(true);
+    });
+  }
+
+  it("averaging a counter over series needs the balanced-buckets assumption", () => {
+    const r = tw("avg:redis.net.commands{*} by {host}", { aggregator: "avg", limit: top5 });
+    expect(r.promql).toBe(`topk(5, avg by (host_name) (rate(${SEL("redis.commands.processed")}[$__range] @ end())))`);
+    expect(r.rules).toContain("time.window.counter.avg");
+    expect(r.assumptions).toEqual(expect.arrayContaining(["A.window", "A.balanced", "A.top-tie"]));
+  });
+
+  // Fail closed to today's per-interval form (T5 then keeps widget.toplist.unranked), with the reason.
+  const UNRANKED: [string, string, Record<string, string>, TranslateContext["window"], RegExp][] = [
+    ["average of per-bucket counts", "sum:nginx.requests{*} by {host}.as_count()", {}, { aggregator: "avg", limit: top5 }, /the average over the window of per-bucket counts has no window rule/],
+    ["max of per-bucket rates", "sum:nginx.requests{*} by {host}.as_rate()", {}, { aggregator: "max", limit: top5 }, /the max over the window of per-bucket rates/],
+    ["sum of per-bucket rates", "sum:nginx.requests{*} by {host}.as_rate()", {}, { aggregator: "sum", limit: top5 }, /the sum over the window of per-bucket rates/],
+    ["a counter combined by max over series", "max:nginx.requests{*} by {host}.as_count()", {}, { aggregator: "sum", limit: top5 }, /not a sum\/avg of its series/],
+    ["no top-N limit", "avg:system.cpu.user{*} by {host}", {}, { aggregator: "avg" }, /no top-N limit/],
+    ["no aggregator", "avg:system.cpu.user{*} by {host}", {}, { limit: top5 }, /no aggregator/],
+    ["aggregator without a window rule", "avg:system.cpu.user{*} by {host}", {}, { aggregator: "area", limit: top5 }, /aggregator 'area' has no window rule/],
+    ["formula over two queries", "query1 / query2", { query1: "avg:redis.mem.used{*} by {host}", query2: "avg:redis.mem.maxmemory{*} by {host}" }, { aggregator: "avg", limit: top5 }, /not one metric query/],
+    ["formula with a function", "abs(query1)", { query1: "avg:system.cpu.user{*} by {host}" }, { aggregator: "avg", limit: top5 }, /not one metric query/],
+    ["negative scale (would swap min and max)", "query1 * -1", { query1: "avg:system.cpu.user{*} by {host}" }, { aggregator: "max", limit: top5 }, /not one metric query/],
+    ["both top() and a limit", "top(avg:system.cpu.user{*} by {host}, 10, 'mean', 'desc')", {}, { aggregator: "avg", limit: top5 }, /both a top\(\) and a top-N limit/],
+    ["top() method without a window rule", "top(avg:system.cpu.user{*} by {host}, 10, 'area', 'desc')", {}, { aggregator: "avg" }, /method 'area' has no window rule/],
+  ];
+  for (const [what, src, refs, window, reason] of UNRANKED) {
+    it(`unranked: ${what}`, () => {
+      const r = tw(src, window, refs);
+      const { window: _w, ...plain } = tw(src, undefined, refs);
+      expect(r.window?.applied).toBe(false);
+      expect(r.window?.reason).toMatch(reason);
+      // exactly today's per-interval translation
+      expect({ ...r, window: undefined }).toEqual({ ...plain, window: undefined });
+    });
+  }
+
+  it("a query that can't be translated at all stays manual", () => {
+    const r = tw("avg:redis.info.latency_ms{*} by {host}", { aggregator: "avg", limit: top5 });
+    expect(r).toMatchObject({ status: "manual", promql: null, window: { applied: false } });
+  });
+
+  it("a monitor never uses the window form (top() stays per step)", () => {
+    const r = mon("avg(last_5m):top(avg:system.cpu.user{*} by {host}, 3, 'mean', 'desc') > 90");
+    expect(r.rules).toContain("fn.top");
+    expect(r.rules).not.toContain("fn.top.window");
+  });
 });
 
 describe("coverage of the rule table", () => {
