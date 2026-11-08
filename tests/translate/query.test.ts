@@ -87,7 +87,6 @@ const CASES: [string, string, string, string][] = [
   ["select.metric.transform", "count:redis.dd.scaled{*}", `count (avg_over_time(${SEL("redis.dd.fraction")}[$__interval]))`, "exact-under"],
   ["select.metric.transform", "sum:redis.dd.scaled{*}.rollup(count, 60)", `sum (count_over_time(${SEL("redis.dd.fraction")}[1m]))`, "exact-under"],
   ["select.metric.transform", "avg:redis.dd.cpu_ms{*}", `1000 * avg (rate(${SEL("redis.cpu.time")}[$__interval] anchored))`, "exact-under"],
-  ["select.metric.transform", "sum:redis.dd.cpu_ms{*} by {host}.as_count()", `1000 * sum by (host_name) (increase(${SEL("redis.cpu.time")}[$__interval] anchored))`, "exact-under"],
   ["select.metric.transform", "sum:redis.dd.keys{*} by {host}", `sum by (host_name) (sum without (db) (avg_over_time(${SEL("redis.db.keys")}[$__interval])))`, "exact-under"],
   ["select.metric.transform", "sum:redis.dd.keys{*}.rollup(sum, 60)", `sum (sum without (db) (sum_over_time(${SEL("redis.db.keys")}[1m])))`, "exact-under"],
   ["select.metric.transform", "avg:redis.dd.keys{host:a}", `avg (sum without (db) (avg_over_time(${SEL("redis.db.keys", ', host_name="a"')}[$__interval])))`, "exact-under"],
@@ -159,7 +158,6 @@ const CASES: [string, string, string, string][] = [
   ["select.metric.mapped", "avg:redis.net.clients{*}", `avg (avg_over_time(${SEL("redis.clients.connected")}[$__interval]))`, "exact-under"],
   ["select.labels", "avg:redis.cpu.sys{*} by {host}", `avg by (host_name) (rate(${SEL("redis.cpu.time", ', state="sys"')}[$__interval] anchored))`, "exact-under"],
   ["time.ddrate.plain.anchored", "sum:redis.net.commands{*}", `sum (rate(${SEL("redis.commands.processed")}[$__interval] anchored))`, "exact-under"],
-  ["time.as_count.counter.anchored", "sum:redis.net.commands{*}.as_count()", `sum (increase(${SEL("redis.commands.processed")}[$__interval] anchored))`, "exact-under"],
   ["select.metric.mapped", "avg:redis.dd.gauge_on_counter{*}", `avg (avg_over_time(${SEL("redis.connections.received")}[$__interval]))`, "exact-under"],
   ["select.metric.approximate", "avg:redis.dd.approx{*}", `avg (avg_over_time(${SEL("redis.memory.rss")}[$__interval]))`, "bounded"],
 ];
@@ -336,6 +334,9 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["fn.monotonic_diff.agg", "monotonic_diff(count:system.cpu.user{*})"],
     ["fn.diff.agg", "diff(abs(avg:system.cpu.user{*}))"],
     ["time.kind-unknown", "sum:custom.requests.count2{*}.as_count()"],
+    ["time.kind", "sum:redis.net.commands{*}.as_count()"],
+    ["time.kind", "sum:redis.net.commands{*}.as_rate()"],
+    ["time.kind", "sum:redis.dd.cpu_ms{*} by {host}.as_count()"],
     ["select.labels.clash", "avg:redis.cpu.sys{state:user}"],
     ["metric.no_equivalent", "avg:redis.info.latency_ms{*}"],
     ["metric.derived", "avg:redis.dd.derived{*}"],
@@ -395,8 +396,8 @@ describe("monitors", () => {
   });
 
   it("sum(last_W) with .as_count() on a counter is the window's increase (no subquery)", () => {
-    const r = track(mon("sum(last_5m):sum:redis.net.commands{*} by {host}.as_count() > 100", { critical: 100, warning: 50 }));
-    expect(r.promql).toBe(`sum by (host_name) (increase(${SEL("redis.commands.processed")}[5m])) > $__threshold`);
+    const r = track(mon("sum(last_5m):sum:redis.dd.count{*} by {host}.as_count() > 100", { critical: 100, warning: 50 }));
+    expect(r.promql).toBe(`sum by (host_name) (increase(${SEL("redis.keys.evicted")}[5m])) > $__threshold`);
     expect(r).toMatchObject({ status: "bounded", thresholds: { failed: 100, degraded: 50 } });
     expect(r.rules).toContain("monitor.sum.as_count");
   });
@@ -404,7 +405,7 @@ describe("monitors", () => {
   it("monitors keep the extrapolated counter forms (bounded, no `anchored`): a check rule with it has not been probed", () => {
     const cases: [string, string][] = [
       ["avg(last_5m):avg:redis.net.commands{*} > 100", "time.ddrate.plain"],
-      ["avg(last_5m):sum:redis.net.commands{*}.as_rate() > 100", "time.as_rate.counter"],
+      ["avg(last_5m):sum:nginx.requests{*}.as_rate() > 100", "time.as_rate.counter"],
       ["sum(last_5m):sum:dd.count.hits{*}.as_count() > 100", "time.unmapped.counter"],
       ["sum(last_5m):sum:dd.count.hits{*} > 100", "time.count.default"],
       ["sum(last_5m):sum:redis.dd.count{*} > 100", "time.count.counter"],
@@ -421,14 +422,14 @@ describe("monitors", () => {
 
   it("sum(last_W) totals survive linear arithmetic and fail closed otherwise (no W/60x overcount)", () => {
     const tot = (q: string) => `sum (increase(${SEL(q)}[5m]))`;
-    const lin = mon("sum(last_5m):sum:redis.net.commands{*}.as_count() * 2 - sum:nginx.requests{*}.as_count() > 100");
-    expect(lin.promql).toBe(`${tot("redis.commands.processed")} * 2 - ${tot("nginx.requests")} > $__threshold`);
+    const lin = mon("sum(last_5m):sum:redis.dd.count{*}.as_count() * 2 - sum:nginx.requests{*}.as_count() > 100");
+    expect(lin.promql).toBe(`${tot("redis.keys.evicted")} * 2 - ${tot("nginx.requests")} > $__threshold`);
     expect(lin.rules).toContain("monitor.sum.as_count");
     expect(lin.promql).not.toContain("[5m:1m]");
     for (const q of [
-      "sum(last_5m):sum:redis.net.commands{*}.as_count() / sum:nginx.requests{*}.as_count() > 1",
-      "sum(last_5m):sum:redis.net.commands{*}.as_count() + 5 > 1",
-      "sum(last_5m):abs(sum:redis.net.commands{*}.as_count()) > 1",
+      "sum(last_5m):sum:redis.dd.count{*}.as_count() / sum:nginx.requests{*}.as_count() > 1",
+      "sum(last_5m):sum:redis.dd.count{*}.as_count() + 5 > 1",
+      "sum(last_5m):abs(sum:redis.dd.count{*}.as_count()) > 1",
     ]) {
       const r = mon(q);
       expect(r, q).toMatchObject({ status: "manual", promql: null });

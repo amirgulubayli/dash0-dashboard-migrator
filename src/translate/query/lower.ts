@@ -490,6 +490,12 @@ class Lowerer {
       } else if (c.name === "as_count" || c.name === "as_rate") {
         // .as_count()/.as_rate() suggest a count or rate metric, so don't lean on the gauge assumption here.
         if (!kindKnown) this.manual("time.kind-unknown", `.${c.name}() on ${m.metric}: its kind is unknown (no mapping entry), so the time aggregation can't be chosen`);
+        // A curated row whose ddKind (rate) comes from the check source: Datadog's own metadata types these metrics as GAUGE
+        // (live 2026-11-08: redis.net.commands, 21 of 22 such rows), where .as_count()/.as_rate() do nothing and return the stored
+        // per-second values. T4 assumes a RATE-typed metric (as_count = sum of count deltas); which one applies depends on the
+        // account's metric type, which the table cannot tell, so there is no faithful translation.
+        if (ddRate)
+          this.manual("time.kind", `.${c.name}() on ${m.metric}: Datadog types this metric as a gauge (then .${c.name}() has no effect) or a rate (then it counts); the mapping cannot tell which`);
         if (kind === "gauge") this.use(`time.${c.name}.gauge`);
         else if (kind === "counter") {
           this.use(this.counterRule(c.name === "as_count" ? "time.as_count.counter" : "time.as_rate.counter"));
