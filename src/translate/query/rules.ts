@@ -28,6 +28,11 @@ export const ASSUMPTIONS = {
   "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
   "A.query-threshold": "Datadog evaluates the threshold written in the monitor query, which differs from options.thresholds.critical",
+  "A.window":
+    "the dashboard substitutes $__range with its visible time range and end() is the end of that range (read live on StatChart and TimeSeriesTable panels), so a [$__range] @ end() window covers the timeframe Datadog aggregates over",
+  "A.balanced": "every series in a group reports in every rollup bucket of the window, so averaging over series and over time commute (maths.md T5)",
+  "A.top-tie":
+    "no two series tie at the N-th place of the ranking, so topk/bottomk over the window value keep the same N series as Datadog (the order in which Dash0 lists them is Dash0's)",
 } as const;
 
 export type AssumptionId = keyof typeof ASSUMPTIONS;
@@ -134,6 +139,19 @@ export const RULES = {
     description: "derivative(q) where q sums or averages a Datadog gauge holding an OTel counter's running total -> agg(rate(x[w]))",
   },
   "fn.top": under(["A.top-stable"], "top(q, N, method, order) / topN / bottomN -> topk(N, q) or bottomk(N, q)"),
+  "fn.top.window": under(["A.top-tie"], "top() on a dashboard -> x and on(<labels>) topk(N, W(x)); a toplist's top-N limit -> topk(N, W(x)); W = the whole-window value"),
+  "time.window.rollup": under(["A.align", "A.boundary", "A.window"], "whole-window avg|sum|min|max of a query of rollup buckets -> agg_over_time((Q)[$__range:w] @ end())"),
+  "time.window.last": under(["A.window"], "whole-window last value -> Q with every selector at @ end()"),
+  "time.window.counter.sum": {
+    status: "bounded",
+    assumptions: ["A.window"],
+    description: "whole-window sum of per-bucket increases (or avg of per-bucket rates), summed over series -> increase/rate(x[$__range] @ end())",
+  },
+  "time.window.counter.avg": {
+    status: "bounded",
+    assumptions: ["A.window", "A.balanced"],
+    description: "the same with the series averaged -> avg by (...) (increase/rate(x[$__range] @ end()))",
+  },
   "fn.cutoff": exact("cutoff_min(q, n) -> q >= n, cutoff_max(q, n) -> q <= n (values beyond the cutoff are removed)"),
   "fn.count_not_null": exact("count_not_null(q) -> count(q): the number of series with a value at each step"),
   "fn.count_nonzero": exact("count_nonzero(q) -> count(q != 0)"),

@@ -4,9 +4,14 @@ import type { Expr, MetricQuery, MonitorQuery, ScopeExpr } from "../../parse/ind
 import { validatePromQL } from "../../validate/promql.js";
 import { mapSelectors, render, type Duration, type PMatcher, type PNode } from "./promql.js";
 import { ASSUMPTIONS, RULES, type AssumptionId, type RuleId } from "./rules.js";
-import { worst, type FormulaEnv, type Finding, type LoweredRef, type MetricMapping, type QueryTranslation, type Status, type TranslateContext } from "./types.js";
+import { worst, type FormulaEnv, type Finding, type LoweredRef, type MetricMapping, type QueryTranslation, type Status, type ToplistWindow, type TranslateContext } from "./types.js";
 
 class Manual extends Error {}
+/** The whole-window form does not apply; the caller falls back to the per-step / per-interval form (not a failure). */
+class Skip extends Error {}
+
+/** Datadog toplist aggregator or top() ranking method -> the whole-window reducer (time.window.*). */
+const WINDOW_AGG: Record<string, "avg" | "sum" | "min" | "max" | "last"> = { avg: "avg", mean: "avg", sum: "sum", min: "min", max: "max", last: "last" };
 
 const SPACE_AGGS = new Set(["avg", "sum", "min", "max", "count"]);
 const ROLLUP_FNS = new Set(["avg", "sum", "min", "max", "count"]);
@@ -253,28 +258,24 @@ class Lowerer {
       return { node: { k: "binary", op: "or", lhs: { k: "binary", op: cmp, lhs: a.node, rhs: b.node }, rhs: b.node }, groups: a.groups };
     }
 
-    // top/bottom: rank and keep N series. topk ranks per step; Datadog ranks once over the window (A.top-stable).
-    const short = TOP_SHORTCUT.exec(e.name);
-    if (short && (e.name !== "top" && e.name !== "bottom" ? e.args.length === 1 : e.args.length >= 1 && e.args.length <= 4)) {
-      let k = short[1] === "top" ? "topk" : "bottomk";
-      let n = short[2] !== undefined ? Number(short[2]) : 10;
-      if (e.name === "top" || e.name === "bottom") {
-        if (e.args.length >= 2) n = numArg(1);
-        const order = e.args[3];
-        // bottom()'s direction argument isn't documented the same way as top()'s: don't guess which way it flips.
-        if (order && e.name === "bottom") this.manual("fn.top.args", "bottom() with an explicit order: semantics not confirmed");
-        if (order) {
-          if (order.type !== "string" || !["asc", "desc"].includes(order.value)) this.manual("fn.top.args", `${e.name}(): order must be 'asc' or 'desc'`);
-          if (order.value === "asc") k = k === "topk" ? "bottomk" : "topk";
-        }
-        const method = e.args[2];
-        if (method && (method.type !== "string" || !["mean", "min", "max", "last", "area", "l2norm", "norm", "sum"].includes(method.value)))
-          this.manual("fn.top.args", `${e.name}(): unknown ranking method`);
-      }
-      if (!Number.isInteger(n) || n <= 0) this.manual("fn.top.args", `${e.name}(): N must be a positive integer`);
+    // top/bottom: rank and keep N series. Datadog ranks once over the whole window: on a dashboard that is
+    // x and on(<labels>) topk(N, W(x)) (fn.top.window); where W has no rule, topk per step (fn.top, A.top-stable).
+    const top = this.topArgs(e);
+    if (top) {
       const x = this.expr(exprArg(0), env);
+      const m = WINDOW_AGG[top.method];
+      if (m && x.groups !== null && !this.monitor && this.interval === "$__interval") {
+        try {
+          const rank = this.windowValue(x, m);
+          this.use("fn.top.window");
+          const node: PNode = { k: "binary", op: "and", on: x.groups, lhs: x.node, rhs: { k: "call", fn: top.k, args: [{ k: "num", value: top.n }, rank] } };
+          return { node, groups: x.groups };
+        } catch (err) {
+          if (!(err instanceof Skip)) throw err;
+        }
+      }
       this.use("fn.top");
-      return { node: { k: "call", fn: k, args: [{ k: "num", value: n }, x.node] }, groups: x.groups };
+      return { node: { k: "call", fn: top.k, args: [{ k: "num", value: top.n }, x.node] }, groups: x.groups };
     }
 
     if ((e.name === "cutoff_min" || e.name === "cutoff_max") && e.args.length === 2) {
@@ -368,6 +369,115 @@ class Lowerer {
       return { node, groups: x.groups };
     }
     this.manual(`fn.${e.name}`, `no exact rule for Datadog function ${e.name}()`);
+  }
+
+  /** top(q, N, method, order) / topN / bottomN_max ...: the ranking it asks for, or null if `e` is not one. */
+  topArgs(e: Extract<Expr, { type: "call" }>): { k: "topk" | "bottomk"; n: number; method: string } | null {
+    const short = TOP_SHORTCUT.exec(e.name);
+    if (!short || !(e.name !== "top" && e.name !== "bottom" ? e.args.length === 1 : e.args.length >= 1 && e.args.length <= 4)) return null;
+    let k: "topk" | "bottomk" = short[1] === "top" ? "topk" : "bottomk";
+    let n = short[2] !== undefined ? Number(short[2]) : 10;
+    // Datadog's default ranking method is the mean.
+    let method = short[3] ?? "mean";
+    if (e.name === "top" || e.name === "bottom") {
+      const nArg = e.args[1];
+      if (nArg) {
+        const x = nArg.type === "expr" ? nArg.expr : null;
+        if (x?.type !== "number") this.manual("fn.args", `${e.name}(): argument 2 must be a number`);
+        n = x.value;
+      }
+      const order = e.args[3];
+      // bottom()'s direction argument isn't documented the same way as top()'s: don't guess which way it flips.
+      if (order && e.name === "bottom") this.manual("fn.top.args", "bottom() with an explicit order: semantics not confirmed");
+      if (order) {
+        if (order.type !== "string" || !["asc", "desc"].includes(order.value)) this.manual("fn.top.args", `${e.name}(): order must be 'asc' or 'desc'`);
+        if (order.value === "asc") k = k === "topk" ? "bottomk" : "topk";
+      }
+      const m = e.args[2];
+      if (m && (m.type !== "string" || !["mean", "min", "max", "last", "area", "l2norm", "norm", "sum"].includes(m.value)))
+        this.manual("fn.top.args", `${e.name}(): unknown ranking method`);
+      if (m?.type === "string") method = m.value;
+    }
+    if (!Number.isInteger(n) || n <= 0) this.manual("fn.top.args", `${e.name}(): N must be a positive integer`);
+    return { k, n, method };
+  }
+
+  // ---------- whole-window values (toplists, top()) ----------
+
+  /**
+   * x's value over the whole visible window, reduced like Datadog's toplist aggregator / top() method, at end() so
+   * every step of a range query carries the same value. Throws Skip when no time.window.* rule covers x.
+   * - last: Q with every selector at @ end(): Q's last point (time.window.last).
+   * - avg|sum|min|max over rollup buckets of one width w: agg_over_time((Q)[$__range:w] @ end()), which evaluates Q per
+   *   bucket and then reduces, Datadog's order (time.window.rollup).
+   * - per-bucket counter values, linear in series: sum of increase() / avg of rate() over the buckets telescopes to
+   *   increase()/rate() over [$__range] (time.window.counter.sum / .avg).
+   */
+  windowValue(x: Lowered, agg: "avg" | "sum" | "min" | "max" | "last"): PNode {
+    if (this.monitor || this.interval !== "$__interval") throw new Skip("the whole-window form is for dashboard queries only");
+    const leaves = windowLeaves(x.node);
+    if (leaves.other) throw new Skip("the query has a part that is not a per-bucket metric rollup or counter (a nested ranking, a subquery, or a [$__range] term)");
+    if (agg === "last") {
+      this.use("time.window.last");
+      return mapSelectors(x.node, (s) => ({ ...s, at: "end()" }));
+    }
+    if (leaves.rollup.length && !leaves.counter.length) {
+      const widths = [...new Set(leaves.rollup.map(String))];
+      if (widths.length !== 1) throw new Skip("the query mixes rollups of different widths");
+      this.use("time.window.rollup");
+      return { k: "call", fn: `${agg}_over_time`, args: [{ k: "subquery", expr: x.node, range: "$__range", step: leaves.rollup[0]!, at: "end()" }] };
+    }
+    if (leaves.counter.length && !leaves.rollup.length) {
+      const fns = [...new Set(leaves.counter)];
+      if (fns.length !== 1) throw new Skip("the query mixes counts (increase) and rates (rate)");
+      const fn = fns[0]!;
+      if (!((fn === "increase" && agg === "sum") || (fn === "rate" && agg === "avg")))
+        throw new Skip(`${agg === "avg" ? "the average" : agg === "sum" ? "the sum" : `the ${agg}`} over the window of per-bucket ${fn === "increase" ? "counts" : "rates"} has no window rule (only a sum of counts or an average of rates)`);
+      if (!linearInSeries(x.node)) throw new Skip("the counter query is not a sum/avg of its series with linear arithmetic");
+      if (hasAgg(x.node, "sum")) this.use("time.window.counter.sum");
+      if (hasAgg(x.node, "avg")) this.use("time.window.counter.avg");
+      return mapSelectors(x.node, (s) => ({ ...s, range: "$__range", at: "end()" }));
+    }
+    throw new Skip(leaves.rollup.length ? "the query mixes rollups and counters" : "the query reads no metric");
+  }
+
+  /**
+   * T5 toplist (ctx.window): rank once over the window. The formula must be ONE metric query, optionally scaled by a
+   * positive constant: Datadog reduces each query of a scalar request with its aggregator, and for several queries or
+   * non-linear functions the order of reducing and combining is not confirmed, so those stay unranked.
+   */
+  toplist(e: Expr, env: FormulaEnv | undefined, w: ToplistWindow): PNode {
+    let body = unparen(e);
+    const top = body.type === "call" ? this.topArgs(body) : null;
+    if (top) {
+      const a = (body as Extract<Expr, { type: "call" }>).args[0];
+      if (a?.type !== "expr") this.manual("fn.args", "top(): argument 1 must be a query");
+      body = unparen(a.expr);
+    }
+    if (top && w.limit) throw new Skip("the toplist has both a top() and a top-N limit");
+    if (!top && !w.limit) throw new Skip("the toplist has no top-N limit");
+    const shape = scaledMetric(body, env);
+    if (shape !== true) throw new Skip(shape);
+    if (!w.aggregator) throw new Skip("the request has no aggregator");
+    const agg = WINDOW_AGG[w.aggregator] === undefined || w.aggregator === "mean" ? undefined : WINDOW_AGG[w.aggregator];
+    if (!agg) throw new Skip(`aggregator '${w.aggregator}' has no window rule`);
+    const x = this.expr(body, env);
+    if (x.groups === null) throw new Skip("the formula is a constant");
+    const value = this.windowValue(x, agg);
+    const k = top ? top.k : w.limit!.order === "asc" ? "bottomk" : "topk";
+    const n = top ? top.n : w.limit!.count;
+    if (!Number.isInteger(n) || n <= 0) throw new Skip("the top-N limit is not a positive integer");
+    let node: PNode;
+    if (!top || WINDOW_AGG[top.method] === agg) node = { k: "call", fn: k, args: [{ k: "num", value: n }, value] };
+    else {
+      // top() ranks by its own method; the table shows the aggregator's value.
+      const m = WINDOW_AGG[top.method];
+      if (!m) throw new Skip(`top() method '${top.method}' has no window rule`);
+      const rank = this.windowValue(x, m);
+      node = { k: "binary", op: "and", on: x.groups, lhs: value, rhs: { k: "call", fn: k, args: [{ k: "num", value: n }, rank] } };
+    }
+    this.use("fn.top.window");
+    return node;
   }
 
   // ---------- metric query ----------
@@ -694,6 +804,81 @@ function linearInSeries(n: PNode): boolean {
   }
 }
 
+/** Leaves of a lowered query, for windowValue: rollup widths, counter functions, and whether anything else reads data. */
+function windowLeaves(n: PNode, out: { rollup: Duration[]; counter: string[]; other: boolean } = { rollup: [], counter: [], other: false }) {
+  switch (n.k) {
+    case "call": {
+      const s = n.args.length === 1 ? n.args[0]! : null;
+      if (s?.k === "selector" && s.range !== undefined && !s.at) {
+        if (/^(avg|sum|min|max|count)_over_time$/.test(n.fn)) {
+          out.rollup.push(s.range);
+          return out;
+        }
+        if (n.fn === "rate" || n.fn === "increase") {
+          out.counter.push(n.fn);
+          return out;
+        }
+      }
+      // A ranking inside ranks per step, which the window form would then reduce: not Datadog's order.
+      if (n.fn === "topk" || n.fn === "bottomk") out.other = true;
+      for (const a of n.args) windowLeaves(a, out);
+      return out;
+    }
+    case "selector":
+    case "subquery":
+      out.other = true;
+      return out;
+    case "agg":
+    case "neg":
+      return windowLeaves(n.expr, out);
+    case "binary":
+      windowLeaves(n.lhs, out);
+      return windowLeaves(n.rhs, out);
+    default:
+      return out;
+  }
+}
+
+function hasAgg(n: PNode, op: string): boolean {
+  switch (n.k) {
+    case "agg":
+      return n.op === op || hasAgg(n.expr, op);
+    case "neg":
+    case "subquery":
+      return hasAgg(n.expr, op);
+    case "binary":
+      return hasAgg(n.lhs, op) || hasAgg(n.rhs, op);
+    case "call":
+      return n.args.some((a) => hasAgg(a, op));
+    default:
+      return false;
+  }
+}
+
+function unparen(e: Expr): Expr {
+  while (e.type === "paren") e = e.expr;
+  return e;
+}
+
+/** true when `e` is one metric query (or a ref to one), optionally times / divided by a positive constant; else why not. */
+function scaledMetric(e: Expr, env: FormulaEnv | undefined): true | string {
+  e = unparen(e);
+  if (e.type === "metric" || e.type === "postfix") return true;
+  if (e.type === "ref") {
+    const t = env?.get(e.name);
+    if (!t) return `the formula references unknown query '${e.name}'`;
+    if ("type" in t && t.type === "lowered") return "a log query keeps T12's window form; ranking it is not implemented";
+    return scaledMetric(t as Expr, env);
+  }
+  const pos = (x: Expr) => {
+    const u = unparen(x);
+    return u.type === "number" && u.value > 0;
+  };
+  if (e.type === "binary" && e.op === "*" && pos(e.left)) return scaledMetric(e.right, env);
+  if (e.type === "binary" && (e.op === "*" || e.op === "/") && pos(e.right)) return scaledMetric(e.left, env);
+  return "the formula is not one metric query (optionally scaled by a positive constant); Datadog's order of reducing and combining several queries or functions is not confirmed";
+}
+
 /** AST fragment without source spans, for a finding's `original`. */
 function stripSpans(x: unknown): unknown {
   if (Array.isArray(x)) return x.map(stripSpans);
@@ -721,9 +906,32 @@ function run(ctx: TranslateContext, interval: Duration, monitor: boolean, f: (l:
   return { ...r, node: r.promql ? node : null };
 }
 
-/** A dashboard query or formula. `env` maps formula refs (`query1`) to their parsed queries. */
+/**
+ * A dashboard query or formula. `env` maps formula refs (`query1`) to their parsed queries.
+ * With ctx.window (a T5 toplist) it first tries the whole-window ranking (fn.top.window); when that has no rule the
+ * per-interval translation is returned, with window.applied false and the reason.
+ */
 export function translateQuery(e: Expr, ctx: TranslateContext = {}, env?: FormulaEnv): QueryTranslation {
-  const { node: _n, ...r } = run(ctx, ctx.interval ?? "$__interval", false, (l) => l.expr(e, env).node);
+  const interval = ctx.interval ?? "$__interval";
+  if (ctx.window) {
+    const w = ctx.window;
+    const l = new Lowerer(ctx, interval, false);
+    let node: PNode | null = null;
+    let reason = "the query could not be translated in the window form";
+    try {
+      node = l.toplist(e, env, w);
+    } catch (err) {
+      if (err instanceof Skip) reason = err.message;
+      else if (!(err instanceof Manual)) throw err;
+    }
+    if (node) {
+      const r = l.result(node);
+      if (r.promql) return { ...r, window: { applied: true } };
+    }
+    const { node: _n, ...r } = run(ctx, interval, false, (x) => x.expr(e, env).node);
+    return { ...r, window: { applied: false, reason } };
+  }
+  const { node: _n, ...r } = run(ctx, interval, false, (l) => l.expr(e, env).node);
   return r;
 }
 

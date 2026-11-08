@@ -123,6 +123,29 @@ export const QUERY_RULES: RuleDef[] = [
   time("time.fill", 190, "manual", ".fill() other than null (zero, last, linear)", "no output: PromQL does not fill gaps", {
     note: "fill(zero): `or vector(0)` loses label sets; fill(last): last_over_time changes staleness. No claim yet.",
   }),
+  // Whole-window values: what a toplist ranks (and shows) and what top() ranks by. T4 lower.ts windowValue().
+  time("time.window.rollup", 200, "exact-under", "the value over the whole visible window, aggregated avg|sum|min|max (toplist aggregator, top() method), of a query made of rollup buckets", "agg_over_time((Q)[$__range:w] @ end()), w = the rollup width", {
+    assumptions: ["A.align", "A.boundary", "A.window"],
+    requires: ["probe:at-modifier", "probe:range-var"],
+    note: "The subquery evaluates Q once per rollup bucket and then reduces, Datadog's order (time rollup, space aggregation, then the reducer over the timeframe), like monitor.window. Every bucket Q covers must have the same width w.",
+  }),
+  time("time.window.last", 202, "exact-under", "the last value over the visible window (toplist aggregator last, top() method last)", "Q with every selector at @ end()", {
+    assumptions: ["A.window"],
+    requires: ["probe:at-modifier"],
+    note: "Q @ end() is Q's last point, the bucket ending at the end of the range; @ end() makes it the same value at every step.",
+  }),
+  time("time.window.counter.sum", 204, "bounded", "sum over the visible window of per-bucket counts (increase), or avg of per-bucket rates (rate), summed over series", "increase(x[$__range] @ end()) / rate(x[$__range] @ end()) in place of each bucket", {
+    assumptions: ["A.window"],
+    requires: ["probe:at-modifier", "probe:range-var"],
+    epsilon: EPS_RATE,
+    note: "Per-bucket increases telescope to the increase over the window (maths.md T4c); the mean of equal-width bucket rates is the rate over the window. The error is the one of increase()/rate() itself.",
+  }),
+  time("time.window.counter.avg", 206, "bounded", "the same, with the series averaged instead of summed", "the same rewrite under avg by (...)", {
+    assumptions: ["A.window", "A.balanced"],
+    requires: ["probe:at-modifier", "probe:range-var"],
+    epsilon: EPS_RATE,
+    note: "Averaging over series and over time commute only when every series reports in every bucket (maths.md T5).",
+  }),
 
   // ---------- space ----------
   space("space.agg", 10, "exact", "avg|sum|min|max|count by {tags}", "PromQL aggregation by (labels)", { evidence: ["unit", "proof:T5", "exhaustive:E3"] }),
@@ -142,7 +165,7 @@ export const QUERY_RULES: RuleDef[] = [
   fn("fn.per_unit.gauge", 102, "bounded", "per_second/per_minute/per_hour/derivative(q) over a plain gauge that only grows (a running total)", "k * agg(rate(x[w]))", { assumptions: ["A.dd-per-unit", "A.monotonic"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
   fn("fn.derivative.counter", 105, "bounded", "derivative(q) over a gauge holding an OTel counter's running total", "agg(rate(x[w]))", { assumptions: ["A.dd-per-unit"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
   fn("fn.diff", 110, "exact-under", "diff(q)", "q - (q offset interval)", { assumptions: ["A.align", "A.no-gaps"] }),
-  fn("fn.top", 145, "exact-under", "top(q, N, method, order) / topN / bottomN", "topk(N, q) / bottomk(N, q)", { assumptions: ["A.top-stable"], note: "fn.top.window (planned, priority 140) drops A.top-stable by ranking once over the window." }),
+  fn("fn.top", 145, "exact-under", "top(q, N, method, order) / topN / bottomN", "topk(N, q) / bottomk(N, q)", { assumptions: ["A.top-stable"], note: "The fallback for fn.top.window (priority 140), which drops A.top-stable by ranking once over the window." }),
   fn("fn.cutoff", 115, "exact", "cutoff_min(q, n) / cutoff_max(q, n)", "q >= n / q <= n"),
   fn("fn.count_not_null", 120, "exact", "count_not_null(q)", "count(q)"),
   fn("fn.count_nonzero", 125, "exact", "count_nonzero(q)", "count(q != 0)"),
@@ -154,10 +177,10 @@ export const QUERY_RULES: RuleDef[] = [
   fn("fn.round", 133, "exact", "round(q)", "round(x)"),
   fn("fn.max_min.scalar", 134, "exact", "max(q, n) / min(q, n)", "clamp_min(x, n) / clamp_max(x, n)"),
   fn("fn.max_min.series", 135, "exact-under", "max(a, b) / min(a, b) of two queries with the same group-by", "a >= b or b / a <= b or b (pointwise)", { assumptions: ["A.both-present"] }),
-  fnPlan("fn.top.window", 140, "exact-under", "top(q, N, 'mean'|'max'|'min'|'sum', 'desc'|'asc')", "x and on(<labels>) topk(N, <agg>_over_time(x[$__range] @ end())) (bottomk for asc)", {
-    assumptions: ["A.top-uniform"],
+  fn("fn.top.window", 140, "exact-under", "top(q, N, 'mean'|'max'|'min'|'sum'|'last', 'desc'|'asc') / topN on a dashboard, or a toplist's top-N limit, when the window value has a time.window.* rule", "x and on(<labels>) topk(N, W(x)) for top(); topk(N, W(x)) for a toplist (bottomk for asc), W = the time.window.* form", {
+    assumptions: ["A.top-tie"],
     requires: ["probe:at-modifier", "probe:range-var"],
-    note: "Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105).",
+    note: "Ranks once over the whole visible window, like Datadog, instead of per step like plain topk. 129 corpus cases (hub #105). Falls back to fn.top (per step, A.top-stable) when W has no rule: area/l2norm/norm methods, mixed or other parts, monitors.",
   }),
   fnPlan("fn.histogram.quantile", 150, "bounded", "pXX:metric on a distribution", "histogram_quantile(0.XX, sum by (le, <g>) (rate(m_bucket[w])))", {
     epsilon: "width of the histogram bucket containing the quantile, plus DDSketch's 1% relative error on the Datadog side",
@@ -265,6 +288,11 @@ export const T4_TABLE_IDS = [
   "fn.diff",
   "fn.derivative.counter",
   "fn.top",
+  "fn.top.window",
+  "time.window.rollup",
+  "time.window.last",
+  "time.window.counter.sum",
+  "time.window.counter.avg",
   "fn.cutoff",
   "fn.count_not_null",
   "fn.count_nonzero",

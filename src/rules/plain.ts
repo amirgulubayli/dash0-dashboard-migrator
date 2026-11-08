@@ -62,8 +62,10 @@ export const PLAIN_ASSUMPTIONS: Record<string, string> = {
   "A.table-single-query": "the table has a single query and default sorting",
   "A.alt-view": "the numbers per group are what matters, not how they are drawn",
   "A.table-columns": "all columns of the table are grouped the same way and default sorting is fine",
-  "A.top-uniform": "all ranked series have data at the same moments and no two tie",
-  "A.top-unlimited": "showing all series, unranked, is acceptable for now",
+  "A.top-unlimited": "showing all series, unranked, is acceptable for this list",
+  "A.window": "the dashboard's time range is the one Datadog's list covers",
+  "A.balanced": "every series in a group reports in every time bucket",
+  "A.top-tie": "no two series tie for the last place in the top list",
   "A.agg-default": "the panel uses Datadog's default average",
   "A.stat-first": "only the panel's first query matters",
 };

@@ -76,7 +76,7 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
   };
   const channels = loadChannels(o.mappingsDir, o.channelsFile);
   const alertCtx: T6Context = { ...base, ...(channels && { channels: channels.lookup }) };
-  const translate: TranslateExpr = (e, t) => translateQuery(e, { ...base, variables: t.variables, where: t.where }, t.env);
+  const translate: TranslateExpr = (e, t) => translateQuery(e, { ...base, variables: t.variables, where: t.where, ...(t.window && { window: t.window }) }, t.env);
 
   // T12: log queries -> dash0.logs PromQL, when the log-attribute table is present.
   const logAttributesFile = join(o.mappingsDir, "log-attributes.yaml");

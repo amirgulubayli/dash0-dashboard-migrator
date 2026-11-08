@@ -45,6 +45,17 @@ export interface TranslateContext {
   interval?: number | "$__interval";
   /** Item id copied into every finding's `itemId`, e.g. "dd-dash-abc/panel-12/query1". */
   where?: string;
+  /**
+   * Set by T5 for a toplist: rank the query once over the visible window (fn.top.window) instead of emitting its
+   * per-interval form. `aggregator` is the Datadog request aggregator (avg|sum|min|max|last), `limit` the formula's
+   * top-N limit. When the window form has no rule, T4 returns the per-interval translation with `window.applied` false.
+   */
+  window?: ToplistWindow;
+}
+
+export interface ToplistWindow {
+  aggregator?: string;
+  limit?: { count: number; order: "asc" | "desc" };
 }
 
 /**
@@ -74,4 +85,6 @@ export interface QueryTranslation {
   /** Assumption ids for exact-under (see ASSUMPTIONS). */
   assumptions: string[];
   findings: Finding[];
+  /** Only when ctx.window was set: whether the toplist was ranked over the window, and if not, why. */
+  window?: { applied: boolean; reason?: string };
 }

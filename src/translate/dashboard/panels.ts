@@ -178,7 +178,15 @@ export function toPersesPanel(p: Panel, itemId: string, q: RequestTranslation | 
         under("widget.geomap", limits.length ? ["A.style", "A.alt-view", "A.top-unlimited"] : ["A.style", "A.alt-view"], `geomap shown as a table of its values per group (Dash0 has no map panel); the map drawing is not migrated${limits.length ? `, without the top-${limits[0]!.count} limit` : ""}`);
         return result("TimeSeriesTable", {});
       }
-      under("widget.toplist.unranked", ["A.top-unlimited"], `toplist shown as a TimeSeriesTable of every series${limits.length ? `, without the top-${limits[0]!.count} limit and ranking` : ""}`);
+      if (q.window?.ranked) {
+        // T4 ranked the query once over the window (fn.top.window): topk(N, W(q)) at end(), so the table's last point
+        // (probe:range-var) is each kept series' whole-window value. Dash0 orders the rows itself.
+        const n = limits[0]?.count;
+        under("widget.toplist", ["A.log-range", "A.top-tie"], `toplist shown as a TimeSeriesTable of the ${n !== undefined ? `top-${n} ` : ""}series ranked over the whole window, each with its window value; the rows are in Dash0's order, not sorted by value`);
+        return result("TimeSeriesTable", {});
+      }
+      const why = q.window?.reason ? `; not ranked over the window: ${q.window.reason}` : "";
+      under("widget.toplist.unranked", ["A.top-unlimited"], `toplist shown as a TimeSeriesTable of every series${limits.length ? `, without the top-${limits[0]!.count} limit and ranking` : ""}${why}`);
       return result("TimeSeriesTable", {});
     }
     case "table": {
@@ -219,7 +227,9 @@ const ASSUMPTION_TEXT: Record<string, string> = {
   "A.table-single-query": "the table has one query, default sorting and no conditional formats",
   "A.alt-view": "what the widget conveys is its value per group; the map or chart drawing is not part of that meaning",
   "A.table-columns": "every column groups by the same labels, so Dash0 shows one row per group with one value column per query (read on a rendered table); default sorting, no conditional formats",
-  "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable until fn.top.window ships",
+  "A.top-unlimited": "showing every series, unranked and without the top-N limit, is acceptable where the toplist can't be ranked over the window (the finding says why)",
+  "A.log-range": "the panel's $__range is the dashboard's visible time range and the panel shows the value at the end of that range (a stat uses calculation last-number; a TimeSeriesTable shows the last point), so a scalar covers the same timeframe Datadog aggregates over",
+  "A.top-tie": "no two series tie at the N-th place of the ranking, so topk/bottomk over the window value keep the same N series as Datadog (the order in which Dash0 lists them is Dash0's)",
   "A.agg-default": "a query_value request without an aggregator uses Datadog's default, avg",
   "A.stat-first": "only the first query of a multi-query stat panel matters",
 };

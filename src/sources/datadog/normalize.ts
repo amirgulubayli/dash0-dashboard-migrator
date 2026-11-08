@@ -212,10 +212,15 @@ function requestsOf(def: Json): QuerySet[] {
       if (str(q.aggregator)) sq.aggregator = str(q.aggregator)!;
       return sq;
     });
-    const formulas = (Array.isArray(r.formulas) ? r.formulas : []).filter(isObj).map((f) => ({
+    // A toplist's newer `sort` ({count, order_by: [{type: "formula", index, order}]}) is the same top-N limit as a
+    // formula's `limit`, on the formula it orders by.
+    const sort = type === "toplist" && isObj(r.sort) && Number.isFinite(Number(r.sort.count)) && Array.isArray(r.sort.order_by) && r.sort.order_by.length === 1 && isObj(r.sort.order_by[0]) && r.sort.order_by[0].type === "formula" ? { index: Number(r.sort.order_by[0].index ?? 0), count: Number(r.sort.count), order: r.sort.order_by[0].order === "asc" ? ("asc" as const) : ("desc" as const) } : null;
+    const formulas = (Array.isArray(r.formulas) ? r.formulas : []).filter(isObj).map((f, i) => ({
       expr: str(f.formula) ?? "",
       ...(str(f.alias) !== undefined && { alias: str(f.alias)! }),
-      ...(isObj(f.limit) && Number.isFinite(Number(f.limit.count)) && { limit: { count: Number(f.limit.count), order: f.limit.order === "asc" ? ("asc" as const) : ("desc" as const) } }),
+      ...(isObj(f.limit) && Number.isFinite(Number(f.limit.count))
+        ? { limit: { count: Number(f.limit.count), order: f.limit.order === "asc" ? ("asc" as const) : ("desc" as const) } }
+        : sort && sort.index === i && { limit: { count: sort.count, order: sort.order } }),
     }));
     return { queries, formulas };
   });

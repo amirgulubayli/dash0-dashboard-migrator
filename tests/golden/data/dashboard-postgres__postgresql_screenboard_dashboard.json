@@ -201,7 +201,7 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))"
+      "topk(5, avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__range] @ end())))"
     ],
     "rules": [
       "select.metric.mapped",
@@ -209,22 +209,27 @@
       "time.ddrate.plain",
       "space.agg",
       "label.default",
-      "widget.toplist.unranked",
+      "time.window.counter.avg",
+      "fn.top.window",
+      "widget.toplist",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
     "assumptions": [
+      "A.balanced",
       "A.tag-default",
+      "A.top-tie",
       "A.var-default",
-      "A.top-unlimited"
+      "A.window",
+      "A.log-range"
     ],
     "findings": [
       "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
-      "exact-under widget.toplist.unranked"
+      "exact-under widget.toplist"
     ]
   },
   {
@@ -234,7 +239,7 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))"
+      "bottomk(5, avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__range] @ end())))"
     ],
     "rules": [
       "select.metric.mapped",
@@ -242,22 +247,27 @@
       "time.ddrate.plain",
       "space.agg",
       "label.default",
-      "widget.toplist.unranked",
+      "time.window.counter.avg",
+      "fn.top.window",
+      "widget.toplist",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
     "assumptions": [
+      "A.balanced",
       "A.tag-default",
+      "A.top-tie",
       "A.var-default",
-      "A.top-unlimited"
+      "A.window",
+      "A.log-range"
     ],
     "findings": [
       "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
-      "exact-under widget.toplist.unranked"
+      "exact-under widget.toplist"
     ]
   },
   {
@@ -267,14 +277,16 @@
     "widget_type": "toplist",
     "status": "exact-under",
     "promql": [
-      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.table.size\"}[$__interval]))"
+      "topk(5, avg_over_time((avg by (table) (avg_over_time({otel_metric_name=\"postgresql.table.size\"}[$__interval])))[$__range:$__interval] @ end()))"
     ],
     "rules": [
       "select.metric.mapped",
       "time.rollup.default",
       "space.agg",
       "label.default",
-      "widget.toplist.unranked",
+      "time.window.rollup",
+      "fn.top.window",
+      "widget.toplist",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
@@ -284,13 +296,15 @@
       "A.align",
       "A.boundary",
       "A.tag-default",
+      "A.top-tie",
       "A.var-default",
-      "A.top-unlimited"
+      "A.window",
+      "A.log-range"
     ],
     "findings": [
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
-      "exact-under widget.toplist.unranked"
+      "exact-under widget.toplist"
     ]
   },
   {
@@ -300,7 +314,7 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"live\"}[$__interval]))"
+      "topk(5, avg_over_time((avg by (table) (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"live\"}[$__interval])))[$__range:$__interval] @ end()))"
     ],
     "rules": [
       "select.metric.mapped",
@@ -309,7 +323,9 @@
       "time.rollup.default",
       "space.agg",
       "label.default",
-      "widget.toplist.unranked",
+      "time.window.rollup",
+      "fn.top.window",
+      "widget.toplist",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
@@ -319,14 +335,16 @@
       "A.align",
       "A.boundary",
       "A.tag-default",
+      "A.top-tie",
       "A.var-default",
-      "A.top-unlimited"
+      "A.window",
+      "A.log-range"
     ],
     "findings": [
       "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
-      "exact-under widget.toplist.unranked"
+      "exact-under widget.toplist"
     ]
   },
   {
@@ -336,7 +354,7 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "topk(5, sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.database.locks\"}[$__interval])))"
+      "sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.database.locks\"}[$__interval])) and on (lock_mode, table) topk(5, avg_over_time((sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.database.locks\"}[$__interval])))[$__range:$__interval] @ end()))"
     ],
     "rules": [
       "select.metric.mapped",
@@ -344,7 +362,8 @@
       "time.rollup.default",
       "space.agg",
       "label.default",
-      "fn.top",
+      "time.window.rollup",
+      "fn.top.window",
       "widget.timeseries",
       "emit.certificate",
       "validate.preflight",
@@ -355,8 +374,9 @@
       "A.align",
       "A.boundary",
       "A.tag-default",
-      "A.top-stable",
-      "A.var-default"
+      "A.top-tie",
+      "A.var-default",
+      "A.window"
     ],
     "findings": [
       "bounded metric.approximate",
@@ -371,7 +391,7 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.database.locks\"}[$__interval]))"
+      "topk(10, max_over_time((sum by (lock_mode, table) (avg_over_time({otel_metric_name=\"postgresql.database.locks\"}[$__interval])))[$__range:$__interval] @ end()))"
     ],
     "rules": [
       "select.metric.mapped",
@@ -379,7 +399,9 @@
       "time.rollup.default",
       "space.agg",
       "label.default",
-      "widget.toplist.unranked",
+      "time.window.rollup",
+      "fn.top.window",
+      "widget.toplist",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
@@ -389,14 +411,16 @@
       "A.align",
       "A.boundary",
       "A.tag-default",
+      "A.top-tie",
       "A.var-default",
-      "A.top-unlimited"
+      "A.window",
+      "A.log-range"
     ],
     "findings": [
       "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
-      "exact-under widget.toplist.unranked"
+      "exact-under widget.toplist"
     ]
   },
   {
@@ -634,7 +658,7 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "max by (db) (avg_over_time({otel_metric_name=\"postgresql.backends\"}[$__interval]))"
+      "topk(10, avg_over_time((max by (db) (avg_over_time({otel_metric_name=\"postgresql.backends\"}[$__interval])))[$__range:$__interval] @ end()))"
     ],
     "rules": [
       "select.metric.mapped",
@@ -642,7 +666,9 @@
       "time.rollup.default",
       "space.agg",
       "label.default",
-      "widget.toplist.unranked",
+      "time.window.rollup",
+      "fn.top.window",
+      "widget.toplist",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
@@ -652,14 +678,16 @@
       "A.align",
       "A.boundary",
       "A.tag-default",
+      "A.top-tie",
       "A.var-default",
-      "A.top-unlimited"
+      "A.window",
+      "A.log-range"
     ],
     "findings": [
       "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
-      "exact-under widget.toplist.unranked"
+      "exact-under widget.toplist"
     ]
   },
   {
@@ -786,7 +814,7 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "avg by (function) (rate({otel_metric_name=\"postgresql.function.calls\"}[$__rate_interval]))"
+      "topk(10, avg by (function) (rate({otel_metric_name=\"postgresql.function.calls\"}[$__range] @ end())))"
     ],
     "rules": [
       "select.metric.mapped",
@@ -794,22 +822,27 @@
       "time.ddrate.plain",
       "space.agg",
       "label.default",
-      "widget.toplist.unranked",
+      "time.window.counter.avg",
+      "fn.top.window",
+      "widget.toplist",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
     "assumptions": [
+      "A.balanced",
       "A.tag-default",
+      "A.top-tie",
       "A.var-default",
-      "A.top-unlimited"
+      "A.window",
+      "A.log-range"
     ],
     "findings": [
       "bounded metric.approximate",
       "exact-under scope.var.free-form",
       "exact-under tag.unmapped",
-      "exact-under widget.toplist.unranked"
+      "exact-under widget.toplist"
     ]
   },
   {
