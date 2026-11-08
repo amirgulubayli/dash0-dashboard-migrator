@@ -75,8 +75,8 @@ The reads cover every custom dashboard and monitor in the Datadog trial; today t
 
 Informational only: compare 2–3 panel values side by side. Small gaps are expected, because the Agent and the collector sample Redis at different moments (maths.md §9.1, e_D).
 
-## 5b. The incident (both alerts fire)
-`scripts/demo/incident.ts` causes a real `high_mem` incident on the demo Redis, so the Datadog monitor and the Dash0 rule migrated from it both fire. Show it in each product's own UI: Datadog → Monitors, and Dash0 → Alerting. (`dd2dash0 watch`, `dd2dash0 proof` and the console's Incident view were never merged; they are not part of the CLI.)
+## 5b. The incident
+`scripts/demo/incident.ts` causes a real `high_mem` incident on the demo Redis, so the Datadog monitor alerts and the migrated Dash0 rule's expression crosses its `failed` threshold. Show it in each product's own UI: Datadog → Monitors, and Dash0 → Alerting. Migrated rules are imported switched off, so turn the rule on in Dash0 first, or Dash0 will not fire it. In the team's test on 2026-11-08 we evaluated the rule's expression ourselves (it crossed 90 at 06:18:03; the Datadog monitor alerted at 06:19:34); Dash0's own firing state was not recorded. (`dd2dash0 watch`, `dd2dash0 proof` and the console's Incident view were never merged; they are not part of the CLI.)
 
 It only ever writes and deletes keys named `dd2dash0:flood:*`, each with a TTL (default 1 h). It refuses to run when:
 - `maxmemory` is 0 (it would fill the host instead);
