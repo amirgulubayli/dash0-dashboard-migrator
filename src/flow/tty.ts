@@ -11,7 +11,58 @@ import type { KeyIO } from "./keys.js";
  * Resolves the chosen index, or null at end of input.
  */
 export type Choose = (question: string, options: string[], defaultIndex?: number) => Promise<number | null>;
-export type TerminalIO = KeyIO & { close: () => void; choose: Choose };
+/** askBlock(): read a multi-line paste (a .env) without showing it; ends on an empty line or Ctrl+D. */
+export type AskBlock = (prompt: string) => Promise<string | null>;
+export type TerminalIO = KeyIO & { close: () => void; choose: Choose; askBlock: AskBlock };
+
+/** Apply raw keystrokes to a hidden multi-line paste. "done" when Enter arrives on an empty line. Exported for tests. */
+export function blockKeys(state: { text: string; line: string }, chunk: string): "done" | "interrupt" | null {
+  for (let i = 0; i < chunk.length; i++) {
+    // Bracketed paste (the terminal marks where a paste ends): finish right after it, no extra Enter needed.
+    if (chunk.startsWith("\u001b[201~", i)) {
+      if (state.line.trim()) state.text += state.line + "\n";
+      state.line = "";
+      if (state.text.trim()) return "done";
+      i += 5;
+      continue;
+    }
+    const ch = chunk[i]!;
+    if (ch === "\u0003") return "interrupt";
+    if (ch === "\u0004") {
+      if (state.line) state.text += state.line + "\n";
+      state.line = "";
+      return "done";
+    }
+    if (ch === "\r" || ch === "\n") {
+      if (ch === "\r" && chunk[i + 1] === "\n") i++;
+      if (!state.line.trim()) {
+        if (state.text) return "done"; // an empty line after content ends the paste
+        state.line = ""; // leading blank lines are skipped; keep reading the rest of this chunk
+        continue;
+      }
+      const first = !state.text;
+      state.text += state.line + "\n";
+      // A dragged-in file arrives as one typed path: Enter after it is enough.
+      if (first && /^\s*(['"]?)(\/|~|[A-Za-z]:\\|file:\/\/)/.test(state.line) && !state.line.includes("=")) {
+        state.line = "";
+        return "done";
+      }
+      state.line = "";
+      continue;
+    }
+    if (ch === "\u007f" || ch === "\b") {
+      state.line = state.line.slice(0, -1);
+      continue;
+    }
+    if (ch === "\u001b") {
+      const m = /^\u001b(?:\[[0-9;?]*[ -/]*[@-~]|O.|.)?/.exec(chunk.slice(i));
+      i += (m?.[0].length ?? 1) - 1;
+      continue;
+    }
+    if (ch >= " " || ch === "\t") state.line += ch;
+  }
+  return null;
+}
 
 /** Apply one chunk of raw keystrokes to a list selection. Exported for tests. */
 export function chooseKeys(state: { i: number }, chunk: string, n: number): "enter" | "interrupt" | "eof" | null {
@@ -68,13 +119,13 @@ export function applyKeys(
     if (ch === "\u007f" || ch === "\b") {
       if (state.buf) {
         state.buf = [...state.buf].slice(0, -1).join("");
-        if (!secret) echo += "\b \b";
+        echo += "\b \b";
       }
       continue;
     }
     if (ch === "\u0015") {
       // Ctrl+U: clear the line.
-      if (!secret) echo += "\b \b".repeat([...state.buf].length);
+      echo += "\b \b".repeat([...state.buf].length);
       state.buf = "";
       continue;
     }
@@ -86,7 +137,7 @@ export function applyKeys(
     }
     if (ch < " ") continue; // other control characters
     state.buf += ch;
-    if (!secret) echo += ch;
+    echo += secret ? "•" : ch; // a dot per character: you see the paste arrived, never the secret
   }
   return { echo, done: null, rest: "" };
 }
@@ -159,11 +210,39 @@ function ttyIO(input: NodeJS.ReadStream, output: NodeJS.WriteStream): TerminalIO
       input.resume();
       input.on("data", onData);
     });
+  const askBlock: AskBlock = (prompt) =>
+    new Promise((resolve) => {
+      const state = { text: "", line: "" };
+      output.write(`${prompt}\n\x1b[?2004h`); // bracketed paste on: we see where the paste ends
+      const count = () => state.text.split("\n").filter((l) => l.trim()).length + (state.line.trim() ? 1 : 0);
+      const status = () => output.write(`\r\x1b[2K  ${p.dim("⎿")} ${count() ? p.dim(`${count()} line(s) received, not shown`) : p.dim("waiting for a paste or a dropped file · Enter on an empty line to finish")}`);
+      status();
+      const onData = (data: Buffer | string) => {
+        const r = blockKeys(state, typeof data === "string" ? data : data.toString("utf8"));
+        if (r === "interrupt") {
+          input.setRawMode(false);
+          output.write("\x1b[?2004l\n");
+          process.exit(130);
+        }
+        status();
+        if (r === "done") {
+          input.off("data", onData);
+          input.setRawMode(false);
+          input.pause();
+          output.write("\x1b[?2004l\n");
+          resolve(state.text);
+        }
+      };
+      input.setRawMode(true);
+      input.resume();
+      input.on("data", onData);
+    });
   return {
     ask: (p) => ask(p, false),
-    askSecret: (p) => ask(p.replace(/:\s*$/, " (hidden as you type): "), true),
+    askSecret: (p) => ask(p, true),
     print: (l) => output.write(l + "\n"),
     choose,
+    askBlock,
     close: () => {
       if (input.isRaw) input.setRawMode(false);
       input.pause();
@@ -209,5 +288,16 @@ function pipedIO(input: NodeJS.ReadStream, output: NodeJS.WriteStream): Terminal
       if (byWord >= 0) return byWord;
     }
   };
-  return { ask: (p) => ask(p, false), askSecret: (p) => ask(p, true), print: (l) => output.write(l + "\n"), choose, close: () => rl.close() };
+  const askBlock: AskBlock = async (prompt) => {
+    output.write(`${prompt}\n`);
+    const got: string[] = [];
+    for (;;) {
+      const l = await new Promise<string | null>((res) => (lines.length ? res(lines.shift()!) : closed ? res(null) : (waiting = res)));
+      if (l === null || (!l.trim() && got.length)) break;
+      if (l.trim()) got.push(l);
+    }
+    output.write(`  ⎿ ${got.length} line(s) received\n`);
+    return got.length ? got.join("\n") + "\n" : null;
+  };
+  return { ask: (p) => ask(p, false), askSecret: (p) => ask(p, true), print: (l) => output.write(l + "\n"), choose, askBlock, close: () => rl.close() };
 }

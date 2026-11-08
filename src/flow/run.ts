@@ -11,11 +11,11 @@ import { resolveConfig } from "../pipeline/config.js";
 import { runPlan } from "../pipeline/plan.js";
 import { importAll, type PrometheusAlertRule } from "../targets/dash0/index.js";
 import { bar, box, link, Ui, type Out } from "../ui/style.js";
-import { gitIgnoreState, KeyError, KEYS, lookupKeys, parseDotEnv, resolveKeys, saveDotEnv, type KeyIO, type Keys } from "./keys.js";
+import { configEnvPath, displayPath, KeyError, KEYS, keysFromText, knownKeys, LABELS, resolveKeys, saveDotEnv, type KeyIO, type KeyName, type Keys } from "./keys.js";
 import { openBrowser, webKeys } from "./keys-web.js";
 import { batchedReview } from "./review.js";
 import { decisionsOf, rowsOf, scoreOf, writeRunReport, type RunFacts, type Score } from "./score.js";
-import type { Choose } from "./tty.js";
+import type { AskBlock, Choose } from "./tty.js";
 import { verifyLive } from "./verify.js";
 
 export const EXIT = { ok: 0, failed: 1, refused: 2, usage: 3 } as const;
@@ -31,7 +31,9 @@ export interface GuidedOptions {
   dryRun?: boolean;
   version: string;
   mappingsDir: string;
-  io: KeyIO & { choose?: Choose };
+  io: KeyIO & { choose?: Choose; askBlock?: AskBlock };
+  /** Home folder for the per-user key file (tests). */
+  home?: string;
   /** Terminal UI; default: plain lines through io.print (pipes, tests). */
   ui?: Ui;
   /** --browser: enter missing keys on the local web page without asking. */
@@ -84,18 +86,39 @@ export async function guided(o: GuidedOptions): Promise<number> {
   // 1. Keys
   ui.heading("Keys");
   if (!need.datadog && !need.dash0) ui.detail(p.dim("dry run from a folder: no keys needed"));
-  const envPath = join(cwd, ".env");
-  const known = lookupKeys(env, existsSync(envPath) ? parseDotEnv(readFileSync(envPath, "utf8")) : {});
+  const { keys: known } = knownKeys(env, cwd, o.home);
   const wanted = KEYS.filter((k) => (k.startsWith("DD_") ? need.datadog : need.dash0) && k !== "DD_SITE" && k !== "DASH0_DATASET");
   const missing = wanted.filter((k) => !known[k]);
+  const pasted: KeyName[] = [];
   if (missing.length && (o.browser || (interactive && !o.yes))) {
-    const where = o.browser ? 1 : await io.choose!(`${missing.length} key(s) missing. Where do you want to enter them?`, ["Here in the terminal", "In the browser (a one-time page on this computer)"], 0);
-    if (where === 1) {
+    const options = ["Paste your .env, or drag the file into this window", "Type them one by one", "In the browser (a one-time page on this computer)"];
+    const where = o.browser ? 2 : await io.choose!(`${missing.length} key(s) missing. How do you want to add them?`, options, 0);
+    if (where === 0 && io.askBlock) {
+      const text = (await io.askBlock(`  Paste the contents of your .env, or drop the file here ${p.dim("(nothing you paste is shown)")}`)) ?? "";
+      let got: Keys = {};
+      let file: string | null = null;
+      try {
+        ({ keys: got, file } = keysFromText(text, cwd, o.home));
+      } catch (e) {
+        ui.detail(p.bad(`could not read that file: ${(e as Error).message}`));
+      }
+      for (const k of KEYS)
+        if (got[k]) {
+          env[k] = got[k];
+          pasted.push(k);
+        }
+      const where = file ? displayPath(file, o.home) : "the paste";
+      if (pasted.length) ui.detail(`found ${pasted.length} key${pasted.length === 1 ? "" : "s"} in ${where} ${p.dim("(checking them now)")}`);
+      const still = wanted.filter((k) => !env[k] && !known[k]);
+      if (!pasted.length) ui.detail(p.warn("no dd2dash0 keys found in that; asking one by one"));
+      else if (still.length) ui.detail(p.dim(`still missing ${still.map((k) => LABELS[k]).join(", ")}: asked next`));
+    } else if (where === 2) {
       try {
         const r = await webKeys({
           need,
           known,
           cwd,
+          savePath: displayPath(configEnvPath(env, o.home), o.home),
           ...(o.fetch ? { fetch: o.fetch } : {}),
           onReady: (url) => {
             ui.detail(`Enter your keys on ${link(p, "the key page", url)} ${p.dim("(this computer only, works once)")}`);
@@ -105,15 +128,12 @@ export async function guided(o: GuidedOptions): Promise<number> {
         });
         for (const [k, v] of Object.entries(r.keys)) if (v) env[k] = v;
         if (r.save) {
-          const ign = gitIgnoreState(envPath);
-          if (ign === "not-ignored") ui.detail(p.warn("not saved: ./.env is not gitignored in this folder"));
-          else {
-            const toSave: Keys = {};
-            for (const k of KEYS) if (r.keys[k] && r.keys[k] !== known[k]) toSave[k] = r.keys[k];
-            if (Object.keys(toSave).length) {
-              saveDotEnv(envPath, toSave);
-              ui.detail(p.dim(`saved to ./.env (only you can read it)`));
-            }
+          const toSave: Keys = {};
+          for (const k of KEYS) if (r.keys[k] && r.keys[k] !== known[k]) toSave[k] = r.keys[k];
+          if (Object.keys(toSave).length) {
+            const path = configEnvPath(env, o.home);
+            saveDotEnv(path, toSave);
+            ui.detail(p.dim(`saved to ${displayPath(path, o.home)}; dd2dash0 finds them from any folder`));
           }
         }
       } catch (e) {
@@ -124,7 +144,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
   }
   let keys;
   try {
-    keys = await resolveKeys({ need, env, cwd, io, yes: o.yes, ...(o.fetch ? { fetch: o.fetch } : {}) });
+    keys = await resolveKeys({ need, env, cwd, io, yes: o.yes, pasted, ...(o.home ? { home: o.home } : {}), ...(o.fetch ? { fetch: o.fetch } : {}) });
   } catch (e) {
     if (e instanceof KeyError) {
       ui.line(`${p.bad("✗")} dd2dash0: ${e.message}`);

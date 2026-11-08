@@ -12,20 +12,28 @@ import { ConfigError, loadConfig, resolveConfig, type Dd2dash0Config } from "./p
 import { runPlan } from "./pipeline/plan.js";
 import { runApply } from "./pipeline/apply.js";
 import { terminalReview } from "./pipeline/review-terminal.js";
+import { explain } from "./flow/explain.js";
 import { guided, terminalIO } from "./flow/run.js";
 import { outOf, Ui } from "./ui/style.js";
 import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.4.1";
+export const VERSION = "0.5.0";
 
 /**
- * The mapping tables: $DD2DASH0_MAPPINGS, else a mappings/ folder next to the executable (the release download),
- * else the package's own mappings/ (running from source).
+ * The mapping tables, first found wins:
+ *   1. $DD2DASH0_MAPPINGS
+ *   2. a mappings/ folder next to the executable (your own edited tables)
+ *   3. the tables built into the release executable (scripts/release/build.sh embeds them; they are read in place
+ *      from the executable's virtual file system, nothing is unpacked)
+ *   4. the package's own mappings/ (running from source)
  */
 export function defaultMappingsDir(): string {
   if (process.env.DD2DASH0_MAPPINGS) return resolve(process.env.DD2DASH0_MAPPINGS);
+  const isTables = (dir: string) => existsSync(join(dir, "tags.yaml"));
   const besideExe = join(dirname(process.execPath), "mappings");
-  if (existsSync(join(besideExe, "metrics.yaml")) || existsSync(join(besideExe, "tags.yaml"))) return besideExe;
+  if (isTables(besideExe)) return besideExe;
+  const builtIn = join(import.meta.dirname, "mappings");
+  if (isTables(builtIn)) return builtIn;
   return join(import.meta.dirname, "..", "mappings");
 }
 
@@ -40,6 +48,9 @@ Options:
   --only <what>         dashboards | monitors
   --out <dir>           run directory (default ./dd2dash0-run/<timestamp>)
   --version, --help
+
+  dd2dash0 explain "<query>"   show one Datadog query going through the engine: the parse tree, the mapping
+                               tables, the rules that fire, the PromQL and the exact claim
 
 What it does:
   1. keys       finds DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET in the
@@ -84,6 +95,14 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
     return 0;
   }
   if (cmd === undefined || GUIDED_FLAGS.has(cmd)) return runGuided(argv);
+  if (cmd === "explain") {
+    const q = rest.join(" ").trim();
+    if (!q) {
+      console.error('usage: dd2dash0 explain "<Datadog query>"   e.g. dd2dash0 explain "avg:redis.mem.used{env:prod} by {host}"');
+      return EXIT.usage;
+    }
+    return explain({ query: q, mappingsDir: defaultMappingsDir(), ui: new Ui(outOf(process.stdout)), version: VERSION });
+  }
   if (cmd === "plan") return runPlanCmd(rest);
   if (cmd === "review") return runReviewCmd(rest);
   if (cmd === "apply") return runApplyCmd(rest);
