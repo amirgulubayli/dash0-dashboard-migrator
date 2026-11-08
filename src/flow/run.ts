@@ -3,7 +3,6 @@
 // Every step reuses the existing gated pipeline (plan.lock, review.json, apply's refusals); this file only chains them.
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import type { Report } from "../report/types.js";
 import { runApply } from "../pipeline/apply.js";
 import { resolveConfig } from "../pipeline/config.js";
@@ -167,42 +166,4 @@ export async function guided(o: GuidedOptions): Promise<number> {
   return applied.ok && !liveFail ? EXIT.ok : EXIT.failed;
 }
 
-/** Terminal I/O: readline for answers, muted echo for secrets. */
-export function terminalIO(input: NodeJS.ReadStream = process.stdin, output: NodeJS.WriteStream = process.stdout): KeyIO & { close: () => void } {
-  const rl = createInterface({ input, output, terminal: input.isTTY === true });
-  let muted = false;
-  const r = rl as unknown as { _writeToOutput: (s: string) => void; output: NodeJS.WriteStream };
-  const orig = r._writeToOutput.bind(rl);
-  r._writeToOutput = (s: string) => {
-    if (!muted) orig(s);
-    else if (s.includes("\n") || s.includes("\r")) orig("\n");
-  };
-  const lines: string[] = [];
-  let waiting: ((l: string | null) => void) | null = null;
-  let closed = false;
-  rl.on("line", (l) => (waiting ? (waiting(l), (waiting = null)) : lines.push(l)));
-  rl.on("close", () => {
-    closed = true;
-    if (waiting) waiting(null);
-  });
-  const ask = (prompt: string, secret = false) =>
-    new Promise<string | null>((res) => {
-      output.write(prompt);
-      muted = secret && input.isTTY === true;
-      const done = (l: string | null) => {
-        muted = false;
-        // Piped input isn't echoed by a terminal: echo answers (never secrets) so the transcript reads right.
-        if (input.isTTY !== true) output.write(l === null ? "\n" : secret ? "\n" : `${l}\n`);
-        res(l);
-      };
-      if (lines.length) done(lines.shift()!);
-      else if (closed) done(null);
-      else waiting = done;
-    });
-  return {
-    ask: (p) => ask(p),
-    askSecret: (p) => ask(p, true),
-    print: (l) => output.write(l + "\n"),
-    close: () => rl.close(),
-  };
-}
+export { terminalIO } from "./tty.js";
