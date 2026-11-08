@@ -67,12 +67,12 @@
     "widget_type": "query_value",
     "status": "bounded",
     "promql": [
-      "sum (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__rate_interval])) / (sum (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__rate_interval])) + sum (rate({otel_metric_name=\"postgresql.tup_returned\"}[$__rate_interval]))) * 100"
+      "sum (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__interval] anchored)) / (sum (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__interval] anchored)) + sum (rate({otel_metric_name=\"postgresql.tup_returned\"}[$__interval] anchored))) * 100"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "arith.same-groups",
       "arith.div",
@@ -84,10 +84,13 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.nonzero-denominator",
-      "A.var-default",
       "A.align",
-      "A.boundary"
+      "A.boundary",
+      "A.no-reset",
+      "A.nonzero-denominator",
+      "A.regular-sampling",
+      "A.same-samples",
+      "A.var-default"
     ],
     "findings": [
       "bounded metric.approximate",
@@ -134,7 +137,7 @@
     "status": "bounded",
     "promql": [
       "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.table.size\"}[$__interval]))",
-      "avg by (table) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))",
+      "avg by (table) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__interval] anchored))",
       "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"live\"}[$__interval]))",
       "avg by (table) (avg_over_time({otel_metric_name=\"postgresql.rows\", state=\"dead\"}[$__interval]))"
     ],
@@ -144,7 +147,7 @@
       "space.agg",
       "label.default",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "select.labels",
       "widget.query_table.columns",
       "emit.certificate",
@@ -157,6 +160,9 @@
       "A.boundary",
       "A.tag-default",
       "A.var-default",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.table-columns"
     ],
     "findings": [
@@ -173,12 +179,12 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "sum (rate({otel_metric_name=\"postgresql.temp.io\"}[$__rate_interval]))"
+      "sum (rate({otel_metric_name=\"postgresql.temp.io\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -187,6 +193,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.var-default"
     ],
     "findings": [
@@ -201,12 +212,12 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))"
+      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.toplist.unranked",
@@ -216,6 +227,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
@@ -234,12 +250,12 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))"
+      "avg by (index) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.toplist.unranked",
@@ -249,6 +265,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
@@ -404,14 +425,14 @@
     "kind": "panel",
     "title": "Deadlocks count",
     "widget_type": "timeseries",
-    "status": "bounded",
+    "status": "exact-under",
     "promql": [
-      "max by (db) (increase({otel_metric_name=\"postgresql.deadlocks.count\"}[$__rate_interval]))"
+      "max by (db) (increase({otel_metric_name=\"postgresql.deadlocks.count\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.kind-metadata",
-      "time.unmapped.counter",
-      "time.as_count.counter",
+      "time.unmapped.counter.anchored",
+      "time.as_count.counter.anchored",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -421,8 +442,13 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
       "A.kind-metadata",
+      "A.no-reset",
       "A.otel-counter",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default"
     ],
@@ -439,12 +465,12 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__rate_interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -454,6 +480,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default"
     ],
@@ -470,12 +501,12 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__rate_interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -485,6 +516,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default"
     ],
@@ -501,14 +537,14 @@
     "widget_type": "query_table",
     "status": "bounded",
     "promql": [
-      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__rate_interval]))",
-      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__rate_interval]))",
-      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__rate_interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__interval] anchored))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__interval] anchored))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.query_table.columns",
@@ -518,6 +554,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default",
       "A.table-columns"
@@ -536,12 +577,12 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__rate_interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -551,6 +592,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default"
     ],
@@ -567,13 +613,13 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg by (db) (rate({otel_metric_name=\"postgresql.operations\", operation=\"hot_upd\"}[$__rate_interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.operations\", operation=\"hot_upd\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
       "select.labels",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -583,6 +629,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default"
     ],
@@ -690,13 +741,13 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg by (db) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))",
-      "avg by (db) (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__interval] anchored))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.timeseries",
@@ -706,6 +757,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default"
     ],
@@ -722,13 +778,13 @@
     "widget_type": "query_table",
     "status": "bounded",
     "promql": [
-      "avg by (db) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__rate_interval]))",
-      "avg by (db) (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval]))"
+      "avg by (db) (rate({otel_metric_name=\"postgresql.index.scans\"}[$__interval] anchored))",
+      "avg by (db) (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.query_table.columns",
@@ -738,6 +794,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default",
       "A.table-columns"
@@ -756,13 +817,13 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "sum (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval]))",
-      "sum (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__rate_interval] offset 1w))"
+      "sum (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__interval] anchored))",
+      "sum (rate({otel_metric_name=\"postgresql.sequential_scans\"}[$__interval] anchored offset 1w))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "map.timeshift",
       "widget.timeseries",
@@ -772,6 +833,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.var-default"
     ],
     "findings": [
@@ -786,12 +852,12 @@
     "widget_type": "toplist",
     "status": "bounded",
     "promql": [
-      "avg by (function) (rate({otel_metric_name=\"postgresql.function.calls\"}[$__rate_interval]))"
+      "avg by (function) (rate({otel_metric_name=\"postgresql.function.calls\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "label.default",
       "widget.toplist.unranked",
@@ -801,6 +867,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.tag-default",
       "A.var-default",
       "A.top-unlimited"
@@ -857,15 +928,15 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"scheduled\"}[$__rate_interval]))",
-      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__rate_interval]))",
-      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__rate_interval]))"
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"scheduled\"}[$__interval] anchored))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__interval] anchored))",
+      "sum (increase({otel_metric_name=\"postgresql.bgwriter.checkpoint.count\", type=\"requested\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
       "select.labels",
-      "time.as_count.counter",
+      "time.as_count.counter.anchored",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -874,6 +945,10 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.same-samples",
       "A.var-default"
     ],
     "findings": [

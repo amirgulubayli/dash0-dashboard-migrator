@@ -11,7 +11,7 @@ export interface PMatcher {
 }
 
 export type PNode =
-  | { k: "selector"; matchers: PMatcher[]; range?: Duration; offset?: Duration; at?: "end()" | "start()" }
+  | { k: "selector"; matchers: PMatcher[]; range?: Duration; anchored?: boolean; offset?: Duration; at?: "end()" | "start()" }
   | { k: "call"; fn: string; args: PNode[] }
   /** `by` lists the grouping labels; with `without: true` they are the labels aggregated away instead (`sum without (db) (x)`). */
   | { k: "agg"; op: "avg" | "sum" | "min" | "max" | "count"; by: string[]; without?: boolean; expr: PNode }
@@ -74,7 +74,7 @@ export function render(n: PNode): string {
         .map((x) => `${x.label}${x.op}"${escapeString(x.value)}"`)
         .join(", ");
       let s = `{${m}}`;
-      if (n.range !== undefined) s += `[${formatDuration(n.range)}]`;
+      if (n.range !== undefined) s += `[${formatDuration(n.range)}]${n.anchored ? " anchored" : ""}`;
       if (n.at) s += ` @ ${n.at}`;
       if (n.offset !== undefined && n.offset !== 0) s += ` offset ${formatDuration(n.offset)}`;
       return s;

@@ -46,14 +46,13 @@ export const PIPELINE_RULES: RuleDef[] = [
 
   // ---------- logs ----------
   // Implemented by T12 (PR #13): mirrors LOG_RULES in src/translate/logs id for id (tests/rules/conformance.test.ts).
-  log("log.count", 10, "bounded", "log query, compute count, search Q, group_by g", 'sum by (g) (increase({otel_metric_name="dash0.logs", m(Q)}[w]))', {
-    assumptions: ["A.log-count"],
-    epsilon: EPS_RATE,
-    requires: ["probe:log-labels"],
-    evidence: ["unit", "proof:T3", "live:dash0-4110"],
-    note: "exact-under(A.same-samples) once probe:anchored is yes (maths.md §8).",
+  log("log.count", 10, "exact-under", "log query, compute count, search Q, group_by g", 'sum by (g) (increase({otel_metric_name="dash0.logs", m(Q)}[w]))', {
+    assumptions: ["A.log-count", "A.align", "A.boundary"],
+    requires: ["probe:log-labels", "probe:log-increase-exact"],
+    evidence: ["unit", "live:dash0-4110", "live:log-increase-exact"],
+    note: "Dash0's increase(dash0.logs[w]) is the exact number of records in the window (live, maths.md §4a-logs), not an extrapolated counter: no rate error term. Monitors (log.monitor.*) stay bounded: a check rule has not been probed.",
   }),
-  log("log.cardinality", 20, "bounded", "cardinality of @a", "count by (g) (sum by (g, a) (increase(...[w])) > 0)", { assumptions: ["A.log-count"], epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["unit", "proof:T3", "live:dash0-4110"] }),
+  log("log.cardinality", 20, "exact-under", "cardinality of @a", "count by (g) (sum by (g, a) (increase(...[w])) > 0)", { assumptions: ["A.log-count", "A.align", "A.boundary"], requires: ["probe:log-labels", "probe:log-increase-exact"], evidence: ["unit", "live:dash0-4110", "live:log-increase-exact"] }),
   log("log.match.reserved", 30, "exact", "service / host / env / version:x", "the resource label (service_name, ...)", { requires: ["probe:log-labels"] }),
   log("log.match.reserved.approx", 40, "exact-under", "source:x", 'source="x" (no OTel counterpart)', { assumptions: ["A.log-source"] }),
   log("log.match.attr", 50, "exact-under", "@a.b:x", 'a_b="x" (renames from mappings/log-attributes.yaml applied)', { assumptions: ["A.log-attr-default"], requires: ["probe:log-labels"] }),
@@ -68,16 +67,15 @@ export const PIPELINE_RULES: RuleDef[] = [
   log("log.group_by.multi-limit", 140, "exact-under", "several facets with limits", "by (labels), limits not applied", { assumptions: ["A.group-limit"] }),
   log("log.group_by.exclude-missing", 150, "exact", "should_exclude_missing: true", 'label!="" for each group-by label'),
   log("log.range.integer", 155, "exact", "@a:>=500 / @a:[200 TO 299] on integer attributes", "a=~ an exact regex over the decimal digits"),
-  log("log.or.inclusion-exclusion", 157, "bounded", "count(A OR B ...) across different keys (up to 3 branches)", "sum of counts by inclusion-exclusion", { assumptions: ["A.log-count"], epsilon: EPS_RATE, evidence: ["unit", "proof:log-or", "exhaustive:E5"] }),
+  log("log.or.inclusion-exclusion", 157, "exact-under", "count(A OR B ...) across different keys (up to 3 branches)", "sum of counts by inclusion-exclusion", { assumptions: ["A.log-count", "A.align", "A.boundary"], requires: ["probe:log-increase-exact"], evidence: ["unit", "proof:log-or", "exhaustive:E5", "live:log-increase-exact"] }),
   log("log.indexes", 160, "exact-under", "indexes other than '*'", "all logs (Dash0 has no indexes)", { assumptions: ["A.all-indexes"] }),
   log("log.monitor.count", 170, "bounded", "logs(Q).rollup(count).by(g).last(W) op T", "sum by (g) (increase(...[W])) op $__threshold", { assumptions: ["A.log-count"], epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["unit", "proof:T3"] }),
   log("log.monitor.formula", 175, "bounded", 'formula("...").last(W) over log queries', "the formula over windowed counts", { assumptions: ["A.log-count"], epsilon: EPS_RATE, evidence: ["unit", "proof:T3"] }),
-  log("log.scalar.window", 180, "bounded", "scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe)", "the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value", {
+  log("log.scalar.window", 180, "exact-under", "scalar log query: query_value, top list, table (Datadog aggregates over the whole timeframe)", "the same count over [$__range] (not one [$__interval] bucket); the panel shows the last value", {
     assumptions: ["A.log-count", "A.log-range"],
-    epsilon: EPS_RATE,
-    requires: ["probe:range-var"],
-    evidence: ["unit"],
-    note: "T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed, rule arith.scalar-log-mixed). EPS_RATE gets relatively tighter over a long range: the uncovered edge stays under one scrape interval while the window total grows with the range.",
+    requires: ["probe:range-var", "probe:log-increase-exact"],
+    evidence: ["unit", "live:log-increase-exact"],
+    note: "T5 must set the stat/top-list calculation to last-number for these queries. A formula that mixes a scalar log count with a per-interval value fails closed (finding log.scalar.mixed, rule arith.scalar-log-mixed). The whole-range total was exact live (5,660 of 5,660 records).",
   }),
   // Still planned: not in T12 yet.
   logs("logs.rate", 200, "bounded", "log count shown as a rate", 'sum by (<labels>) (rate({otel_metric_name="dash0.logs", …}[1m]))', { epsilon: EPS_RATE, requires: ["probe:log-labels"], evidence: ["proof:T3"] }),

@@ -30,11 +30,11 @@ describe("metadata.csv kinds (mappings/datadog/_kinds.json)", () => {
     expect(loadDdKinds("does/not/exist")).toEqual({});
   });
 
-  it("feeds T4: an unmapped Datadog RATE metric becomes rate()", () => {
+  it("feeds T4: an unmapped Datadog RATE metric becomes rate() on `anchored` (dashboards)", () => {
     const p = parseQuery("sum:activemq.artemis.queue.messages_added{*}");
     if (!p.ok) throw new Error();
     const r = translateQuery(p.value, { metric: metricLookup(maps), ddKind: ddKindLookup(kinds, maps) });
-    expect(r.promql).toBe('sum (rate({otel_metric_name="activemq.artemis.queue.messages_added"}[$__rate_interval]))');
-    expect(r.rules).toContain("time.unmapped.counter");
+    expect(r.promql).toBe('sum (rate({otel_metric_name="activemq.artemis.queue.messages_added"}[$__interval] anchored))');
+    expect(r.rules).toContain("time.unmapped.counter.anchored");
   });
 });

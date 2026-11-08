@@ -6,15 +6,15 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__rate_interval]))",
-      "avg (rate({otel_metric_name=\"postgresql.tup_returned\"}[$__rate_interval]))",
-      "avg (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__rate_interval]))",
-      "avg (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__rate_interval]))"
+      "avg (rate({otel_metric_name=\"postgresql.tup_fetched\"}[$__interval] anchored))",
+      "avg (rate({otel_metric_name=\"postgresql.tup_returned\"}[$__interval] anchored))",
+      "avg (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__interval] anchored))",
+      "avg (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -23,6 +23,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.var-default"
     ],
     "findings": [
@@ -70,14 +75,14 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "avg (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__rate_interval]))",
-      "avg (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__rate_interval]))",
-      "avg (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__rate_interval]))"
+      "avg (rate({otel_metric_name=\"postgresql.tup_inserted\"}[$__interval] anchored))",
+      "avg (rate({otel_metric_name=\"postgresql.tup_deleted\"}[$__interval] anchored))",
+      "avg (rate({otel_metric_name=\"postgresql.tup_updated\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.default-avg",
       "widget.timeseries",
       "emit.certificate",
@@ -86,6 +91,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.var-default"
     ],
     "findings": [
@@ -246,14 +256,14 @@
     "widget_type": "timeseries",
     "status": "bounded",
     "promql": [
-      "sum (rate({otel_metric_name=\"system.network.io\", direction=\"receive\"}[$__rate_interval]))",
-      "sum (rate({otel_metric_name=\"system.network.io\", direction=\"transmit\"}[$__rate_interval]))"
+      "sum (rate({otel_metric_name=\"system.network.io\", direction=\"receive\"}[$__interval] anchored))",
+      "sum (rate({otel_metric_name=\"system.network.io\", direction=\"transmit\"}[$__interval] anchored))"
     ],
     "rules": [
       "select.metric.mapped",
       "select.metric.approximate",
       "select.labels",
-      "time.ddrate.plain",
+      "time.ddrate.plain.anchored",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -262,6 +272,11 @@
       "emit.single-item"
     ],
     "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.no-reset",
+      "A.regular-sampling",
+      "A.same-samples",
       "A.var-default"
     ],
     "findings": [
