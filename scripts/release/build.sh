@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 target="${1:-}"
 out="${2:-dist/dd2dash0}"
-bun="bun"; command -v bun >/dev/null || bun="npx -y bun@1.4.4"
+bun="bun"; command -v bun >/dev/null || bun="npx -y bun@${BUN_VERSION:-1.4.4}"
 mkdir -p "$(dirname "$out")"
 tables=(mappings/tags.yaml mappings/log-attributes.yaml mappings/notification-channels.yaml mappings/datadog/*.yaml mappings/datadog/_kinds.json)
 $bun build src/bin.ts "${tables[@]}" --compile --minify ${target:+--target "$target"} \

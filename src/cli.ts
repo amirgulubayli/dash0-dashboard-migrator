@@ -43,10 +43,13 @@ Usage:
   dd2dash0              asks for your Datadog and Dash0 keys, migrates everything, prints a report
 
 Options:
-  --yes                 no prompts: keys from env/.env, approve bounded panels and translatable monitors
+  --yes                 no prompts: keys from env, .env or the saved file; approve bounded panels and
+                        translatable monitors
   --browser             enter missing keys on a one-time local web page instead of the terminal
   --only <what>         dashboards | monitors
   --out <dir>           run directory (default ./dd2dash0-run/<timestamp>)
+  --dry-run             translate and write the payloads and report, import nothing
+  --input <dir>         read Datadog JSON exports from a folder instead of the API
   --version, --help
 
   dd2dash0 explain "<query>"   show one Datadog query going through the engine: the parse tree, the mapping
@@ -54,11 +57,12 @@ Options:
 
 What it does:
   1. keys       finds DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET in the
-                environment or ./.env, asks for missing ones, checks them, offers to save them to ./.env (0600)
+                environment, ./.env or ~/.config/dd2dash0/.env; asks for missing ones (drag in a .env, paste,
+                type, or --browser), checks them, offers to save them to ~/.config/dd2dash0/.env (0600)
   2. translate  every dashboard -> Perses, every query -> PromQL, every monitor -> a Dash0 check rule
   3. review     one question for all approximate panels, one per monitor; what can't be translated
                 becomes a placeholder panel with the original query (nothing is dropped)
-  4. import     into Dash0; check rules go in disabled
+  4. import     into Dash0; new check rules start off, existing ones keep their on/off state
   5. verify     reads every item back from Dash0, checks the last hour of data against Datadog
   6. report     translated · landed · live · success %, plus <run>/report.html and report.md
 
