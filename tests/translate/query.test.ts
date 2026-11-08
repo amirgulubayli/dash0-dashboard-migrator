@@ -12,6 +12,11 @@ const METRICS: Record<string, MetricMapping> = {
   "nginx.requests": { otel: "nginx.requests", kind: "counter" },
   "app.events": { otel: "app.events", kind: "delta" },
   "http.duration": { otel: "http.server.request.duration", kind: "histogram" },
+  // fn.histogram.quantile fixtures: a curated Datadog distribution read from an OTel histogram.
+  "http.dd.dist": { otel: "http.client.request.duration", kind: "histogram", ddKind: "distribution", status: "exact" },
+  "http.dd.dist_ms": { otel: "http.client.request.duration", kind: "histogram", ddKind: "distribution", status: "exact", scale: 1000 },
+  "http.dd.dist_split": { otel: "rpc.server.duration", kind: "histogram", ddKind: "distribution", status: "exact", sumBy: ["rpc_method"] },
+  "http.dd.gauge_on_hist": { otel: "http.server.request.duration", kind: "histogram", ddKind: "gauge", status: "exact" },
   // Shaped like T1's metricLookup() output (PR #4), taken from mappings/datadog/redisdb.yaml.
   "redis.cpu.sys": { otel: "redis.cpu.time", kind: "counter", ddKind: "rate", labels: { state: "sys" }, status: "exact" },
   "redis.net.commands": { otel: "redis.commands.processed", kind: "counter", ddKind: "rate", status: "exact" },
@@ -306,6 +311,95 @@ describe("select.metric.transform", () => {
   });
 });
 
+describe("fn.histogram.quantile: pXX on a distribution (maths.md §12, T11)", () => {
+  const H = (name: string, extra = "", w = "$__rate_interval") => `rate(${SEL(name, extra)}[${w}])`;
+  const HQ_ASSUMPTIONS = ["A.finite-quantile", "A.histogram-buckets", "A.histogram-samples"];
+
+  it("p95 on a curated distribution -> histogram_quantile over sum by (le) of the bucket rates", () => {
+    const r = track(q("p95:http.dd.dist{*}"));
+    expect(r.promql).toBe(`histogram_quantile(0.95, sum by (le) (${H("http.client.request.duration")}))`);
+    expect(r.status).toBe("bounded");
+    expect(r.rules).toEqual(expect.arrayContaining(["select.metric.mapped", "fn.histogram.quantile"]));
+    expect(r.rules).not.toContain("space.agg");
+    expect(r.assumptions).toEqual(HQ_ASSUMPTIONS);
+    expect(validatePromQL(r.promql!).ok).toBe(true);
+  });
+
+  it("p99.9 keeps the decimal quantile exactly (0.999, no float noise)", () => {
+    const r = track(q("p99.9:http.duration{*}"));
+    expect(r.promql).toBe(`histogram_quantile(0.999, sum by (le) (${H("http.server.request.duration")}))`);
+    expect(r.status).toBe("bounded");
+  });
+
+  it("by {g} and filters: le joins the group-by labels, scope becomes matchers", () => {
+    const r = track(q("p50:http.dd.dist{env:prod} by {service,host}"));
+    expect(r.promql).toBe(
+      `histogram_quantile(0.5, sum by (host_name, le, service_name) (${H("http.client.request.duration", ', deployment_environment_name="prod"')}))`,
+    );
+    expect(validatePromQL(r.promql!).ok).toBe(true);
+  });
+
+  it("a fixed dashboard interval is used as the rate window", () => {
+    const r = q("p90:http.dd.dist{*}", { ...CTX, interval: 300 });
+    expect(r.promql).toBe(`histogram_quantile(0.9, sum by (le) (${H("http.client.request.duration", "", "5m")}))`);
+  });
+
+  it("a metadata.csv distribution without a curated entry keeps its name, under A.kind-metadata", () => {
+    const r = track(q("p99:dd.dist.latency{*}"));
+    expect(r.promql).toBe(`histogram_quantile(0.99, sum by (le) (${H("dd.dist.latency")}))`);
+    expect(r.status).toBe("bounded");
+    expect(r.assumptions).toEqual(["A.kind-metadata", ...HQ_ASSUMPTIONS].sort());
+    expect(r.rules).toContain("select.metric.kind-metadata");
+  });
+
+  it("scale k > 0 multiplies the quantile (quantiles commute with positive scaling); sumBy labels are summed by sum by (le, g)", () => {
+    expect(track(q("p95:http.dd.dist_ms{*}")).promql).toBe(`1000 * histogram_quantile(0.95, sum by (le) (${H("http.client.request.duration")}))`);
+    const s = track(q("p95:http.dd.dist_split{*} by {service}"));
+    expect(s.promql).toBe(`histogram_quantile(0.95, sum by (le, service_name) (${H("rpc.server.duration")}))`);
+    expect(s.rules).toContain("select.metric.transform");
+    expect(s.assumptions).not.toContain("A.sumby-together");
+  });
+
+  it("monitors reuse it on 1m buckets inside the window subquery", () => {
+    const r = track(mon("avg(last_5m):p95:http.dd.dist{*} by {service} > 0.5", { critical: 0.5 }));
+    expect(r.promql).toBe(
+      `avg_over_time((histogram_quantile(0.95, sum by (le, service_name) (${H("http.client.request.duration", "", "1m")})))[5m:1m]) > $__threshold`,
+    );
+    expect(r.status).toBe("bounded");
+    expect(r.thresholds).toEqual({ failed: 0.5 });
+    expect(r.assumptions).toEqual(expect.arrayContaining(["A.monitor-rollup-60s", ...HQ_ASSUMPTIONS]));
+  });
+
+  it("avg:/max: on a distribution are unchanged (still manual)", () => {
+    expect(q("avg:http.dd.dist{*}")).toMatchObject({ status: "manual", promql: null });
+    expect(q("max:http.duration{*}")).toMatchObject({ status: "manual", promql: null });
+    expect(q("avg:dd.dist.latency{*}").findings.some((f) => f.code === "metric.distribution")).toBe(true);
+  });
+
+  for (const [code, src, why] of [
+    ["fn.histogram.kind-unknown", "p95:unmapped.latency{*}", /no mapping entry/],
+    ["fn.histogram.kind", "p99:system.cpu.user{*}", /OTel gauge/],
+    ["fn.histogram.kind", "p99:nginx.requests{*}", /OTel counter/],
+    ["fn.histogram.kind", "p95:http.dd.gauge_on_hist{*}", /Datadog stores it as a gauge/],
+    ["fn.histogram.modifier", "p95:http.dd.dist{*}.rollup(max, 60)", /rollup/],
+    ["fn.histogram.le", "p95:http.dd.dist{*} by {le}", /le/],
+    ["query.value-filter", "p95(v: v>=0):http.dd.dist{*}", /value filter/],
+  ] as const) {
+    it(`fails closed: ${code}: ${src}`, () => {
+      const r = q(src);
+      expect(r).toMatchObject({ status: "manual", promql: null });
+      const f = r.findings.find((x) => x.status === "manual" && x.code === code);
+      expect(f, r.findings.map((x) => x.code).join(",")).toBeDefined();
+      expect(f!.message).toMatch(why);
+    });
+  }
+
+  it("a pXX query cannot feed per_second/diff (no rate form, not linear in the series)", () => {
+    expect(q("per_second(p95:http.dd.dist{*})").status).toBe("manual");
+    expect(q("diff(p95:http.dd.dist{*})").status).toBe("manual");
+  });
+});
+
 describe("fail closed: manual, no PromQL, original kept", () => {
   for (const [code, src] of [
     ["fn.anomalies", "anomalies(avg:system.cpu.user{*}, 'basic', 2)"],
@@ -322,7 +416,7 @@ describe("fail closed: manual, no PromQL, original kept", () => {
     ["time.fill", "avg:system.cpu.user{*}.fill(last)"],
     ["time.kind", "sum:nginx.requests{*}"],
     ["time.kind", "avg:http.duration{*}"],
-    ["space.agg", "p99:system.cpu.user{*}"],
+    ["fn.histogram.kind", "p99:system.cpu.user{*}"],
     ["scope.bare-tag", "avg:system.cpu.user{canary}"],
     ["scope.or.cross-key", "avg:system.cpu.user{env:prod OR host:a}"],
     ["scope.same-key", "avg:system.cpu.user{host:a,host:b}"],

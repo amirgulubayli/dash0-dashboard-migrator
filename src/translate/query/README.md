@@ -29,13 +29,14 @@ Choices worth knowing:
 - **`rate()`/`increase()` use `$__rate_interval`** on dashboards, so a short `$__interval` can't leave them with fewer than two samples.
 - **Monitors use the subquery form** that the reference evaluator showed is exact (maths.md §5): `fn_over_time((Q on 1m buckets)[W:1m]) > $__threshold`.
 - **`per_second`/`per_minute`/`per_hour`** have a rule only for sum/avg over a Datadog gauge that holds an OTel counter's running total: `60 * sum(rate(x[$__rate_interval]))` (bounded). **`diff(q)`** becomes `q - (q offset interval)`, the structural form of "each point minus the previous one" (exact-under alignment and no gaps).
+- **`pXX:` on a distribution** (mapping `otelKind: histogram`, or `distribution` in metadata.csv) becomes `histogram_quantile(0.XX, sum by (le, g) (rate({otel_metric_name="<otel>", …}[w])))`, `bounded` with ε = w_b + g + 1%·x (maths.md §12, T11; property test `tests/semantics/histogram-quantile.test.ts`). `w` is `$__rate_interval` on dashboards and `1m` inside a monitor's subquery. No `_bucket` suffix: Dash0's own documented example queries the histogram under its OTel name (`A.histogram-buckets`, not yet probed live). Unknown kind, a gauge/counter mapping, or a postfix modifier stay manual; `avg:`/`max:`… on a distribution stay manual.
 - **`<` and `<=` monitors are negated** (maths.md T7). Thresholds are negated too, and `negated: true` is set.
 
 ## Metric kinds without a curated mapping
 `ctx.ddKind(dd)` gives Datadog's declared kind (from integrations-core `metadata.csv`) for metrics the curated tables don't cover. Gauges keep `avg_over_time`. COUNT/RATE metrics are read as OTel cumulative counters: `.as_count()`, or a plain COUNT, becomes `increase()`; `.as_rate()`, or a plain RATE, becomes `rate()`. These are `bounded`, with the assumptions in the ledger. With no metadata entry, a `.count`/`.total` name queried with `.as_count()`/`.as_rate()` is read as a count, under `A.kind-suffix`.
 
 ## Fails closed
-Anything without a rule makes the whole query `manual`, with no PromQL and an `unsupported` finding that names the construct. Examples: `top`, `anomalies`, `per_second`, `weighted`, `fill(zero)`, `pXX:`, OR across tag keys, bare tags, mismatched group-bys in arithmetic, `change()` monitors, and `.as_count()`/`.as_rate()` on a metric whose kind isn't in the mapping table.
+Anything without a rule makes the whole query `manual`, with no PromQL and an `unsupported` finding that names the construct. Examples: `top`, `anomalies`, `per_second`, `weighted`, `fill(zero)`, `pXX:` on a metric not known to be a distribution (`fn.histogram.kind`/`fn.histogram.kind-unknown`), OR across tag keys, bare tags, mismatched group-bys in arithmetic, `change()` monitors, and `.as_count()`/`.as_rate()` on a metric whose kind isn't in the mapping table.
 
 An unmapped metric **without** those modifiers keeps its Datadog name and is assumed to be a gauge. That's `exact-under(A.kind-gauge)` plus a `warn` finding.
 
