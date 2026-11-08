@@ -98,29 +98,18 @@
     "kind": "panel",
     "title": "Disk utilization (%)",
     "widget_type": "timeseries",
-    "status": "exact-under",
-    "promql": [
-      "avg (avg_over_time({otel_metric_name=\"system.io.util\"}[$__interval]))"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.unmapped",
-      "time.rollup.default",
-      "space.agg",
-      "widget.timeseries",
+      "widget.unknown",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-gauge",
-      "A.var-default"
-    ],
+    "assumptions": [],
     "findings": [
-      "exact-under metric.unmapped",
-      "exact-under scope.var.free-form"
+      "manual metric.derived"
     ]
   },
   {
@@ -130,12 +119,12 @@
     "widget_type": "timeseries",
     "status": "exact-under",
     "promql": [
-      "avg (avg_over_time({otel_metric_name=\"system.load.1\"}[$__interval]))",
-      "avg (avg_over_time({otel_metric_name=\"system.load.5\"}[$__interval]))",
-      "avg (avg_over_time({otel_metric_name=\"system.load.15\"}[$__interval]))"
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.load_average.1m\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.load_average.5m\"}[$__interval]))",
+      "avg (avg_over_time({otel_metric_name=\"system.cpu.load_average.15m\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.unmapped",
+      "select.metric.mapped",
       "time.rollup.default",
       "space.default-avg",
       "widget.timeseries",
@@ -147,11 +136,9 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-gauge",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
       "exact-under scope.var.free-form"
     ]
   },
@@ -160,18 +147,14 @@
     "kind": "panel",
     "title": "CPU usage (%)",
     "widget_type": "timeseries",
-    "status": "exact-under",
-    "promql": [
-      "avg (avg_over_time({otel_metric_name=\"system.cpu.idle\"}[$__interval]))",
-      "avg (avg_over_time({otel_metric_name=\"system.cpu.system\"}[$__interval]))",
-      "avg (avg_over_time({otel_metric_name=\"system.cpu.iowait\"}[$__interval]))",
-      "avg (avg_over_time({otel_metric_name=\"system.cpu.user\"}[$__interval]))",
-      "avg (avg_over_time({otel_metric_name=\"system.cpu.stolen\"}[$__interval]))",
-      "avg (avg_over_time({otel_metric_name=\"system.cpu.guest\"}[$__interval]))"
-    ],
+    "status": "manual",
+    "promql": [],
     "rules": [
-      "select.metric.unmapped",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
       "time.rollup.default",
+      "select.metric.transform",
       "space.default-avg",
       "widget.timeseries",
       "emit.certificate",
@@ -182,12 +165,13 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-gauge",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
-      "exact-under scope.var.free-form"
+      "bounded metric.approximate",
+      "exact-under scope.var.free-form",
+      "manual metric.derived",
+      "manual metric.no_equivalent"
     ]
   },
   {
@@ -195,13 +179,16 @@
     "kind": "panel",
     "title": "I/O wait (%)",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "max (avg_over_time({otel_metric_name=\"system.cpu.iowait\"}[$__interval]))"
+      "100 * max (avg_over_time({otel_metric_name=\"system.cpu.utilization\", state=\"wait\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.unmapped",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
       "time.rollup.default",
+      "select.metric.transform",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -212,11 +199,10 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-gauge",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form"
     ]
   },
@@ -225,14 +211,16 @@
     "kind": "panel",
     "title": "System memory",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"system.mem.usable\"}[$__interval]))",
-      "sum (avg_over_time({otel_metric_name=\"system.mem.total\"}[$__interval])) - sum (avg_over_time({otel_metric_name=\"system.mem.usable\"}[$__interval]))"
+      "9.5367431640625e-7 * sum (avg_over_time({otel_metric_name=\"system.linux.memory.available\"}[$__interval]))",
+      "9.5367431640625e-7 * sum (avg_over_time({otel_metric_name=\"system.memory.limit\"}[$__interval])) - 9.5367431640625e-7 * sum (avg_over_time({otel_metric_name=\"system.linux.memory.available\"}[$__interval]))"
     ],
     "rules": [
-      "select.metric.unmapped",
+      "select.metric.mapped",
+      "select.metric.approximate",
       "time.rollup.default",
+      "select.metric.transform",
       "space.agg",
       "arith.same-groups",
       "widget.timeseries",
@@ -244,11 +232,10 @@
     "assumptions": [
       "A.align",
       "A.boundary",
-      "A.kind-gauge",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form"
     ]
   },
@@ -257,14 +244,16 @@
     "kind": "panel",
     "title": "Network traffic (per sec)",
     "widget_type": "timeseries",
-    "status": "exact-under",
+    "status": "bounded",
     "promql": [
-      "sum (avg_over_time({otel_metric_name=\"system.net.bytes_rcvd\"}[$__interval]))",
-      "sum (avg_over_time({otel_metric_name=\"system.net.bytes_sent\"}[$__interval]))"
+      "sum (rate({otel_metric_name=\"system.network.io\", direction=\"receive\"}[$__rate_interval]))",
+      "sum (rate({otel_metric_name=\"system.network.io\", direction=\"transmit\"}[$__rate_interval]))"
     ],
     "rules": [
-      "select.metric.kind-metadata",
-      "time.rollup.default",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
+      "time.ddrate.plain",
       "space.agg",
       "widget.timeseries",
       "emit.certificate",
@@ -273,13 +262,10 @@
       "emit.single-item"
     ],
     "assumptions": [
-      "A.align",
-      "A.boundary",
-      "A.kind-metadata",
       "A.var-default"
     ],
     "findings": [
-      "exact-under metric.unmapped",
+      "bounded metric.approximate",
       "exact-under scope.var.free-form"
     ]
   }
