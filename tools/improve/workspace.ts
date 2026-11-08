@@ -40,11 +40,11 @@ export interface Workspace {
   remove(): void;
 }
 
-/** A detached worktree of `base` at HEAD (committed state only; your uncommitted edits are not in it). */
-export function createWorkspace(baseDir: string): Workspace {
+/** A detached worktree of `base` at `ref` (default HEAD; committed state only, your uncommitted edits are not in it). */
+export function createWorkspace(baseDir: string, ref = "HEAD"): Workspace {
   const base = resolve(baseDir);
   const dir = join(mkdtempSync(join(tmpdir(), "improve-ws-")), "ws");
-  const r = run("git", ["worktree", "add", "--detach", dir, "HEAD"], base);
+  const r = run("git", ["worktree", "add", "--detach", dir, ref], base);
   if (!r.ok) throw new Error(`git worktree add failed:\n${tail(r.out)}`);
   const nm = join(base, "node_modules");
   if (existsSync(nm)) symlinkSync(nm, join(dir, "node_modules"), "junction");

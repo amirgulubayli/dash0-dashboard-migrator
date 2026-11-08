@@ -1,10 +1,12 @@
 // The mechanical gates a candidate change must pass. Pure functions over two snapshots, plus the command results.
 // No model judges anything here: a change is accepted only if every gate holds.
+// The claim order and the per-item comparison are shared with tools/gate (plan 10 step 4), so both loops judge
+// "worse" the same way: the order comes from src/ir worst() (tools/lib/report.ts), and unsupported (a placeholder) is
+// a manual claim.
+import { compareClaims } from "../gate/checks.js";
+import { claimRank } from "../lib/report.js";
 import { gapKey, gapSize } from "./gaps.js";
 import type { Snapshot, SnapshotItem } from "./snapshot.js";
-
-/** Lower is better. "unsupported" is a placeholder panel (report-only status). */
-export const RANK: Record<string, number> = { exact: 0, "exact-under": 1, bounded: 2, manual: 3, unsupported: 4 };
 
 export interface GateResult {
   ok: boolean;
@@ -44,30 +46,25 @@ export function evaluate(before: Snapshot, after: Snapshot, gap: string, changed
   // No regression: no item gets a worse status; items the gap didn't touch keep their exact output.
   const inGap = new Set(before.items.filter((i) => i.findings.some((f) => gapKey(f.code, f.message).key === gap)).map((i) => i.id));
   const afterBy = new Map(after.items.map((i) => [i.id, i]));
+  const cmp = compareClaims(before.items.map((i) => ({ ...i, kind: "item" })), after.items.map((i) => ({ ...i, kind: "item" })));
   const worse: string[] = [];
-  const drifted: string[] = [];
-  const lost: string[] = [];
   const honest: string[] = [];
-  for (const b of before.items) {
-    const a = afterBy.get(b.id);
-    if (!a) {
-      lost.push(b.id);
-      continue;
-    }
-    if ((RANK[a.status] ?? 9) > (RANK[b.status] ?? 9)) {
-      // An item in the gap rested on a guess: that the Datadog name exists in Dash0 as a gauge (metric.unmapped,
-      // exact-under). Replacing the guess with a researched row may honestly lower its claimed status:
-      //  - to bounded or better, when its gap findings went down (an approximate mapping replaced the guess);
-      //  - to anything, when the item now says why (metric.no_equivalent or metric.derived).
-      // Every such item is listed for the reviewer, not hidden. Anything else is a regression.
-      const gapFindings = (i: SnapshotItem) => i.findings.filter((f) => gapKey(f.code, f.message).key === gap).length;
-      const says = a.findings.some((f) => f.code === "metric.no_equivalent" || f.code === "metric.derived");
-      const replaced = gapFindings(a) < gapFindings(b) && (RANK[a.status] ?? 9) <= RANK.bounded!;
-      if (inGap.has(b.id) && (says || replaced)) honest.push(`${b.id}: ${b.status} -> ${a.status}${says ? " (no equivalent / derived)" : " (guess replaced by a researched mapping)"}`);
-      else worse.push(`${b.id}: ${b.status} -> ${a.status}`);
-    }
-    if (!inGap.has(b.id) && a.outputHash !== b.outputHash) drifted.push(b.id);
+  const lost = cmp.lost;
+  for (const w of cmp.worse) {
+    const b = before.items.find((i) => i.id === w.id)!;
+    const a = afterBy.get(w.id)!;
+    // An item in the gap rested on a guess: that the Datadog name exists in Dash0 as a gauge (metric.unmapped,
+    // exact-under). Replacing the guess with a researched row may honestly lower its claimed status:
+    //  - to bounded or better, when its gap findings went down (an approximate mapping replaced the guess);
+    //  - to anything, when the item now says why (metric.no_equivalent or metric.derived).
+    // Every such item is listed for the reviewer, not hidden. Anything else is a regression.
+    const gapFindings = (i: SnapshotItem) => i.findings.filter((f) => gapKey(f.code, f.message).key === gap).length;
+    const says = a.findings.some((f) => f.code === "metric.no_equivalent" || f.code === "metric.derived");
+    const replaced = gapFindings(a) < gapFindings(b) && claimRank(a.status) <= claimRank("bounded");
+    if (inGap.has(b.id) && (says || replaced)) honest.push(`${b.id}: ${b.status} -> ${a.status}${says ? " (no equivalent / derived)" : " (guess replaced by a researched mapping)"}`);
+    else worse.push(`${b.id}: ${b.status} -> ${a.status}`);
   }
+  const drifted = cmp.changedOutput.filter((id) => !inGap.has(id));
   gate(
     "no-regression",
     worse.length === 0 && lost.length === 0,
