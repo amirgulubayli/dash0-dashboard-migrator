@@ -33,6 +33,8 @@ const METRICS: Record<string, MetricMapping> = {
   "redis.dd.keys": { otel: "redis.db.keys", kind: "gauge", ddKind: "gauge", status: "exact", sumBy: ["db"] },
   "redis.dd.keys_kb": { otel: "redis.db.bytes", kind: "gauge", ddKind: "gauge", status: "exact", scale: 0.001, sumBy: ["db"] },
   "redis.dd.negscale": { otel: "redis.dd.neg", kind: "gauge", ddKind: "gauge", status: "exact", scale: -1 },
+  // The table names OTel attributes as emitted (dotted); Dash0 labels use underscores (kubernetes_state.yaml).
+  "k8s.dd.dotted": { otel: "k8s.container.status.state", kind: "gauge", ddKind: "gauge", labels: { "k8s.container.status.state": "running" }, status: "exact", sumBy: ["k8s.dd.split"] },
 };
 /** Mirrors T1's metricAvailability(): known to the table but not usable. */
 const AVAILABILITY: Record<string, MetricAvailability> = {
@@ -162,6 +164,7 @@ const CASES: [string, string, string, string][] = [
   // T1 mapping fields (ddKind, labels, status)
   ["select.metric.mapped", "avg:redis.net.clients{*}", `avg (avg_over_time(${SEL("redis.clients.connected")}[$__interval]))`, "exact-under"],
   ["select.labels", "avg:redis.cpu.sys{*} by {host}", `avg by (host_name) (rate(${SEL("redis.cpu.time", ', state="sys"')}[$__interval] anchored))`, "exact-under"],
+  ["select.labels", "sum:k8s.dd.dotted{*}", `sum (sum without (k8s_dd_split) (avg_over_time(${SEL("k8s.container.status.state", ', k8s_container_status_state="running"')}[$__interval])))`, "exact-under"],
   ["time.ddrate.plain.anchored", "sum:redis.net.commands{*}", `sum (rate(${SEL("redis.commands.processed")}[$__interval] anchored))`, "exact-under"],
   ["select.metric.mapped", "avg:redis.dd.gauge_on_counter{*}", `avg (avg_over_time(${SEL("redis.connections.received")}[$__interval]))`, "exact-under"],
   ["select.metric.approximate", "avg:redis.dd.approx{*}", `avg (avg_over_time(${SEL("redis.memory.rss")}[$__interval]))`, "bounded"],

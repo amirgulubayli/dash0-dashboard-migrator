@@ -437,8 +437,9 @@ class Lowerer {
       });
     }
 
-    // Mapping-table labels select the right OTel series (redis.cpu.sys -> redis.cpu.time{state="sys"}).
-    const labelMatchers: PMatcher[] = Object.entries(mapping.labels ?? {}).map(([label, value]) => ({ label, op: "=", value }));
+    // Mapping-table labels select the right OTel series (redis.cpu.sys -> redis.cpu.time{state="sys"}). The table names
+    // OTel attributes as emitted (k8s.container.status.state); Dash0 exposes them with dots as underscores.
+    const labelMatchers: PMatcher[] = Object.entries(mapping.labels ?? {}).map(([label, value]) => ({ label: label.replace(/\./g, "_"), op: "=", value }));
     if (labelMatchers.length) this.use("select.labels");
     const scopeMatchers = this.scope(m.scope);
     const clash = scopeMatchers.find((s) => labelMatchers.some((l) => l.label === s.label));
@@ -448,7 +449,7 @@ class Lowerer {
     // select.metric.transform: Datadog value = scale × OTel value, and the OTel metric splits Datadog's series by the
     // extra sumBy labels. Guards that need only the selector run here; the time-aggregation guard runs below.
     const scale = mapping.scale;
-    const sumBy = [...new Set(mapping.sumBy ?? [])].sort();
+    const sumBy = [...new Set((mapping.sumBy ?? []).map((l) => l.replace(/\./g, "_")))].sort();
     const transform = scale !== undefined || sumBy.length > 0;
     if (scale !== undefined && !(scale > 0 && Number.isFinite(scale)))
       this.manual("metric.needs_transform", `${m.metric}: scale ${scale} is not positive; min/max would swap under it, so no exact rewrite is applied`);
