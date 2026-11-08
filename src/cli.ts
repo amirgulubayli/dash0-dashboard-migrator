@@ -19,7 +19,7 @@ import { openBrowser } from "./flow/keys-web.js";
 import { webBanner, webTerminal } from "./flow/web-term.js";
 import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.5.5";
+export const VERSION = "0.5.6";
 
 /**
  * The mapping tables, first found wins:
