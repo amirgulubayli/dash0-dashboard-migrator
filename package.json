@@ -14,7 +14,8 @@
     "build": "tsc -p .",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "integrations-core": "bash scripts/test-integrations-core.sh"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

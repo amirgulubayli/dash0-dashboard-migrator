@@ -94,7 +94,12 @@ export function toPerses(d: Dashboard, translate: TranslateExpr, translateLog?: 
     if (run.length) layouts.push(grid(run, null, findings, dashItem));
     run = [];
   };
-  for (const item of d.items) {
+  // A Datadog dashboard with no widgets (integrations-core has placeholders like gpu "Network Metrics") still lands:
+  // Dash0 needs at least one panel, so it gets one note saying so instead of being refused.
+  const items: Dashboard["items"] = d.items.length
+    ? d.items
+    : [{ id: "empty", kind: "markdown", sourceType: "note", layout: null, requests: [], options: { text: "This Datadog dashboard has no widgets." }, original: null }];
+  for (const item of items) {
     if (isGroup(item)) {
       flush();
       const children = item.panels.map((p) => convert(p, `${dashItem}/${item.id}/${p.id}`));
@@ -140,20 +145,27 @@ export function groupColumns(groupWidth: number | undefined, children: Panel[]):
 function grid(items: { key: string; layout: Layout | null }[], title: string | null, findings: Finding[], dashItem: string, cols = 12): GridLayout {
   const placed = items.filter((i) => i.layout);
   const y0 = placed.length ? Math.min(...placed.map((i) => i.layout!.y)) : 0;
+  // Free-layout ("screenboard") dashboards use their own units: x up to 200 and below 0 in integrations-core
+  // (marklogic). When a section runs past its grid, scale the whole section to fit, keeping the arrangement and the
+  // proportions, instead of clamping single panels on top of each other.
+  const x0 = placed.length ? Math.min(0, ...placed.map((i) => i.layout!.x)) : 0;
+  const span = Math.max(cols, ...placed.map((i) => i.layout!.x + i.layout!.w - x0));
+  const k = cols / span; // 1 on a normal grid
+  const rows = (v: number) => Math.round(v * ROW_SCALE * k);
   const out: GridItem[] = [];
-  let flowY = placed.length ? Math.max(...placed.map((i) => (i.layout!.y - y0 + i.layout!.h) * ROW_SCALE)) : 0;
+  let flowY = placed.length ? Math.max(...placed.map((i) => rows(i.layout!.y - y0 + i.layout!.h))) : 0;
   let flowX = 0;
   for (const i of items) {
     if (i.layout) {
-      const f = 24 / cols;
-      let x = Math.round(i.layout.x * f);
-      let width = Math.max(1, Math.round((i.layout.x + i.layout.w) * f) - x);
+      const f = 24 / span;
+      let x = Math.round((i.layout.x - x0) * f);
+      let width = Math.max(1, Math.round((i.layout.x - x0 + i.layout.w) * f) - x);
       if (x + width > 24) {
         findings.push({ status: "bounded", code: "layout.clamped", message: `panel ${i.key} overflowed the 24-column grid and was clamped`, itemKind: "panel", itemId: dashItem });
         x = Math.min(x, 23);
         width = 24 - x;
       }
-      out.push({ x, y: (i.layout.y - y0) * ROW_SCALE, width, height: Math.max(1, i.layout.h * ROW_SCALE), content: { $ref: `#/spec/panels/${i.key}` } });
+      out.push({ x, y: rows(i.layout.y - y0), width, height: Math.max(1, rows(i.layout.h)), content: { $ref: `#/spec/panels/${i.key}` } });
     } else {
       if (flowX + AUTO.w > 24) {
         flowX = 0;

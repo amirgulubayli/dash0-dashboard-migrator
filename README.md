@@ -163,6 +163,23 @@ Datadog API ──► parse (Datadog query grammar → AST) ──► IR (dashbo
 - Datadog Agent integrations not in `mappings/` translate structurally, with every unmapped metric flagged.
 - The arrow-key prompts are not tested on Windows yet.
 
+## Tested against DataDog/integrations-core
+
+The Dash0 case names [DataDog/integrations-core](https://github.com/DataDog/integrations-core): Datadog's own dashboards and monitors for every integration (516 dashboards, 329 monitors). One command fetches just those files and runs the whole guided flow over them, as a dry run:
+
+```bash
+npm run integrations-core
+```
+
+```
+● Translate  516 dashboards · 329 monitors → 14614 items  4.5s
+  ⎿ 12380 exact-under · 194 bounded · 1338 manual · 702 unsupported
+● Import  516 dashboards · 189 check rules (dry run, nothing imported)
+  translated  12574/14614   86%
+```
+
+Every dashboard and every translatable monitor passes the pre-import checks (exit 0). What doesn't translate is listed per item in `.corpus/run/report.html`, never dropped: mostly widget types with no Dash0 panel (`widget.unsupported`), queries on non-metric data sources, and the 140 monitors built on Datadog-only functions such as `anomalies()`.
+
 ## Run from source
 
 ```bash
