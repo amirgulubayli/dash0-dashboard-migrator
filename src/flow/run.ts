@@ -260,7 +260,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
   const decisions = decisionsOf(review, appliedReport.items);
   const facts: RunFacts = {
     version: o.version,
-    source: useApi ? `Datadog ${keys.DD_SITE}` : `folder ${o.input}`,
+    source: useApi ? `Datadog API ${keys.DD_SITE}` : `folder ${o.input}`,
     target: live ? `Dash0 ${new URL(keys.DASH0_API_URL!).host} / ${keys.DASH0_DATASET}` : "Dash0 (dry run)",
     mode: live ? "live" : "dry-run",
     inputHash: report.run.inputHash,
@@ -268,6 +268,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
     planHash: plan.planHash,
     windowSeconds: WINDOW_S,
     startedAt: started.toISOString(),
+    toolCommit: report.run.toolCommit ?? null,
   };
   // Rules that are on in Dash0 after the import (existing rules keep their state).
   const enabled = new Set(applied.manifest.results.filter((r) => r.kind === "check-rule" && r.action === "imported" && r.enabled).map((r) => r.id));

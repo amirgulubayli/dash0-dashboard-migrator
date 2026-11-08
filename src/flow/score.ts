@@ -34,6 +34,14 @@ export interface Row {
   promql: string[];
   thresholds?: { failed: number; degraded?: number };
   enabled?: boolean;
+  /** The item's plain sentence from report.json (src/rules/plain.ts templates), shown in report.html. */
+  plain?: string;
+  /** exact-under only: the item's condition (its assumptions as sentences) from report.json, shown as "EXACT IF …". */
+  condition?: string;
+  /** The plain sentence of each of this item's reason codes, from report.json reasonCodes (src/rules/plain.ts). */
+  reasonPlain?: Record<string, string>;
+  /** Source file of the item relative to the input folder (report.json `source`), or "api"; report.html groups by it. */
+  source?: string;
 }
 
 export interface Num {
@@ -70,6 +78,15 @@ export function decisionsOf(review: BatchResult, items: ReportItem[]): Map<strin
   return m;
 }
 
+function reasonPlainOf(applied: Report, codes: string[]): { reasonPlain?: Record<string, string> } {
+  const out: Record<string, string> = {};
+  for (const c of codes) {
+    const p = applied.reasonCodes?.[c]?.plain;
+    if (p) out[c] = p;
+  }
+  return Object.keys(out).length ? { reasonPlain: out } : {};
+}
+
 export function rowsOf(applied: Report, decisions: Map<string, string>, live: Map<string, LiveResult> | null, measuredLanding: boolean, enabled: Set<string> = new Set()): Row[] {
   const rows: Row[] = [];
   for (const i of applied.items) {
@@ -102,6 +119,10 @@ export function rowsOf(applied: Report, decisions: Map<string, string>, live: Ma
       promql: i.promql,
       ...(i.thresholds ? { thresholds: i.thresholds } : {}),
       ...(i.kind === "alert" && i.target ? { enabled: enabled.has(i.target.dash0Id) } : {}),
+      ...(i.explain?.plain ? { plain: i.explain.plain } : {}),
+      ...(i.condition ? { condition: i.condition } : {}),
+      ...reasonPlainOf(applied, i.reason_codes),
+      ...(i.source ? { source: i.source } : {}),
     });
   }
   return rows;
@@ -142,6 +163,8 @@ export interface RunFacts {
   planHash: string;
   windowSeconds: number;
   startedAt: string;
+  /** The CLI build commit (report.json run.toolCommit), when the build stamped one. */
+  toolCommit?: string | null;
 }
 
 export function reportMarkdown(score: Score, rows: Row[], facts: RunFacts): string {
