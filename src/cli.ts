@@ -47,6 +47,7 @@ Usage:
 Options:
   --yes                 no prompts: keys from env, .env or the saved file; approve bounded panels and
                         translatable monitors
+  --env <file>          read the keys from this file (any name; DATADOG_API_KEY, DASH0_TOKEN, … understood)
   --web                 run the whole migration in the browser, on a one-time page on this computer
   --browser             enter missing keys on a one-time local web page instead of the terminal
   --only <what>         dashboards | monitors
@@ -60,8 +61,8 @@ Options:
 
 What it does:
   1. keys       finds DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET in the
-                environment, ./.env or ~/.config/dd2dash0/.env; asks for missing ones (drag in a .env, paste,
-                type, or --browser), checks them, offers to save them to ~/.config/dd2dash0/.env (0600)
+                environment, ./.env or ~/.config/dd2dash0/.env (or --env <file>); offers env files it finds
+                nearby; asks for missing ones (drag in a .env, paste, type, or --browser), checks them, offers to save them to ~/.config/dd2dash0/.env (0600)
   2. translate  every dashboard -> Perses, every query -> PromQL, every monitor -> a Dash0 check rule
   3. review     one question for all approximate panels, one per monitor; what can't be translated
                 becomes a placeholder panel with the original query (nothing is dropped)
@@ -85,7 +86,7 @@ const USAGE_ADVANCED = `dd2dash0 ${VERSION} advanced commands
 Guided flow, hidden options: --input <dir> (exported Datadog JSON/YAML instead of the API), --dry-run (write
 payloads, import nothing, skip the live checks).`;
 
-const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser", "--web"]);
+const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser", "--web", "--env"]);
 
 export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   const [cmd, ...rest] = argv;
@@ -119,7 +120,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
 }
 
 async function runGuided(args: string[]): Promise<number> {
-  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input"], ["--yes", "--dry-run", "--browser", "--web"]);
+  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input", "--env"], ["--yes", "--dry-run", "--browser", "--web"]);
   if (typeof r === "string" || r._.length) {
     console.error(`${typeof r === "string" ? r : `unexpected argument ${r._[0]}`}\n\n${USAGE}`);
     return EXIT.usage;
@@ -136,6 +137,7 @@ async function runGuided(args: string[]): Promise<number> {
     ...(r.v["--input"] ? { input: r.v["--input"] } : {}),
     ...(only ? { only: only as "dashboards" | "monitors" } : {}),
     ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
+    ...(r.v["--env"] ? { envFile: r.v["--env"] } : {}),
     dryRun: r.b.has("--dry-run"),
     version: VERSION,
     mappingsDir: defaultMappingsDir(),

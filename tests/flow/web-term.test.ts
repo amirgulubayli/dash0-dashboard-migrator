@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { webTerminal, type WebSession } from "../../src/flow/web-term.js";
+import { page, webTerminal, type WebSession } from "../../src/flow/web-term.js";
 
 type Ev = { t: string; s?: string; id?: number; kind?: string; prompt?: string; options?: string[]; def?: number; label?: string; url?: string; code?: number };
 
@@ -54,6 +54,13 @@ const answer = (url: string, id: number | undefined, value: unknown, origin = ne
   fetch(`${url}/answer`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify({ id, value }) });
 
 describe("web terminal: the guided flow in the browser", () => {
+  it("the page's script compiles (it lives in a template string, where one wrong escape breaks it)", () => {
+    const html = page({ version: "t", cwd: "~" }, "n0nce", "tok");
+    const scripts = [...html.matchAll(/<script nonce="n0nce">([\s\S]*?)<\/script>/g)].map((m) => m[1]!);
+    expect(scripts).toHaveLength(1);
+    expect(() => new Function(scripts[0]!)).not.toThrow();
+  });
+
   it("relays output and every kind of question; secrets are never echoed back", async () => {
     const got: unknown[] = [];
     const s = start(async ({ io, out }) => {

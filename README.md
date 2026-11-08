@@ -127,7 +127,7 @@ It explains monitors too (`avg(last_5m):… > 90` → a Dash0 check rule with `f
 | Dash0 auth token | Dash0 → Settings → Auth Tokens |
 | Dash0 dataset | usually `default` |
 
-Have a `.env` already? **Drag it into the terminal window** (or paste its contents) when dd2dash0 asks: it reads the keys, shows only their last four characters, and checks each one with a read-only call. Other common names work too (`DATADOG_API_KEY`, `DD_APPLICATION_KEY`, `DASH0_TOKEN`, …). You can also type them one by one (a dot per character, never the key), or enter them on a one-time page on your own computer (`--browser`: 127.0.0.1 only, secret link, closes after use).
+Have a `.env` already? dd2dash0 reads `./.env` by itself, and offers env-looking files it finds in the current folder or `~/Downloads` (`prod.env`, `.env.local`, `env.example copy.txt`, …) as the first choice. Point at any file with `--env <file>`. Or **drag it into the terminal window** (or paste its contents) when dd2dash0 asks; in the browser, drop it on the page or pick it with **choose a file…**: it reads the keys, shows only their last four characters, and checks each one with a read-only call. Other common names work too (`DATADOG_API_KEY`, `DD_APPLICATION_KEY`, `DASH0_TOKEN`, …). You can also type them one by one (a dot per character, never the key), or enter them on a one-time page on your own computer (`--browser`: 127.0.0.1 only, secret link, closes after use).
 
 Saved once, they live in `~/.config/dd2dash0/.env` (only you can read it) and work from any folder. dd2dash0 looks in the environment, then `./.env`, then that file.
 
@@ -140,7 +140,7 @@ Saved once, they live in `~/.config/dd2dash0/.env` (only you can read it) and wo
 5. **Verify**: reads every item back from Dash0 and runs every migrated query against the last hour of data, next to the original Datadog query.
 6. **Report**: the result card, `report.html`, `report.md`, `report.json`. At the end it offers to turn the approved rules on (default no) and to open the report.
 
-Commands: `dd2dash0` (the guided migration), `dd2dash0 explain "<query>"`. Options: `--yes` (no questions: keys from the environment, `.env` or the saved file, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--dry-run` (import nothing), `--input <dir>` (Datadog JSON exports instead of the API), `--web` (run it in the browser), `--browser` (only the key page), `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
+Commands: `dd2dash0` (the guided migration), `dd2dash0 explain "<query>"`. Options: `--yes` (no questions: keys from the environment, `.env` or the saved file, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--dry-run` (import nothing), `--input <dir>` (Datadog JSON exports instead of the API), `--env <file>` (keys from any file), `--web` (run it in the browser), `--browser` (only the key page), `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
 
 ## How it works
 

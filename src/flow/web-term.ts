@@ -98,7 +98,7 @@ export function webTerminal(o: WebTerminalOptions): Promise<number> {
         ask<number>({ t: "ask", kind: "choose", prompt: question, options, def: Math.min(Math.max(0, def), options.length - 1) }, (v) => `  ${question}  ${DIM("›")} ${v === null ? DIM("(no answer)") : options[v]}\n`),
       askBlock: (prompt) =>
         ask<string>({ t: "ask", kind: "block", prompt }, (v) => {
-          const n = (v ?? "").split("\n").filter((l) => l.trim()).length;
+          const n = (v ?? "").split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length;
           return `${prompt}\n  ${DIM("⎿")} ${DIM(`${n} line(s) received, not shown`)}\n`;
         }),
     };
@@ -301,6 +301,8 @@ a:focus-visible,button:focus-visible{outline:1px solid var(--accent);outline-off
 .zone.over{border-color:var(--accent);color:var(--fg)}
 .zone textarea{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
 .k{color:var(--fg)}
+.pick{font:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+@media (hover:hover) and (pointer:fine){.pick:hover{text-decoration-color:var(--accent)}}
 .link{margin-left:2ch}
 .end{color:var(--dim);margin-top:1.55em}
 .caret{display:inline-block;width:.6em;height:1.15em;vertical-align:-.2em;background:var(--accent);animation:blink 1.1s steps(1) infinite}
@@ -435,13 +437,25 @@ function askBlock(ev) {
   const zone = document.createElement("div"); zone.className = "zone";
   const msg = document.createElement("span");
   const ta = document.createElement("textarea"); ta.setAttribute("aria-label", "Paste your .env here");
-  zone.append(msg, ta); el.append(zone);
+  // A real file picker for people who don't drag files (on macOS, ⌘⇧. shows hidden .env files in the dialog).
+  const pick = document.createElement("input"); pick.type = "file"; pick.hidden = true;
+  const btn = document.createElement("button"); btn.type = "button"; btn.className = "pick"; btn.textContent = "choose a file…";
+  btn.addEventListener("click", (e) => { e.stopPropagation(); pick.click(); });
+  zone.append(msg, ta, pick); el.append(zone);
   let text = "";
+  const useFile = async (f) => {
+    if (!f || !active || active.el !== el) return;
+    if (f.size > 60000) { msg.textContent = "that file is too large for a .env"; return; }
+    // The file is read here, in the page; only its text goes to dd2dash0 (the name rides along as a comment line).
+    text = "# dd2dash0-file: " + f.name.replace(/[\\r\\n]/g, " ") + "\\n" + text + (await f.text()) + "\\n";
+    answer(ev.id, text);
+  };
+  pick.addEventListener("change", () => useFile(pick.files && pick.files[0]));
   const lines = () => text.split("\\n").filter((l) => l.trim()).length;
   const show = () => {
     msg.textContent = "";
     if (lines()) msg.append(lines() + " line(s) received, not shown · ", Object.assign(document.createElement("span"), { className: "k", textContent: "⏎" }), " to continue");
-    else msg.append("Drop your .env file here, or paste it (", Object.assign(document.createElement("span"), { className: "k", textContent: "⌘V" }), ") · ", Object.assign(document.createElement("span"), { className: "k", textContent: "⏎" }), " to skip");
+    else msg.append("Drop your .env here, ", btn, ", or paste it (", Object.assign(document.createElement("span"), { className: "k", textContent: "⌘V" }), ") · ", Object.assign(document.createElement("span"), { className: "k", textContent: "⏎" }), " to skip");
   };
   show();
   ta.addEventListener("paste", (e) => { e.preventDefault(); text += (e.clipboardData.getData("text") || "") + "\\n"; show(); });
@@ -450,11 +464,7 @@ function askBlock(ev) {
   document.addEventListener("dragover", over(true)); document.addEventListener("dragleave", over(false));
   document.addEventListener("drop", async (e) => {
     e.preventDefault(); zone.classList.remove("over");
-    const f = e.dataTransfer && e.dataTransfer.files[0];
-    if (!f || !active || active.el !== el) return;
-    if (f.size > 60000) { msg.textContent = "that file is too large for a .env"; return; }
-    text += (await f.text()) + "\\n";
-    answer(ev.id, text); // reading the file happened here, in the page; only its text goes to dd2dash0
+    useFile(e.dataTransfer && e.dataTransfer.files[0]);
   });
   zone.addEventListener("click", () => ta.focus());
   return { el, focus: () => ta.focus() };

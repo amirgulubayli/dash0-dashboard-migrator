@@ -2,7 +2,7 @@
 // check each against its API with a read-only call, and offer to save them to ./.env (0600).
 // Secrets are never printed, logged or written anywhere but .env; at most a 4-character fingerprint is shown.
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
@@ -65,14 +65,7 @@ export function droppedPath(text: string, cwd: string, home = homedir()): string
 /** Keys from pasted text or a dropped file: KEY=value lines, other names mapped, everything else ignored. */
 export function keysFromText(text: string, cwd: string, home = homedir()): { keys: Keys; file: string | null } {
   const file = droppedPath(text, cwd, home);
-  const raw = parseDotEnv(file ? readFileSync(file, "utf8") : text);
-  const keys: Keys = {};
-  for (const [k, v] of Object.entries(raw)) {
-    const name = (KEYS as readonly string[]).includes(k) ? (k as KeyName) : ALIASES[k];
-    if (name && v && !keys[name]) keys[name] = v;
-  }
-  if (keys.DD_SITE) keys.DD_SITE = keys.DD_SITE.replace(/^https?:\/\/(api\.|app\.)?/, "").replace(/\/.*$/, "");
-  return { keys, file };
+  return { keys: canonicalKeys(parseDotEnv(file ? readFileSync(file, "utf8") : text)), file };
 }
 
 /** Minimal .env parser: KEY=value, optional quotes, # comments. Only what we need, no expansion. */
@@ -91,14 +84,59 @@ export function parseDotEnv(text: string): Record<string, string> {
   return out;
 }
 
-/** Env wins over ./.env; empty values count as missing. */
-export function lookupKeys(env: NodeJS.ProcessEnv, dotenv: Record<string, string>): Keys {
+/** Our names for whatever a source calls them: DD_API_KEY wins over DATADOG_API_KEY when both are set. */
+export function canonicalKeys(raw: Record<string, string | undefined>): Keys {
   const k: Keys = {};
-  for (const name of KEYS) {
-    const v = env[name]?.trim() || dotenv[name]?.trim();
-    if (v) k[name] = v;
-  }
+  for (const name of KEYS) if (raw[name]?.trim()) k[name] = raw[name]!.trim();
+  for (const [alias, name] of Object.entries(ALIASES)) if (!k[name] && raw[alias]?.trim()) k[name] = raw[alias]!.trim();
+  if (k.DD_SITE) k.DD_SITE = k.DD_SITE.replace(/^https?:\/\/(api\.|app\.)?/, "").replace(/\/.*$/, "");
   return k;
+}
+
+/** Env wins over ./.env; empty values count as missing; other common names (ALIASES) count too. */
+export function lookupKeys(env: NodeJS.ProcessEnv, dotenv: Record<string, string>): Keys {
+  return { ...canonicalKeys(dotenv), ...canonicalKeys(env) };
+}
+
+/** A file name that looks like an env file: .env.local, prod.env, env.example copy.txt, datadog-env.txt. */
+const ENV_NAME = /^\.env(\..+)?$|\.env$|(^|[._ -])env([._ -]|$)/i;
+
+export interface EnvCandidate {
+  path: string;
+  /** dd2dash0 keys with a value in it (any of their names). */
+  names: KeyName[];
+}
+
+/**
+ * Env-looking files next to you that hold dd2dash0 keys: the current folder (other than ./.env, which is read anyway)
+ * and ~/Downloads (where a .env someone sent you lands). Only names are matched and keys counted; nothing is used
+ * until you pick one. Small files only, best first.
+ */
+export function findEnvFiles(cwd: string, home = homedir(), max = 3): EnvCandidate[] {
+  const out: (EnvCandidate & { mtime: number })[] = [];
+  for (const dir of [...new Set([cwd, join(home, "Downloads")])]) {
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const n of names) {
+      if (!ENV_NAME.test(n) || (dir === cwd && n === ".env")) continue;
+      const p = join(dir, n);
+      try {
+        const st = statSync(p);
+        if (!st.isFile() || st.size > 64_000) continue;
+        const keys = canonicalKeys(parseDotEnv(readFileSync(p, "utf8")));
+        const found = KEYS.filter((k) => keys[k]);
+        if (found.some((k) => SECRET_KEYS.has(k))) out.push({ path: p, names: found, mtime: st.mtimeMs });
+      } catch {
+        continue;
+      }
+    }
+  }
+  out.sort((a, b) => b.names.length - a.names.length || b.mtime - a.mtime);
+  return out.slice(0, max).map(({ path, names }) => ({ path, names }));
 }
 
 /** Replace our keys in an existing .env (keeping every other line and comment), append the ones not there yet. */
