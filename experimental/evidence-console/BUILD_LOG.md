@@ -19,3 +19,7 @@ events.jsonl: `{seq, type, ...}`; types seen: `run.start, dashboard.start, item.
 
 ## Step 2: data server
 `server/server.ts`: 127.0.0.1 only, host-header check, fixed routes, query strings ignored, UI served from an in-memory map, no CORS headers, files opened read-only. `server/tail.ts`: complete lines only, partial last line kept, truncation resets.
+
+## Steps 3-6: UI
+Main screen (counts computed from the loaded report, tile grid with text labels, monitors in a separate pinned row, stage bar from events), evidence panel with Expand, live SSE + replay through one reducer, deterministic brief, optional AI (server side, off by default, no SDK: one fetch, key only from the shell env).
+Screenshots at 1920x1080 and 1280x720 looked at: first pass at 1280x720 had a two-line stage strip and the monitor row below the fold; fixed (single-line stage marks, monitors pinned under the grid). No sideways scroll at either size.
