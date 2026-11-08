@@ -232,5 +232,17 @@ describe("guided flow, live against a fake Dash0 + Datadog", () => {
     expect(md).toMatch(/## Monitors/);
     expect(md).not.toContain("fake-token-1234");
     expect(existsSync(join(work, "run", "plan", "plan.lock"))).toBe(true);
+
+    // Re-run: the rule is already on in Dash0, so it stays on and the flow doesn't offer to enable it again.
+    globalThis.fetch = (async (u: string | URL) => {
+      throw new Error(`test reached the real network: ${String(u)}`);
+    }) as typeof fetch;
+    const io2 = scripted(["y", "y"]);
+    await guided({ yes: false, input: "src", out: "run2", version: "test", mappingsDir: join(ROOT, "mappings"), io: io2, env, cwd: work, fetch: fetchFn, now: () => new Date("2026-11-08T10:05:00Z") });
+    globalThis.fetch = realFetch;
+    expect(io2.prompts.some((p) => /Enable/.test(p))).toBe(false);
+    const rep2 = JSON.parse(readFileSync(join(work, "run2", "report.json"), "utf8")) as { items: Row[] };
+    expect(rep2.items.filter((r) => r.kind === "alert" && r.enabled)).toHaveLength(1);
+    expect(io2.out.join("\n")).toMatch(/1 imported \(1 on, 0 off\)/);
   });
 });
