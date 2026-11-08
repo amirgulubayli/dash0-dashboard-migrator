@@ -36,6 +36,8 @@ export const ASSUMPTIONS = {
   "A.finite-quantile":
     "the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d)",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
+  "A.ratio-one-instance": "each group of the query holds the series of one source instance, so the group's numerator total over its denominator is that instance's ratio (Datadog computes the ratio per instance, then aggregates)",
+  "A.ratio-den-constant": "the denominator (a configured limit such as max_connections) does not change inside a rollup bucket, so the average or sum of the ratio over the bucket is the average or sum of the numerator divided by it",
   // T12 (src/translate/logs, PR #13), text verbatim
   "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
   "A.log-source": "logs carry Datadog's `source` as a `source` attribute (set by the shipper); OTel has no built-in equivalent",
@@ -124,4 +126,6 @@ export const T4_ASSUMPTION_IDS = [
   "A.histogram-buckets",
   "A.histogram-samples",
   "A.finite-quantile",
+  "A.ratio-one-instance",
+  "A.ratio-den-constant",
 ] as const satisfies readonly AssumptionId[];

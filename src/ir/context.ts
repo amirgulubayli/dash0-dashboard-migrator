@@ -40,6 +40,14 @@ export function metricAvailability(m: Mappings, dd: string): MetricAvailability 
   return "mapped";
 }
 
+/** ctx.ratio for T4: a derived row that is num / den over two other Datadog metrics (rule select.metric.ratio). */
+export function metricRatio(m: Mappings): (dd: string) => { num: string; den: string } | undefined {
+  return (dd) => {
+    const e = m.metrics.get(dd);
+    return e && e.otel === null && e.ratio ? { ...e.ratio } : undefined;
+  };
+}
+
 /** ctx.metric for T4. undefined unless availability is "mapped" (check metricAvailability for the reason). */
 export function metricLookup(m: Mappings): (dd: string) => MetricLookup | undefined {
   return (dd) => {

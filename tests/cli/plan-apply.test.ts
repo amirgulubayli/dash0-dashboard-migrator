@@ -61,7 +61,8 @@ describe("apply (dry-run)", () => {
     if (o.kind !== "done") return;
     expect(o.imported).toEqual({ dashboards: 4, rules: 1 });
     expect(o.placeholders).toEqual([flagged]);
-    expect(o.skippedAlerts).toEqual([]); // feature #34: the postgres monitor no longer yields a check rule
+    // select.metric.ratio: the postgres connections monitor translates again; this review approves only high_mem.
+    expect(o.skippedAlerts).toEqual(["dd-monitor-postgres__percent_usage_connections"]);
     const dash = readFileSync(join(planDir, "apply", "dash0", "dashboards", "dd-nginx-nginx-overview-dashboard.json"), "utf8");
     expect(dash).toContain("flagged in review");
     expect(dash).toContain("check by hand");
