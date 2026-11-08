@@ -885,6 +885,1215 @@
     }
    }
   },
+  "kubernetes": {
+   "source": "opentelemetry-collector-contrib v0.164.0 receiver/{kubeletstatsreceiver,k8sclusterreceiver}/metadata.yaml",
+   "metrics": {
+    "container.cpu.time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.cpu.usage": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.filesystem.available": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.filesystem.capacity": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.filesystem.usage": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.memory.available": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.memory.major_page_faults": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.memory.page_faults": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.memory.rss": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.memory.usage": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.memory.working_set": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "container.uptime": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.container.cpu.node.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.container.cpu_limit": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.cpu_limit_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.container.cpu_request": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.cpu_request_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.container.ephemeral_storage.usage": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {
+      "fs.type": [
+       "rootfs",
+       "logs"
+      ]
+     }
+    },
+    "k8s.container.ephemeralstorage_limit": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.ephemeralstorage_request": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.memory.node.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.container.memory_limit": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.memory_limit_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.container.memory_request": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.memory_request_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.container.ready": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.restarts": {
+     "kind": "gauge",
+     "unit": "{restart}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.status.reason": {
+     "kind": "updowncounter",
+     "unit": "{container}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.container.status.reason": [
+       "ContainerCreating",
+       "CrashLoopBackOff",
+       "CreateContainerConfigError",
+       "ErrImagePull",
+       "ImagePullBackOff",
+       "OOMKilled",
+       "Completed",
+       "Error",
+       "ContainerCannotRun"
+      ]
+     }
+    },
+    "k8s.container.status.state": {
+     "kind": "updowncounter",
+     "unit": "{container}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.container.status.state": [
+       "terminated",
+       "running",
+       "waiting"
+      ]
+     }
+    },
+    "k8s.container.storage_limit": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.storage_request": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.cronjob.active_jobs": {
+     "kind": "gauge",
+     "unit": "{job}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.current_scheduled_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.desired_scheduled_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.misscheduled_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.ready_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.deployment.available": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.deployment.desired": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.current_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.desired_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.max_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.min_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.active_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.desired_successful_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.failed_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.max_parallel_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.successful_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.namespace.phase": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.condition": {
+     "kind": "gauge",
+     "unit": "{condition}",
+     "enabledByDefault": false,
+     "attributes": {
+      "condition": null
+     }
+    },
+    "k8s.node.cpu.time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.cpu.usage": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.filesystem.available": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.filesystem.capacity": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.filesystem.inode.count": {
+     "kind": "updowncounter",
+     "unit": "{inode}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.filesystem.inode.free": {
+     "kind": "updowncounter",
+     "unit": "{inode}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.filesystem.usage": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.memory.available": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.memory.major_page_faults": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.memory.page_faults": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.memory.rss": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.memory.usage": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.memory.working_set": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.network.errors": {
+     "kind": "counter",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {
+      "interface": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    },
+    "k8s.node.network.io": {
+     "kind": "counter",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {
+      "interface": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    },
+    "k8s.node.pid.limit": {
+     "kind": "updowncounter",
+     "unit": "{thread}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.pid.usage": {
+     "kind": "updowncounter",
+     "unit": "{thread}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.system_container.cpu.time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.system_container.cpu.usage": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.system_container.memory.usage": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.system_container.memory.working_set": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.node.uptime": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.persistentvolume.status.phase": {
+     "kind": "updowncounter",
+     "unit": "{persistentvolume}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.persistentvolume.status.phase": [
+       "Pending",
+       "Available",
+       "Bound",
+       "Released",
+       "Failed"
+      ]
+     }
+    },
+    "k8s.persistentvolume.storage.capacity": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.persistentvolumeclaim.status.phase": {
+     "kind": "updowncounter",
+     "unit": "{persistentvolumeclaim}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.persistentvolumeclaim.status.phase": [
+       "Pending",
+       "Bound",
+       "Lost"
+      ]
+     }
+    },
+    "k8s.persistentvolumeclaim.storage.capacity": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.persistentvolumeclaim.storage.request": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.cpu.node.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.cpu.time": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.cpu.usage": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.cpu_limit_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.cpu_request_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.filesystem.available": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.filesystem.capacity": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.filesystem.usage": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.memory.available": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.memory.major_page_faults": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.memory.node.utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.memory.page_faults": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.memory.rss": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.memory.usage": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.memory.working_set": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.memory_limit_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.memory_request_utilization": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.network.errors": {
+     "kind": "counter",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {
+      "interface": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    },
+    "k8s.pod.network.io": {
+     "kind": "counter",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {
+      "interface": null,
+      "direction": [
+       "receive",
+       "transmit"
+      ]
+     }
+    },
+    "k8s.pod.phase": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.status_reason": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.uptime": {
+     "kind": "counter",
+     "unit": "s",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.volume.usage": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.replicaset.available": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.replicaset.desired": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.replication_controller.available": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.replication_controller.desired": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.resource_quota.hard_limit": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    },
+    "k8s.resource_quota.used": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    },
+    "k8s.service.endpoint.count": {
+     "kind": "gauge",
+     "unit": "{endpoint}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.service.endpoint.address_type": [
+       "IPv4",
+       "IPv6",
+       "FQDN"
+      ],
+      "k8s.service.endpoint.condition": [
+       "ready",
+       "serving",
+       "terminating"
+      ],
+      "k8s.service.endpoint.zone": null
+     }
+    },
+    "k8s.service.load_balancer.ingress.count": {
+     "kind": "gauge",
+     "unit": "{ingress}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.statefulset.current_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.statefulset.desired_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.statefulset.pod.available": {
+     "kind": "updowncounter",
+     "unit": "{pod}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.statefulset.ready_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.statefulset.updated_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.volume.available": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.volume.capacity": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.volume.inodes": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.volume.inodes.free": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.volume.inodes.used": {
+     "kind": "gauge",
+     "unit": "1",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "openshift.appliedclusterquota.limit": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "k8s.namespace.name": null,
+      "resource": null
+     }
+    },
+    "openshift.appliedclusterquota.used": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "k8s.namespace.name": null,
+      "resource": null
+     }
+    },
+    "openshift.clusterquota.limit": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    },
+    "openshift.clusterquota.used": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    }
+   }
+  },
+  "kubernetes_state": {
+   "source": "opentelemetry-collector-contrib v0.164.0 receiver/k8sclusterreceiver/metadata.yaml",
+   "metrics": {
+    "k8s.container.cpu_limit": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.cpu_request": {
+     "kind": "gauge",
+     "unit": "{cpu}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.ephemeralstorage_limit": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.ephemeralstorage_request": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.memory_limit": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.memory_request": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.ready": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.restarts": {
+     "kind": "gauge",
+     "unit": "{restart}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.status.reason": {
+     "kind": "updowncounter",
+     "unit": "{container}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.container.status.reason": [
+       "ContainerCreating",
+       "CrashLoopBackOff",
+       "CreateContainerConfigError",
+       "ErrImagePull",
+       "ImagePullBackOff",
+       "OOMKilled",
+       "Completed",
+       "Error",
+       "ContainerCannotRun"
+      ]
+     }
+    },
+    "k8s.container.status.state": {
+     "kind": "updowncounter",
+     "unit": "{container}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.container.status.state": [
+       "terminated",
+       "running",
+       "waiting"
+      ]
+     }
+    },
+    "k8s.container.storage_limit": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.container.storage_request": {
+     "kind": "gauge",
+     "unit": "By",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.cronjob.active_jobs": {
+     "kind": "gauge",
+     "unit": "{job}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.current_scheduled_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.desired_scheduled_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.misscheduled_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.daemonset.ready_nodes": {
+     "kind": "gauge",
+     "unit": "{node}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.deployment.available": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.deployment.desired": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.current_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.desired_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.max_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.hpa.min_replicas": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.active_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.desired_successful_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.failed_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.max_parallel_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.job.successful_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.namespace.phase": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.node.condition": {
+     "kind": "gauge",
+     "unit": "{condition}",
+     "enabledByDefault": false,
+     "attributes": {
+      "condition": null
+     }
+    },
+    "k8s.persistentvolume.status.phase": {
+     "kind": "updowncounter",
+     "unit": "{persistentvolume}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.persistentvolume.status.phase": [
+       "Pending",
+       "Available",
+       "Bound",
+       "Released",
+       "Failed"
+      ]
+     }
+    },
+    "k8s.persistentvolume.storage.capacity": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.persistentvolumeclaim.status.phase": {
+     "kind": "updowncounter",
+     "unit": "{persistentvolumeclaim}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.persistentvolumeclaim.status.phase": [
+       "Pending",
+       "Bound",
+       "Lost"
+      ]
+     }
+    },
+    "k8s.persistentvolumeclaim.storage.capacity": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.persistentvolumeclaim.storage.request": {
+     "kind": "updowncounter",
+     "unit": "By",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.pod.phase": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.pod.status_reason": {
+     "kind": "gauge",
+     "unit": "",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.replicaset.available": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.replicaset.desired": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.replication_controller.available": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.replication_controller.desired": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.resource_quota.hard_limit": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    },
+    "k8s.resource_quota.used": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    },
+    "k8s.service.endpoint.count": {
+     "kind": "gauge",
+     "unit": "{endpoint}",
+     "enabledByDefault": false,
+     "attributes": {
+      "k8s.service.endpoint.address_type": [
+       "IPv4",
+       "IPv6",
+       "FQDN"
+      ],
+      "k8s.service.endpoint.condition": [
+       "ready",
+       "serving",
+       "terminating"
+      ],
+      "k8s.service.endpoint.zone": null
+     }
+    },
+    "k8s.service.load_balancer.ingress.count": {
+     "kind": "gauge",
+     "unit": "{ingress}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.statefulset.current_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.statefulset.desired_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.statefulset.pod.available": {
+     "kind": "updowncounter",
+     "unit": "{pod}",
+     "enabledByDefault": false,
+     "attributes": {}
+    },
+    "k8s.statefulset.ready_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "k8s.statefulset.updated_pods": {
+     "kind": "gauge",
+     "unit": "{pod}",
+     "enabledByDefault": true,
+     "attributes": {}
+    },
+    "openshift.appliedclusterquota.limit": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "k8s.namespace.name": null,
+      "resource": null
+     }
+    },
+    "openshift.appliedclusterquota.used": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "k8s.namespace.name": null,
+      "resource": null
+     }
+    },
+    "openshift.clusterquota.limit": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    },
+    "openshift.clusterquota.used": {
+     "kind": "gauge",
+     "unit": "{resource}",
+     "enabledByDefault": true,
+     "attributes": {
+      "resource": null
+     }
+    }
+   }
+  },
   "system": {
    "source": "opentelemetry-collector-contrib v0.164.0 receiver/hostmetricsreceiver/internal/scraper/{cpu,load,memory,network,disk,filesystem}scraper/metadata.yaml",
    "metrics": {

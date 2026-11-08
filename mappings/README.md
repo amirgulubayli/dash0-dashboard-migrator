@@ -49,6 +49,23 @@ receivers:
 
 **NGINX** (`nginxreceiver`): needs `stub_status` exposed (for example `location /status { stub_status; }`) and `endpoint: http://<host>/status`. The mapped metrics (`nginx.connections_current`, `nginx.requests`) are enabled by default.
 
+**Kubernetes** (`kubernetes.yaml` → `kubeletstatsreceiver` + `k8sclusterreceiver`; `kubernetes_state.yaml` → `k8sclusterreceiver`; both checked against v0.164.0). Usage (CPU, memory, network, filesystem) comes from `kubeletstats` on every node. Requests, limits, restarts and the workload counts (deployment, daemonset, statefulset, replicaset, job) come from one `k8s_cluster` receiver. Datadog's `kube_*` and `pod_name` tags map to the `k8s.*` resource attributes (`tags.yaml`). Two mapped metrics are **disabled by default**:
+
+```yaml
+receivers:
+  kubeletstats:
+    auth_type: serviceAccount
+    endpoint: https://${env:K8S_NODE_NAME}:10250
+    metrics:
+      k8s.container.memory_limit_utilization: { enabled: true }   # kubernetes.memory.usage_pct
+  k8s_cluster:
+    metrics:
+      k8s.container.status.state: { enabled: true }               # kubernetes_state.container.running / .terminated
+```
+- 40 of the 77 rows are `status: none`. These are object counts (`*.count`, `pods.running`), node capacity and allocatable (k8s_cluster v0.164.0 doesn't emit them), `pod.status_phase` and `node.by_condition` (the receiver encodes the phase or status in the value, not in a label), probe results and disk IO. They become placeholders that say so, not panels that stay empty.
+- `kubernetes.filesystem.usage_pct` and `kubernetes.node.filesystem.usage_pct` are `derived` (usage / capacity) and stay manual until derived expressions are translated.
+- Not verified on a live cluster yet.
+
 **Host metrics** (`system.*`, `hostmetricsreceiver`, `datadog/system.yaml`; Datadog side from the datadog-agent 7.60.0 core checks). Scrapers needed: `cpu`, `load`, `memory`, `disk`, `network`. These mapped metrics are **disabled by default** and must be enabled:
 
 ```yaml

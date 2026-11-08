@@ -38,3 +38,50 @@ tags:
     label: db
     status: approximate
     note: "redis.db.* attribute db; Datadog values look like db0, OTel values like 0. Value mapping UNVERIFIED"
+  # Kubernetes: Datadog's tagger tags (kubelet + kubernetes_state checks) -> the OTel k8s.* resource attributes the
+  # kubeletstats / k8s_cluster receivers (or k8sattributes) set. Pairs from Datadog's OTel semantic mapping
+  # (docs.datadoghq.com/opentelemetry/schema_semantics/semantic_mapping/). Values are the same object names.
+  kube_namespace:
+    label: k8s_namespace_name
+    status: exact
+    note: "OTel k8s.namespace.name"
+  pod_name:
+    label: k8s_pod_name
+    status: exact
+    note: "OTel k8s.pod.name"
+  kube_container_name:
+    label: k8s_container_name
+    status: exact
+    note: "OTel k8s.container.name"
+  container_name:
+    label: k8s_container_name
+    status: approximate
+    note: "Datadog container_name is the runtime's container name; in Kubernetes it usually equals k8s.container.name"
+  kube_deployment:
+    label: k8s_deployment_name
+    status: exact
+    note: "OTel k8s.deployment.name"
+  kube_replica_set:
+    label: k8s_replicaset_name
+    status: exact
+    note: "OTel k8s.replicaset.name"
+  kube_daemon_set:
+    label: k8s_daemonset_name
+    status: exact
+    note: "OTel k8s.daemonset.name"
+  kube_stateful_set:
+    label: k8s_statefulset_name
+    status: exact
+    note: "OTel k8s.statefulset.name"
+  kube_job:
+    label: k8s_job_name
+    status: exact
+    note: "OTel k8s.job.name"
+  kube_cronjob:
+    label: k8s_cronjob_name
+    status: exact
+    note: "OTel k8s.cronjob.name"
+  kube_cluster_name:
+    label: k8s_cluster_name
+    status: approximate
+    note: "OTel k8s.cluster.name; not set by the k8s receivers, only by resourcedetection or a resource processor"

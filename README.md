@@ -8,7 +8,7 @@ Translation is **deterministic**: a Datadog query parser, rule tables and metric
 
 It runs in your terminal, because the people who migrate monitoring are engineers, and engineers live there. No web app to log in to, no account to create.
 
-**Tested on Datadog's own dashboards.** All 516 dashboards and 329 monitors in [DataDog/integrations-core](https://github.com/DataDog/integrations-core) run through end to end: **93.7% of 14,172 distinct queries and monitors translate, and 92.2% are exact under a stated condition** ([details](#tested-against-datadogintegrations-core)). One command repeats it: `npm run integrations-core`.
+**Tested on Datadog's own dashboards.** All 516 dashboards and 329 monitors in [DataDog/integrations-core](https://github.com/DataDog/integrations-core) run through end to end: **92.4% of 14,172 distinct queries and monitors translate, and 89.4% are exact under a stated condition** ([details](#tested-against-datadogintegrations-core)). One command repeats it: `npm run integrations-core`.
 
 ## Quick start
 
@@ -174,10 +174,10 @@ npm run integrations-core
 ```
 
 ```
-● Translate  516 dashboards · 329 monitors → 14614 items  4.5s
-  ⎿ 12380 exact-under · 194 bounded · 1338 manual · 702 unsupported
-● Import  516 dashboards · 189 check rules (dry run, nothing imported)
-  translated  12574/14614   86%
+● Translate  516 dashboards · 329 monitors → 14614 items  5.4s
+  ⎿ 12111 exact-under · 302 bounded · 1499 manual · 702 unsupported
+● Import  516 dashboards · 184 check rules (dry run, nothing imported)
+  translated  12413/14614   84%
 ```
 
 Every run also reports **coverage by query type**: every distinct query and monitor in the source, run through the same translators, split the way a Datadog user thinks of them. Over integrations-core:
@@ -185,17 +185,19 @@ Every run also reports **coverage by query type**: every distinct query and moni
 ```
 ● By query type  14,172 distinct queries and monitors
   ⎿ Legacy queries   ████████████████▓░   96.7%  1555/1607  time.kind 26 · metric.derived 9
-  ⎿ Metric queries   ████████████████▓░   94.4%  5215/5520  time.kind-unknown 91 · time.kind 33
   ⎿ Log monitors     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░   93.7%  30/32  log.monitor.shape 2
   ⎿ Log queries      ████████████████░░   93.4%  4177/4472  log.measure 292 · log.or.cross-key 2
   ⎿ Log formulas     ████████████████░░   92.8%  2100/2261  log.measure 152 · fn.throughput 5
-  ⎿ Metric monitors  ████████████▓░░░░░   74.6%  209/280  fn.anomalies 46 · monitor.as_count 13
-  ⎿ 93.7% of 14,172 distinct queries and monitors translate, and 92.2% are exact under a stated condition.
+  ⎿ Metric queries   ███████████████▓░░   91.1%  5030/5520  metric.no_equivalent 200 · time.kind-unknown 81
+  ⎿ Metric monitors  ███████████▓▓░░░░░   72.8%  204/280  fn.anomalies 46 · monitor.as_count 13
+  ⎿ 92.4% of 14,172 distinct queries and monitors translate, and 89.4% are exact under a stated condition.
 ```
 
 Solid is exact under a stated condition, shaded is within a proven bound, and what stays with a person is named with its reason (46 metric monitors use `anomalies()`: we don't guess). The same section is in `report.html`, `report.md` and `report.json` (`queryCoverage`), for whatever you migrate.
 
-Every dashboard and every translatable monitor passes the pre-import checks (exit 0). What doesn't translate is listed per item in `.corpus/run/report.html`, never dropped: mostly widget types with no Dash0 panel (`widget.unsupported`), queries on non-metric data sources, and the 140 monitors built on Datadog-only functions such as `anomalies()`.
+Every dashboard and every translatable monitor passes the pre-import checks (exit 0). What doesn't translate is listed per item in `.corpus/run/report.html`, never dropped: mostly widget types with no Dash0 panel (`widget.unsupported`), queries on non-metric data sources, and the 145 monitors that use Datadog-only functions such as `anomalies()` or metrics with no OTel equivalent.
+
+"Translates" counts valid PromQL. Where a metric has no row in `mappings/datadog/`, the query keeps its Datadog name and returns data only if your Collector emits that name, so the mapping tables matter more than the percentage. With the Kubernetes tables (`kubernetes.yaml`, `kubernetes_state.yaml`), 514 more queries point at real kubeletstats / k8s_cluster metrics, and 185 that would have drawn an empty panel now say there is no equivalent. That's why the percentage went down from 93.7%.
 
 ## Run from source
 
