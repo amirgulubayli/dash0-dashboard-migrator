@@ -126,7 +126,8 @@ export function buildReport(b: BuildInput): Report {
         source: d.source.origin ?? d.source.id,
         source_queries: src ? src.panel.requests.flatMap((q) => q.queries.map((x) => x.expr)).filter(Boolean) : [],
         source_formula: src && src.panel.requests.some((q) => q.formulas.length) ? src.panel.requests.flatMap((q) => q.formulas.map((f) => f.expr)) : null,
-        promql: r.promql,
+        // fail closed: a manual or unsupported panel is a placeholder, so it lists no PromQL even when some of its queries translated
+        promql: status === "manual" || status === "unsupported" ? [] : r.promql,
         status,
         reason_codes: [...new Set(r.findings.map((f) => f.code))],
         certificate: {

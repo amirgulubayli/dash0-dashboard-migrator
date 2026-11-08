@@ -150,16 +150,27 @@
     "status": "manual",
     "promql": [],
     "rules": [
-      "widget.unknown",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
+      "time.rollup.default",
+      "select.metric.transform",
+      "space.default-avg",
+      "widget.timeseries",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.var-default"
+    ],
     "findings": [
+      "bounded metric.approximate",
+      "exact-under scope.var.free-form",
       "manual metric.derived",
-      "manual metric.needs_transform",
       "manual metric.no_equivalent"
     ]
   },
@@ -168,18 +179,31 @@
     "kind": "panel",
     "title": "I/O wait (%)",
     "widget_type": "timeseries",
-    "status": "manual",
-    "promql": [],
+    "status": "bounded",
+    "promql": [
+      "100 * max (avg_over_time({otel_metric_name=\"system.cpu.utilization\", state=\"wait\"}[$__interval]))"
+    ],
     "rules": [
-      "widget.unknown",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "select.labels",
+      "time.rollup.default",
+      "select.metric.transform",
+      "space.agg",
+      "widget.timeseries",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.var-default"
+    ],
     "findings": [
-      "manual metric.needs_transform"
+      "bounded metric.approximate",
+      "exact-under scope.var.free-form"
     ]
   },
   {
@@ -187,18 +211,32 @@
     "kind": "panel",
     "title": "System memory",
     "widget_type": "timeseries",
-    "status": "manual",
-    "promql": [],
+    "status": "bounded",
+    "promql": [
+      "9.5367431640625e-7 * sum (avg_over_time({otel_metric_name=\"system.linux.memory.available\"}[$__interval]))",
+      "9.5367431640625e-7 * sum (avg_over_time({otel_metric_name=\"system.memory.limit\"}[$__interval])) - 9.5367431640625e-7 * sum (avg_over_time({otel_metric_name=\"system.linux.memory.available\"}[$__interval]))"
+    ],
     "rules": [
-      "widget.unknown",
+      "select.metric.mapped",
+      "select.metric.approximate",
+      "time.rollup.default",
+      "select.metric.transform",
+      "space.agg",
+      "arith.same-groups",
+      "widget.timeseries",
       "emit.certificate",
       "validate.preflight",
       "emit.id",
       "emit.single-item"
     ],
-    "assumptions": [],
+    "assumptions": [
+      "A.align",
+      "A.boundary",
+      "A.var-default"
+    ],
     "findings": [
-      "manual metric.needs_transform"
+      "bounded metric.approximate",
+      "exact-under scope.var.free-form"
     ]
   },
   {

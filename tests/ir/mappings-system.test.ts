@@ -36,12 +36,12 @@ describe("system mapping table", () => {
     }
   });
 
-  it("single-state CPU percents: utilization fraction * 100, waiting for select.metric.transform", () => {
+  it("single-state CPU percents: utilization fraction * 100, applied by select.metric.transform (#56)", () => {
     for (const [dd, state] of [["idle", "idle"], ["iowait", "wait"], ["stolen", "steal"]] as const) {
       const row = get(`system.cpu.${dd}`);
       expect(row).toMatchObject({ otel: "system.cpu.utilization", labels: { state }, scale: 100, ddKind: "gauge", status: "approximate" });
       expect(row.note).toMatch(/Disabled by default in the receiver/);
-      expect(metricAvailability(m, `system.cpu.${dd}`)).toBe("needs_transform");
+      expect(metricAvailability(m, `system.cpu.${dd}`)).toBe("mapped");
     }
   });
 
