@@ -10,13 +10,14 @@ import { reportToEvents } from "../report/events.js";
 import { narrate } from "../report/narrate.js";
 import type { Report } from "../report/types.js";
 import { VIEWER_HTML } from "./viewer.js";
+import { AGENT_NAME, CLIENT_TOOLS, VOICE_TOOL_ROUTES, findAgentByName } from "../voice/agent.js";
 
 export interface ServeOptions {
   outDir: string;
   port: number;
   /** Delay between events in ms, so a person (and the voice) can follow. Overridable per request: /events?pace=. */
   pace: number;
-  /** ElevenLabs agent id. With elevenLabsKey, the page gets a voice narrator. */
+  /** ElevenLabs agent id. Optional: with only elevenLabsKey, serve looks up the agent `dd2dash0 voice setup` made. */
   agentId?: string;
   /** ElevenLabs API key: used server-side only to mint conversation tokens. Never sent to the browser. */
   elevenLabsKey?: string;
@@ -54,21 +55,58 @@ export function summaryForAgent(r: Report) {
   };
 }
 
+/** Only browser pages served from this machine may call the API cross-origin (e.g. a UI dev server on :5173). */
+export function allowedOrigin(origin: string | undefined): string | null {
+  if (!origin) return null;
+  try {
+    const u = new URL(origin);
+    return (u.protocol === "http:" || u.protocol === "https:") && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) ? origin : null;
+  } catch {
+    return null;
+  }
+}
+
+function itemDetails(r: Report, query: string) {
+  const q = query.toLowerCase();
+  return r.items
+    .filter((i) => i.id.toLowerCase() === q || i.title.toLowerCase().includes(q))
+    .slice(0, 5)
+    .map((i) => ({
+      id: i.id, title: i.title, dashboard: i.dashboard, type: i.widget_type, status: i.status,
+      datadog: i.source_queries, promql: i.promql, why: i.findings.map((x) => `${x.code}: ${x.message}`),
+      assumptions: i.certificate.assumptions, manual_actions: i.manual_actions ?? [],
+    }));
+}
+
 export function startServer(o: ServeOptions): Promise<{ server: Server; url: string }> {
   const f = o.fetch ?? fetch;
+  // Agent id: given, or looked up once by name (cached on success only, so `voice setup` can run while serve is up).
+  let agentId: string | undefined = o.agentId;
+  const resolveAgent = async (): Promise<string | undefined> => {
+    if (agentId || !o.elevenLabsKey) return agentId;
+    agentId = (await findAgentByName({ apiKey: o.elevenLabsKey, fetch: f })) ?? undefined;
+    return agentId;
+  };
+  const voiceKey = !!o.elevenLabsKey;
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
+    const cors = allowedOrigin(req.headers.origin);
+    const corsHeaders: Record<string, string> = cors ? { "Access-Control-Allow-Origin": cors, Vary: "Origin" } : {};
     const send = (code: number, type: string, body: string) => {
-      res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store" });
+      res.writeHead(code, { "Content-Type": type, "Cache-Control": "no-store", ...corsHeaders });
       res.end(body);
     };
+    if (req.method === "OPTIONS") {
+      res.writeHead(cors ? 204 : 403, { ...corsHeaders, "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "600" });
+      return res.end();
+    }
     const json = (x: unknown, code = 200) => send(code, "application/json", JSON.stringify(x));
     try {
       switch (url.pathname) {
         case "/":
           return send(200, "text/html; charset=utf-8", VIEWER_HTML);
         case "/config.json":
-          return json({ voice: !!(o.agentId && o.elevenLabsKey), pace: o.pace });
+          return json({ voice: voiceKey, pace: o.pace });
         case "/report.json":
           return json(loadReport(o.outDir));
         case "/report.md":
@@ -84,30 +122,39 @@ export function startServer(o: ServeOptions): Promise<{ server: Server; url: str
           }
           return send(200, "text/javascript; charset=utf-8", readFileSync(p, "utf8"));
         }
-        case "/api/el-token": {
-          if (!o.agentId || !o.elevenLabsKey) return json({ error: "voice not configured (ELEVENLABS_AGENT_ID, ELEVENLABS_API_KEY)" }, 404);
-          const r = await f(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(o.agentId)}`, { headers: { "xi-api-key": o.elevenLabsKey } });
+        // UI contract (see VOICE_AGENT.md "Building a UI"): config, token, one route per client tool, /events.
+        case "/api/voice/config": {
+          const id = voiceKey ? await resolveAgent().catch(() => undefined) : undefined;
+          return json({
+            enabled: voiceKey && !!id,
+            reason: !voiceKey ? "ELEVENLABS_API_KEY not set" : !id ? `no agent named "${AGENT_NAME}": run 'dd2dash0 voice setup'` : null,
+            agent: { id: id ?? null, name: AGENT_NAME },
+            connection: { type: "webrtc", tokenUrl: "/api/voice/token", sdk: "@elevenlabs/client", sdkUrl: "/vendor/elevenlabs.js" },
+            tools: CLIENT_TOOLS.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters, route: VOICE_TOOL_ROUTES[t.name as keyof typeof VOICE_TOOL_ROUTES] })),
+            events: { url: "/events", format: "text/event-stream; each data line is a run event plus a `say` sentence", milestonePrefix: "[EVENT] " },
+            pace: o.pace,
+          });
+        }
+        case "/api/el-token": // older name, kept for the built-in viewer
+        case "/api/voice/token": {
+          if (!o.elevenLabsKey) return json({ error: "voice not configured (ELEVENLABS_API_KEY)" }, 404);
+          const id = await resolveAgent();
+          if (!id) return json({ error: `no agent named "${AGENT_NAME}": run 'dd2dash0 voice setup'` }, 404);
+          const r = await f(`https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(id)}`, { headers: { "xi-api-key": o.elevenLabsKey } });
           if (!r.ok) return json({ error: `ElevenLabs token request failed: ${r.status}` }, 502); // never echo the key
           const { token } = (await r.json()) as { token?: string };
-          return json({ token });
+          return json({ token, agentId: id, connectionType: "webrtc" });
         }
         case "/api/summary":
+        case "/api/voice/tools/get_summary":
           return json(summaryForAgent(loadReport(o.outDir)));
-        case "/api/item": {
-          const q = (url.searchParams.get("id") ?? url.searchParams.get("q") ?? "").toLowerCase();
-          const items = loadReport(o.outDir).items.filter((i) => i.id.toLowerCase() === q || i.title.toLowerCase().includes(q));
-          return json(
-            items.slice(0, 5).map((i) => ({
-              id: i.id, title: i.title, dashboard: i.dashboard, type: i.widget_type, status: i.status,
-              datadog: i.source_queries, promql: i.promql, why: i.findings.map((x) => `${x.code}: ${x.message}`),
-              assumptions: i.certificate.assumptions, manual_actions: i.manual_actions ?? [],
-            })),
-          );
-        }
+        case "/api/item":
+        case "/api/voice/tools/get_item_details":
+          return json(itemDetails(loadReport(o.outDir), url.searchParams.get("query") ?? url.searchParams.get("id") ?? url.searchParams.get("q") ?? ""));
         case "/events": {
           const pace = Math.max(0, Math.min(5000, Number(url.searchParams.get("pace") ?? o.pace) || 0));
           const events = reportToEvents(loadReport(o.outDir));
-          res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
+          res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", ...corsHeaders });
           let i = 0;
           const tick = () => {
             if (res.destroyed) return;

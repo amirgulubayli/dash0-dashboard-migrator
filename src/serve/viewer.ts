@@ -78,11 +78,11 @@ $("#replay").onclick=start;start();
  btn.onclick=async()=>{btn.disabled=true;$("#voiceStatus").textContent="Connecting...";
   try{await navigator.mediaDevices.getUserMedia({audio:true});
    if(!window.ElevenLabsClient){await new Promise((ok,err)=>{const s=document.createElement("script");s.src="/vendor/elevenlabs.js";s.onload=ok;s.onerror=err;document.head.append(s)})}
-   const {token}=await (await fetch("/api/el-token")).json();if(!token)throw new Error("no conversation token");
+   const {token}=await (await fetch("/api/voice/token")).json();if(!token)throw new Error("no conversation token");
    conv=await ElevenLabsClient.Conversation.startSession({conversationToken:token,connectionType:"webrtc",
     clientTools:{
-     get_summary:async()=>JSON.stringify(await (await fetch("/api/summary")).json()),
-     get_item_details:async({query})=>JSON.stringify(await (await fetch("/api/item?q="+encodeURIComponent(query||""))).json())},
+     get_summary:async()=>JSON.stringify(await (await fetch("/api/voice/tools/get_summary")).json()),
+     get_item_details:async({query})=>JSON.stringify(await (await fetch("/api/voice/tools/get_item_details?query="+encodeURIComponent(query||""))).json())},
     onModeChange:({mode:m})=>{mode=m;$("#voiceStatus").textContent="Narrator is "+m+"."},
     onMessage:m=>{if(m&&m.message)say((m.source==="user"?"You: ":"Agent: ")+m.message)},
     onError:m=>{$("#voiceStatus").textContent="Voice error: "+m},

@@ -60,7 +60,7 @@ describe("serve", async () => {
   });
   it("mints an ElevenLabs conversation token server-side; the key never reaches the page", async () => {
     const body = await (await get("/api/el-token")).text();
-    expect(JSON.parse(body)).toEqual({ token: "conv-token-123" });
+    expect(JSON.parse(body)).toEqual({ token: "conv-token-123", agentId: "agent_abc", connectionType: "webrtc" });
     expect(body).not.toContain("sk_SECRET");
     expect(tokenCalls[0]).toEqual({ url: "https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=agent_abc", key: "sk_SECRET" });
   });
