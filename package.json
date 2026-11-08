@@ -16,6 +16,9 @@
     "test": "vitest run",
     "typecheck": "tsc -p . --noEmit",
     "improve": "tsx tools/improve/main.ts",
+    "gaps": "tsx tools/gaps/main.ts",
+    "gate": "tsx tools/gate/main.ts",
+    "recurse": "tsx tools/recurse/main.ts",
     "typecheck:tools": "tsc -p tools"
   },
   "devDependencies": {

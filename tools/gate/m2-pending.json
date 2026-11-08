@@ -1,0 +1,90 @@
+{
+  "//": "M2 allowlist (plan 09 §4): catalog rules with an epsilon that no property test under tests/semantics names yet. Reviewed debt, may only shrink: a new untested rule fails the gate, and an entry fails as stale once a property test names the rule. Changing this file needs a review from the T16 owner (Amir) or the catalog owner (Michael).",
+  "reviewed": "initial list = every untested ε rule at bfcb9b9 (2026-11-08); reviewed in the PR that adds it",
+  "pending": [
+    {
+      "id": "fn.derivative.counter",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "fn.histogram.quantile",
+      "reason": "tests/semantics/histogram-quantile.test.ts (T11) checks the bound but T11d shows the catalog's one-bucket ε is too small; fix the ε, then name the rule there"
+    },
+    {
+      "id": "fn.per_unit.counter",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "fn.per_unit.gauge",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "layout.clamped",
+      "reason": "geometry-only ε (no data error); needs a layout property test, or drop the ε if it is not an approximation of values"
+    },
+    {
+      "id": "log.cardinality",
+      "reason": "implemented; ε backed by proof:T3, live:dash0-4110; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "log.count",
+      "reason": "implemented; ε backed by proof:T3, live:dash0-4110; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "log.monitor.count",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "log.monitor.formula",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "log.or.inclusion-exclusion",
+      "reason": "implemented; ε backed by proof:log-or, exhaustive:E5; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "log.scalar.window",
+      "reason": "implemented; ε backed by nothing yet; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "logs.rate",
+      "reason": "planned; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "monitor.sum.as_count",
+      "reason": "implemented; ε backed by proof:T3, proof:T4; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "select.metric.approximate",
+      "reason": "implemented; ε backed by nothing yet; no fast-check test in tests/semantics names it"
+    },
+    {
+      "id": "time.as_count.counter",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "time.as_rate.counter",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "time.count.counter",
+      "reason": "implemented; ε backed by proof:T4c; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "time.count.default",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "time.ddrate.plain",
+      "reason": "evidence says property:T16 but no property test names the rule; T3b is exercised in properties.test.ts (T4 block): name it there"
+    },
+    {
+      "id": "time.unmapped.counter",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    },
+    {
+      "id": "time.unmapped.suffix-counter",
+      "reason": "implemented; ε backed by proof:T3; no fast-check test in tests/semantics names it (T3b: extend properties.test.ts or rollup-rate.test.ts and name the rule)"
+    }
+  ]
+}
