@@ -38,7 +38,7 @@ describe("keys", () => {
     const dir = tmp("env");
     writeFileSync(join(dir, ".env"), "OTHER=1\n", { mode: 0o644 });
     saveDotEnv(join(dir, ".env"), { DASH0_AUTH_TOKEN: "t" });
-    expect(statSync(join(dir, ".env")).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(statSync(join(dir, ".env")).mode & 0o777).toBe(0o600); // Windows has no Unix mode bits
     expect(readFileSync(join(dir, ".env"), "utf8")).toBe("OTHER=1\nDASH0_AUTH_TOKEN=t\n");
   });
 
@@ -88,7 +88,7 @@ describe("keys", () => {
     for (const secret of ["dd-good-api-key", "dd-good-app-key", "d0-good-token-xyz", "dd-bad-api-key-000"]) expect(printed).not.toContain(secret);
     const saved = parseDotEnv(readFileSync(join(cwd, ".env"), "utf8"));
     expect(saved).toMatchObject({ DD_API_KEY: "dd-good-api-key", DASH0_AUTH_TOKEN: "d0-good-token-xyz" });
-    expect(statSync(join(cwd, ".env")).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(statSync(join(cwd, ".env")).mode & 0o777).toBe(0o600); // Windows has no Unix mode bits
 
     // Second run: everything comes from ./.env, nothing is asked.
     const io2 = scripted([]);
