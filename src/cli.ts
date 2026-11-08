@@ -17,7 +17,7 @@ import { guided, terminalIO } from "./flow/run.js";
 import { outOf, Ui } from "./ui/style.js";
 import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.5.0";
+export const VERSION = "0.5.1";
 
 /**
  * The mapping tables, first found wins:
