@@ -1,0 +1,16 @@
+{
+  "schema": "dd2dash0.report/v2",
+  "run": { "options": { "mode": "dry-run", "enableRules": false } },
+  "reasonCodes": {
+    "metric.approximate": { "plain": "Close to Datadog's result within a stated bound." },
+    "metric.no_equivalent": { "plain": "No equivalent metric exists." }
+  },
+  "items": [
+    { "kind": "group", "id": "g1", "title": "Group one", "status": "exact", "dashboard": "Small - Dash" },
+    { "kind": "panel", "id": "p1", "title": "Note", "status": "exact-under", "widget_type": "note", "group": "Group one", "dashboard": "Small - Dash", "condition": "colours do not matter", "promql": [], "source_queries": [], "reason_codes": [], "target": { "action": "dry-run", "readBack": "skipped" } },
+    { "kind": "panel", "id": "p2", "title": "Hit rate", "status": "bounded", "widget_type": "query_value", "group": "Group one", "dashboard": "Small - Dash", "condition": null, "source_queries": ["avg:a{*}"], "promql": ["avg(a)"], "reason_codes": ["metric.approximate"], "explain": { "plain": "Within a bound." }, "target": { "action": "dry-run", "readBack": "skipped" } },
+    { "kind": "panel", "id": "p3", "title": "Lost", "status": "manual", "widget_type": "timeseries", "group": "Group one", "dashboard": "Small - Dash", "source_queries": ["sum:b{*}"], "promql": [], "reason_codes": ["metric.no_equivalent"] },
+    { "kind": "panel", "id": "p4", "title": "Good", "status": "exact-under", "widget_type": "timeseries", "group": "Group one", "dashboard": "Small - Dash", "condition": "no counter reset", "source_queries": ["avg:c{*}"], "promql": ["avg(c)"], "reason_codes": [] },
+    { "kind": "alert", "id": "m1", "title": "High mem", "status": "exact-under", "widget_type": "query alert", "condition": "notification is manual", "source_queries": ["avg(last_5m):x > 90"], "promql": ["x > $__threshold"], "reason_codes": [], "manual_actions": ["Enable the check rule in Dash0"] }
+  ]
+}
