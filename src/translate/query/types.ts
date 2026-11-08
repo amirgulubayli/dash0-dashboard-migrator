@@ -37,6 +37,8 @@ export interface TranslateContext {
    * for contexts that can't supply them. Without it, every metric the lookup doesn't return is treated as unmapped.
    */
   availability?: (ddName: string) => MetricAvailability;
+  /** A derived metric that is num / den over two other Datadog metrics (T1 `metricRatio`). Rule select.metric.ratio. */
+  ratio?: (ddName: string) => { num: string; den: string } | undefined;
   /**
    * Datadog's own kind for a metric WITHOUT a curated mapping (generated from integrations-core metadata.csv).
    * Curated mappings always win. Without it, an unmapped metric is assumed to be a gauge.
