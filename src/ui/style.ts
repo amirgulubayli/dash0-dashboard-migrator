@@ -9,8 +9,10 @@ export interface Out {
   columns: number;
 }
 
-export function outOf(stream: NodeJS.WriteStream = process.stdout): Out {
-  return { write: (s) => void stream.write(s), isTTY: stream.isTTY === true, columns: stream.columns || 80 };
+export function outOf(stream: NodeJS.WriteStream = process.stdout, env: NodeJS.ProcessEnv = process.env): Out {
+  // Piped output has no width; COLUMNS (when set) still lets a caller ask for narrow output.
+  const cols = stream.columns || Number(env.COLUMNS) || 80;
+  return { write: (s) => void stream.write(s), isTTY: stream.isTTY === true, columns: Math.max(40, cols) };
 }
 
 export function colorEnabled(out: Pick<Out, "isTTY">, env: NodeJS.ProcessEnv = process.env): boolean {
@@ -45,6 +47,76 @@ export function truncate(s: string, n: number): string {
   // Drop colors and link wrappers (keeping the link text) so a cut never lands inside an escape sequence.
   const plain = s.replace(/\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g, "").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
   return [...plain].slice(0, Math.max(0, n - 1)).join("") + "…";
+}
+
+/**
+ * Word-wrap plain or colored text to `n` visible columns. Continuation lines start with `indent`. Words longer than a
+ * line are kept whole (a long URL or PromQL selector is better unbroken than split mid-token).
+ */
+export function wrap(s: string, n: number, indent = ""): string[] {
+  const words = s.split(/ +/);
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const lead = lines.length ? indent : "";
+    if (cur && width(lead + cur + " " + w) > n) {
+      lines.push(lead + cur);
+      cur = w;
+    } else cur = cur ? `${cur} ${w}` : w;
+  }
+  lines.push((lines.length ? indent : "") + cur);
+  return lines;
+}
+
+/**
+ * "prefix text…" wrapped to `n` columns with the continuation lines hanging under the text. When the prefix leaves
+ * less than `min` columns, the text moves to its own lines under the prefix, indented by `under`.
+ */
+export function hang(prefix: string, text: string, n: number, o: { min?: number; under?: number; color?: (s: string) => string } = {}): string[] {
+  const w = width(prefix);
+  const c = o.color ?? ((s: string) => s); // applied per line, so a color never spans a line break
+  if (!text) return [prefix.trimEnd()];
+  if (n - w >= (o.min ?? 28)) return wrap(text, n - w).map((l, i) => (i === 0 ? prefix : " ".repeat(w)) + c(l));
+  const pad = " ".repeat(o.under ?? 2);
+  return [prefix.trimEnd(), ...wrap(text, n - pad.length).map((l) => pad + c(l))];
+}
+
+/** Keep the end of a long path visible: "…/run/report.html". */
+export function truncateStart(s: string, n: number): string {
+  const chars = [...s];
+  return chars.length <= n ? s : "…" + chars.slice(chars.length - Math.max(1, n - 1)).join("");
+}
+
+// The claim vocabulary. One word, one glyph and one color role per claim, the same on every surface (terminal,
+// report.md, report.html: .c-exact/.c-exact-under = ok, .c-bounded = accent, .c-manual = warn, .c-unsupported = bad).
+// The glyph carries the meaning without color (NO_COLOR, projectors, color-blind readers). ✗ stays reserved for
+// failures (a rejected import, a bad key): unsupported is not a failure, it is "no equivalent" (∅).
+export const CLAIMS = ["exact", "exact-under", "bounded", "manual", "unsupported"] as const;
+export type Claim = (typeof CLAIMS)[number];
+export const CLAIM_GLYPH: Record<Claim, string> = { exact: "✓", "exact-under": "✓", bounded: "±", manual: "!", unsupported: "∅" };
+export const CLAIM_ROLE: Record<Claim, "ok" | "accent" | "warn" | "bad"> = { exact: "ok", "exact-under": "ok", bounded: "accent", manual: "warn", unsupported: "bad" };
+/** One line per claim, in plain words (help text, explain, review prompts). */
+export const CLAIM_MEANING: Record<Claim, string> = {
+  exact: "same result as Datadog, always",
+  "exact-under": "same result as Datadog whenever the listed conditions hold",
+  bounded: "within a stated error bound of Datadog's result",
+  manual: "needs a person; lands as a placeholder panel with the original query",
+  unsupported: "no Dash0 equivalent; lands as a placeholder panel with the original query",
+};
+const isClaim = (s: string): s is Claim => (CLAIMS as readonly string[]).includes(s);
+
+/** "✓ exact-under" in the claim's color role. Unknown words render in the "bad" role with no glyph. */
+export function claim(p: Paint, status: string, o: { glyph?: boolean } = {}): string {
+  if (!isClaim(status)) return p.bad(status);
+  const text = o.glyph === false ? status : `${CLAIM_GLYPH[status]} ${status}`;
+  return p[CLAIM_ROLE[status]](text);
+}
+
+/** "✓ 40 exact-under · ± 38 bounded · ! 18 manual": counts in claim order, zeros left out. */
+export function claimCounts(p: Paint, counts: Partial<Record<string, number>>): string {
+  return CLAIMS.filter((c) => counts[c])
+    .map((c) => p[CLAIM_ROLE[c]](`${CLAIM_GLYPH[c]} ${counts[c]!.toLocaleString("en")} ${c}`))
+    .join(p.dim(" · "));
 }
 
 /** A clickable link (OSC 8) on a TTY that likely supports it; otherwise "text (url)" or just the url. */

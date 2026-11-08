@@ -8,6 +8,11 @@ import type { ReportItem } from "../report/types.js";
 import { decide, openReview, saveReview } from "../pipeline/review-session.js";
 import type { KeyIO } from "./keys.js";
 import type { Choose } from "./tty.js";
+import { CLAIM_GLYPH, type Claim } from "../ui/style.js";
+
+/** "± bounded": the claim with its glyph (plain text; the review prints through io.print). */
+const tag = (status: string) => `${CLAIM_GLYPH[status as Claim] ?? "?"} ${status}`;
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 export interface BatchResult {
   file: string;
@@ -26,7 +31,7 @@ const yesNo = (a: string | null, def: boolean) => {
 
 function showRule(io: Pick<KeyIO, "print">, i: ReportItem, n: number, total: number) {
   io.print("");
-  io.print(`  ⎿ monitor ${n}/${total}  ${i.title || "(untitled monitor)"}  (${i.status})`);
+  io.print(`  ⎿ monitor ${n}/${total}  ${i.title || "(untitled monitor)"}  ${tag(i.status)}`);
   for (const q of i.source_queries) io.print(`      Datadog  ${q}`);
   for (const q of i.promql) io.print(`      PromQL   ${q}`);
   if (i.thresholds) io.print(`      failed > ${i.thresholds.failed}${i.thresholds.degraded !== undefined ? `   degraded > ${i.thresholds.degraded}` : ""}`);
@@ -51,7 +56,7 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
     let approve = true;
     if (!o.yes && io.choose) {
       for (;;) {
-        const c = await io.choose(`Import ${bounded.length} approximate panels? They are translated within a proven error bound.`, ["Yes, import them", "No, use placeholders", "Show them first"], 0);
+        const c = await io.choose(`Import ${plural(bounded.length, "bounded panel")} (${CLAIM_GLYPH.bounded} within a stated error bound of Datadog's result)?`, ["Yes, import them", "No, use placeholders", "Show them first"], 0);
         if (c === 2) {
           listBounded(io, bounded);
           continue;
@@ -61,7 +66,7 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
       }
     } else if (!o.yes) {
       for (;;) {
-        const a = await io.ask(`  Approve all ${bounded.length} approximate (bounded) panels? They are translated within a proven error bound. [Y/n/list] `);
+        const a = await io.ask(`  Import all ${plural(bounded.length, "bounded panel")} (${CLAIM_GLYPH.bounded} within a stated error bound of Datadog's result)? [Y/n/list] `);
         if ((a ?? "").trim().toLowerCase() === "list") {
           listBounded(io, bounded);
           continue;
@@ -78,12 +83,16 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
   // Manual / unsupported panels: acknowledged automatically; they land as placeholders holding the original query.
   for (const i of manualPanels) decide(s, i.id, "acknowledged");
   r.acknowledged = manualPanels.length;
-  if (manualPanels.length) io.print(`  ⎿ ${manualPanels.length} panel(s) can't be translated exactly; they become placeholder panels with the original Datadog query.`);
+  if (manualPanels.length) {
+    const n = (st: string) => manualPanels.filter((i) => i.status === st).length;
+    const split = [n("manual") ? `${n("manual")} ${tag("manual")}` : "", n("unsupported") ? `${n("unsupported")} ${tag("unsupported")}` : ""].filter(Boolean).join(" · ");
+    io.print(`  ⎿ ${plural(manualPanels.length, "placeholder panel")} (${split}): each keeps its original Datadog query, nothing is dropped`);
+  }
 
   // Monitors that can't become a rule: acknowledged, listed, never imported as rules (still counted in the report).
   for (const i of manualMonitors) decide(s, i.id, "acknowledged");
   if (manualMonitors.length) {
-    io.print(`  ⎿ ${manualMonitors.length} monitor(s) can't be translated into a check rule (listed in the report):`);
+    io.print(`  ⎿ ${plural(manualMonitors.length, "monitor")} ${manualMonitors.length === 1 ? "stays" : "stay"} ${tag("manual")}: no check rule is created (listed in the report)`);
     for (const i of manualMonitors) io.print(`      · ${i.title || i.id}: ${i.reason_codes.slice(0, 3).join(", ") || "manual"}`);
   }
 

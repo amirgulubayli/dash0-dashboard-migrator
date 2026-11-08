@@ -65,7 +65,7 @@ describe("result card", () => {
     expect(lines[0]).toMatch(/^╭─ Result /);
     expect(text).toMatch(/success\s+█{15}░{3}\s+31\/37\s+83%/); // 31/37 of 18 cells = 15.08, rounded down
     expect(text).toContain("1 imported (0 on, 1 off)");
-    expect(text).toContain("report run/report.html · run/report.md");
+    expect(text).toMatch(/report\s+run\/report\.html · run\/report\.md/);
   });
 });
 

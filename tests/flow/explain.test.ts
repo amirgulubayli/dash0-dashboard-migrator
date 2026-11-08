@@ -20,10 +20,10 @@ describe("explain", () => {
     expect(text).toContain("└─ .rollup(avg, 60)");
     expect(text).toMatch(/redis\.mem\.used → redis\.memory\.used\s+gauge · exact\s+mappings\/datadog\/redisdb\.yaml/);
     expect(text).toContain("tag host → host_name");
-    expect(text).toMatch(/time\.rollup\.explicit\s+exact-under/);
+    expect(text).toMatch(/time\.rollup\.explicit\s+✓ exact-under/);
     expect(text).toContain("lezer-promql) ✓");
     expect(text).toContain('avg by (host_name) (avg_over_time({otel_metric_name="redis.memory.used", deployment_environment_name="prod"}[1m]))');
-    expect(text).toMatch(/Claim\s+exact-under/);
+    expect(text).toMatch(/Claim\s+✓ exact-under/);
     expect(text).toMatch(/A\.align\s+PromQL evaluation step/);
   });
 
@@ -38,7 +38,7 @@ describe("explain", () => {
   it("points at the exact position of a parse error and exits 3", () => {
     const { code, text } = run("avg:redis.mem.used{env:prod by {host}");
     expect(code).toBe(3);
-    expect(text).toContain("not a Datadog query");
+    expect(text).toContain("not a Datadog metric query");
     expect(text).toMatch(/\n\s{4}\s{28}\^ expected '}'/);
   });
 
