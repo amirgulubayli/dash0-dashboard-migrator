@@ -19,9 +19,15 @@ describe("parseMetricTable validates strictly", () => {
     ["a missing otelKind", `  a:\n    otel: "x"\n    ddKind: gauge\n    status: exact\n`, /otelKind is required/],
     ["a bad ddKind", `  a:\n    otel: "x"\n    ddKind: counter\n    otelKind: gauge\n    status: exact\n`, /ddKind must be/],
     ["a zero scale", `  a:\n    otel: "x"\n    ddKind: gauge\n    otelKind: gauge\n    status: exact\n    scale: 0\n`, /scale/],
+    ["a ratio naming a row that isn't in the table", `  r:\n    otel: null\n    ddKind: gauge\n    otelKind: null\n    status: approximate\n    derived: "x / y"\n    ratio: { num: n, den: missing }\n  n:\n    otel: "x"\n    ddKind: gauge\n    otelKind: gauge\n    status: exact\n`, /ratio.den must name a row/],
+    ["a ratio without a derived expression", `  r:\n    otel: null\n    ddKind: gauge\n    otelKind: null\n    status: none\n    ratio: { num: n, den: n }\n  n:\n    otel: "x"\n    ddKind: gauge\n    otelKind: gauge\n    status: exact\n`, /ratio needs otel: null and a 'derived'/],
   ])("rejects %s", (_name, body, re) => {
     expect(() => parseMetricTable(table(body))).toThrow(MappingError);
     expect(() => parseMetricTable(table(body))).toThrow(re);
+  });
+  it("reads a ratio row (rule select.metric.ratio)", () => {
+    const pg = loadMappings(join(root, "mappings")).metrics.get("postgresql.percent_usage_connections");
+    expect(pg?.ratio).toEqual({ num: "postgresql.connections", den: "postgresql.max_connections" });
   });
   it("rejects an unsupported version", () => expect(() => parseMetricTable("version: 2\nintegration: t\nmetrics: {}\n")).toThrow(/version/));
 });
