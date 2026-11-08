@@ -94,7 +94,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
 
   // 4. Apply
   io.print("");
-  io.print(live ? `4/5  Importing into Dash0 (${new URL(keys.DASH0_API_URL!).host}, dataset ${keys.DASH0_DATASET}); check rules go in disabled` : "4/5  Writing Dash0 payloads (dry run, nothing imported)");
+  io.print(live ? `4/5  Importing into Dash0 (${new URL(keys.DASH0_API_URL!).host}, dataset ${keys.DASH0_DATASET}); new check rules go in disabled, existing ones keep their on/off state` : "4/5  Writing Dash0 payloads (dry run, nothing imported)");
   const dash0 = live ? { apiUrl: keys.DASH0_API_URL!, token: keys.DASH0_AUTH_TOKEN!, dataset: keys.DASH0_DATASET!, ...(o.fetch ? { fetch: o.fetch } : {}) } : undefined;
   const applied = await runApply({ planDir, reviewFile: review.file, dryRun: !live, enableRules: false, cwd, ...(dash0 ? { dash0 } : {}) });
   if (applied.kind === "refused") {
@@ -134,7 +134,8 @@ export async function guided(o: GuidedOptions): Promise<number> {
     windowSeconds: WINDOW_S,
     startedAt: started.toISOString(),
   };
-  let enabled = new Set<string>();
+  // Rules that are on in Dash0 after the import (existing rules keep their state).
+  const enabled = new Set(applied.manifest.results.filter((r) => r.kind === "check-rule" && r.action === "imported" && r.enabled).map((r) => r.id));
   const write = () => {
     const rows = rowsOf(appliedReport, decisions, liveResults, live, enabled);
     const score = scoreOf(rows);
@@ -142,12 +143,13 @@ export async function guided(o: GuidedOptions): Promise<number> {
   };
   let out = write();
   io.print("");
-  for (const l of summaryText(out.score, facts, { rulesImported: applied.imported.rules, manualMonitors: review.manualMonitors.length, reportMd: out.files.md.startsWith(cwd) ? out.files.md.slice(cwd.length + 1) : out.files.md })) io.print(l);
+  for (const l of summaryText(out.score, facts, { rulesImported: applied.imported.rules, rulesOn: enabled.size, manualMonitors: review.manualMonitors.length, reportMd: out.files.md.startsWith(cwd) ? out.files.md.slice(cwd.length + 1) : out.files.md })) io.print(l);
 
   // Offer to enable the approved, imported rules (default No).
-  const importedRuleIds = applied.manifest.results.filter((r) => r.kind === "check-rule" && r.action === "imported").map((r) => r.id);
+  // Offer to switch on only the imported rules that are off.
+  const importedRuleIds = applied.manifest.results.filter((r) => r.kind === "check-rule" && r.action === "imported" && !r.enabled).map((r) => r.id);
   if (live && importedRuleIds.length && !o.yes) {
-    const a = ((await io.ask(`Enable the ${importedRuleIds.length} approved check rule(s) now? They will start evaluating and can notify. [y/N] `)) ?? "").trim().toLowerCase();
+    const a = ((await io.ask(`Enable the ${importedRuleIds.length} approved check rule(s) that are off? They will start evaluating and can notify. They will start evaluating and can notify. [y/N] `)) ?? "").trim().toLowerCase();
     if (a === "y" || a === "yes") {
       const dir = join(planDir, "dash0", "check-rules"); // the plan always writes every payload
       const payloads = importedRuleIds
@@ -155,7 +157,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
         .filter(existsSync)
         .map((p) => ({ ...(JSON.parse(readFileSync(p, "utf8")) as PrometheusAlertRule), enabled: true }));
       const m = await importAll({ dashboards: [], rules: payloads }, { dryRun: false, outDir: join(runDir, "enable"), enableRules: true, config: dash0! });
-      enabled = new Set(m.results.filter((r) => r.action === "imported").map((r) => r.id));
+      for (const r of m.results) if (r.action === "imported") enabled.add(r.id);
       const bad = m.results.filter((r) => r.errors.length);
       io.print(`  ${enabled.size} rule(s) enabled${bad.length ? `, ${bad.length} failed: ${bad.map((r) => `${r.name}: ${r.errors.join("; ")}`).join(" | ")}` : ""}`);
       out = write();

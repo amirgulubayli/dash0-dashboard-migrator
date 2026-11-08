@@ -229,13 +229,13 @@ export function writeRunReport(dir: string, score: Score, rows: Row[], facts: Ru
   return { md, json };
 }
 
-export function summaryText(score: Score, facts: RunFacts, extra: { rulesImported: number; manualMonitors: number; reportMd: string }): string[] {
+export function summaryText(score: Score, facts: RunFacts, extra: { rulesImported: number; rulesOn?: number; manualMonitors: number; reportMd: string }): string[] {
   return [
     `dd2dash0  ${score.panels} panels, ${score.monitors} monitors  ${facts.source} -> ${facts.target}`,
     `  success     ${fmt(score.success)}`,
     `  translated  ${fmt(score.translated)}   landed ${fmt(score.landed)}   live ${fmt(score.live)}`,
     ...(score.topGaps.length ? [`  top gaps    ${score.topGaps.slice(0, 3).map(([c, n]) => `${c} x${n}`).join(" · ")}`] : []),
-    `  rules       ${extra.rulesImported} ${facts.mode === "live" ? "imported disabled" : "written (dry run)"}${extra.manualMonitors ? ` · ${extra.manualMonitors} monitor(s) not translatable` : ""}`,
+    `  rules       ${extra.rulesImported} ${facts.mode === "live" ? `imported (${extra.rulesOn ?? 0} on, ${extra.rulesImported - (extra.rulesOn ?? 0)} off)` : "written (dry run)"}${extra.manualMonitors ? ` · ${extra.manualMonitors} monitor(s) not translatable` : ""}`,
     `  report      ${extra.reportMd}`,
   ];
 }
