@@ -25,6 +25,12 @@ export const ASSUMPTIONS = {
   "A.at-range": "the dashboard substitutes $__range with its visible time range, so the zero-filled series are those present in the window (Dash0 accepts @ end(), verified live)",
   "A.monotonic": "the gauge only increases between resets (a running total), so its change per second is rate()",
   "A.sumby-together": "the series a mapping's sumBy adds up are scraped together, so they have samples at the same timestamps (the average, rate or increase of their sum is the sum of theirs)",
+  "A.histogram-buckets":
+    "Dash0 exposes the OTel histogram under {otel_metric_name=\"<otel>\"} so that histogram_quantile over sum by (le, ...) (rate(...)) reads its buckets: Dash0's own dashboard-source example queries histogram_quantile(q, sum by (service_name) (rate({otel_metric_name=\"dash0.spans.duration\"}[w]))) with no _bucket suffix (native histogram); not yet checked live on a collector-emitted explicit-bucket histogram",
+  "A.histogram-samples":
+    "the Datadog distribution and the OTel histogram record the same samples in each window (maths.md §12, A.same-samples for distributions)",
+  "A.finite-quantile":
+    "the quantile falls below the histogram's highest finite bucket bound (otherwise histogram_quantile returns that bound whatever the data, maths.md T11d)",
   "A.both-present": "both arguments have a value at the step (Datadog's max/min of a missing point is the other argument)",
   // T12 (src/translate/logs, PR #13), text verbatim
   "A.log-count": "Dash0's dash0.logs counter counts the same log records Datadog indexed (no sampling or exclusion filters on either side)",
@@ -106,4 +112,7 @@ export const T4_ASSUMPTION_IDS = [
   "A.monotonic",
   "A.query-threshold",
   "A.sumby-together",
+  "A.histogram-buckets",
+  "A.histogram-samples",
+  "A.finite-quantile",
 ] as const satisfies readonly AssumptionId[];
