@@ -7,7 +7,7 @@ import { migrate } from "../../src/pipeline/migrate.js";
 import { writeReport } from "../../src/report/index.js";
 import { reportToEvents } from "../../src/report/events.js";
 import { narrate } from "../../src/report/narrate.js";
-import { startServer } from "../../src/serve/server.js";
+import { startServer } from "../serve/server.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const out = mkdtempSync(join(tmpdir(), "t8s-"));
@@ -16,10 +16,10 @@ writeReport(run.report, out);
 
 describe("events and narration", () => {
   const ev = reportToEvents(run.report);
-  it("one event per item, framed by run.start / run.done, in sequence", () => {
+  it("one event per panel and alert (group items are structure only), framed by run.start / run.done, in sequence", () => {
     expect(ev[0]!.type).toBe("run.start");
     expect(ev.at(-1)!.type).toBe("run.done");
-    expect(ev.filter((e) => e.type === "item.done")).toHaveLength(run.report.items.length);
+    expect(ev.filter((e) => e.type === "item.done")).toHaveLength(run.report.items.filter((i) => i.kind !== "group").length);
     expect(ev.map((e) => e.seq)).toEqual(ev.map((_, i) => i));
   });
   it("is deterministic", () => expect(JSON.stringify(reportToEvents(run.report))).toBe(JSON.stringify(ev)));

@@ -1,55 +1,113 @@
 #!/usr/bin/env node
 // dd2dash0 CLI (T8; HOT: post a CONTRACT before changing flags).
+// `dd2dash0` with no arguments runs the one guided flow (src/flow/run.ts). plan / review / apply / migrate stay as
+// advanced commands for scripting.
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { configFromEnv } from "./targets/dash0/index.js";
 import { migrate, overallOk } from "./pipeline/migrate.js";
 import { summaryLines, writeReport } from "./report/index.js";
 import { reportToEvents } from "./report/events.js";
-import { loadReport, startServer } from "./serve/server.js";
+import { ConfigError, loadConfig, resolveConfig, type Dd2dash0Config } from "./pipeline/config.js";
+import { runPlan } from "./pipeline/plan.js";
+import { runApply } from "./pipeline/apply.js";
+import { terminalReview } from "./pipeline/review-terminal.js";
+import { guided, terminalIO } from "./flow/run.js";
+import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 
-const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards + monitors to Dash0 (Perses, PromQL, check rules)
+const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards and monitors to Dash0
 
 Usage:
-  dd2dash0 migrate --from datadog (--input <dir> | --api) [options]
-  dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
+  dd2dash0              asks for your Datadog and Dash0 keys, migrates everything, prints a report
 
 Options:
-  --input <dir>        folder of exported Datadog JSON or YAML (dashboards and monitors, any depth)
-  --api                read from the Datadog API (DD_SITE, default datadoghq.eu; DD_API_KEY, DD_APP_KEY)
-  --dry-run            translate and write the Dash0 payloads to <out>/dash0, import nothing
-  --no-import          translate and report only
-  --out <dir>          output directory (default ./out): report.json, report.md, dash0/
-  --only <what>        dashboards | monitors
-  --enable-rules       import check rules enabled (default: disabled, D-30)
-  --mappings <dir>     mapping tables (default: the package's mappings/)
-  --channels <file>    Datadog @handle -> existing Dash0 notification channel id (default: <mappings>/notification-channels.yaml)
+  --yes                 no prompts: keys from env/.env, approve bounded panels and translatable monitors
+  --only <what>         dashboards | monitors
+  --out <dir>           run directory (default ./dd2dash0-run/<timestamp>)
+  --version, --help
 
-migrate writes <out>/report.json, report.md, events.jsonl and (unless --no-import) <out>/dash0/.
-serve replays <out>'s run in the browser; with ELEVENLABS_AGENT_ID + ELEVENLABS_API_KEY set, an ElevenLabs
-voice agent narrates it and answers questions (setup: src/serve/VOICE_AGENT.md).
+What it does:
+  1. keys       finds DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET in the
+                environment or ./.env, asks for missing ones, checks them, offers to save them to ./.env (0600)
+  2. translate  every dashboard -> Perses, every query -> PromQL, every monitor -> a Dash0 check rule
+  3. review     one question for all approximate panels, one per monitor; what can't be translated
+                becomes a placeholder panel with the original query (nothing is dropped)
+  4. import     into Dash0; check rules go in disabled
+  5. verify     reads every item back from Dash0, checks the last hour of data against Datadog
+  6. report     translated · landed · live · success %, plus <run>/report.md
 
-Live import needs DASH0_API_URL and DASH0_AUTH_TOKEN (and optionally DASH0_DATASET), e.g.
-  npx tsx --env-file=.env src/cli.ts migrate --from datadog --input fixtures/datadog
+Exit codes: 0 all good, 1 something failed (see report.md), 2 refused, 3 usage or key error.
+Translation is deterministic: parsers, rules and mapping tables. No LLM is involved.
 
-Translation is deterministic: rules, parsers and mapping tables. No LLM is involved.`;
+Advanced: dd2dash0 plan | review <plan> --terminal | apply <plan> --approved <review.json> | migrate  (see --help-advanced)`;
+
+const USAGE_ADVANCED = `dd2dash0 ${VERSION} advanced commands
+
+  dd2dash0 plan  (--input <dir> | --api) [--config dd2dash0.yaml] [--out plan] [--only ...]   translate, import nothing
+  dd2dash0 review <plan dir> --terminal [--reviewer <name>] [--all]                         decide item by item
+  dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run] [--skip-source-check]
+  dd2dash0 migrate --from datadog (--input <dir> | --api) [--dry-run | --no-import] [--out <dir>] [--only ...]
+                   [--enable-rules] [--mappings <dir>] [--channels <file>]                   one shot, no review
+
+Guided flow, hidden options: --input <dir> (exported Datadog JSON/YAML instead of the API), --dry-run (write
+payloads, import nothing, skip the live checks).`;
+
+const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run"]);
 
 export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   const [cmd, ...rest] = argv;
-  if (!cmd || cmd === "--help" || cmd === "-h") {
+  if (cmd === "--help" || cmd === "-h") {
     console.log(USAGE);
+    return 0;
+  }
+  if (cmd === "--help-advanced") {
+    console.log(USAGE_ADVANCED);
     return 0;
   }
   if (cmd === "--version") {
     console.log(VERSION);
     return 0;
   }
+  if (cmd === undefined || GUIDED_FLAGS.has(cmd)) return runGuided(argv);
+  if (cmd === "plan") return runPlanCmd(rest);
+  if (cmd === "review") return runReviewCmd(rest);
+  if (cmd === "apply") return runApplyCmd(rest);
   if (cmd === "migrate") return runMigrate(rest);
-  if (cmd === "serve") return runServe(rest);
   console.error(`unknown command: ${cmd} (try --help)`);
-  return 2;
+  return 3;
+}
+
+async function runGuided(args: string[]): Promise<number> {
+  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input"], ["--yes", "--dry-run"]);
+  if (typeof r === "string" || r._.length) {
+    console.error(`${typeof r === "string" ? r : `unexpected argument ${r._[0]}`}\n\n${USAGE}`);
+    return EXIT.usage;
+  }
+  const only = r.v["--only"];
+  if (only && only !== "dashboards" && only !== "monitors") {
+    console.error("--only must be dashboards or monitors");
+    return EXIT.usage;
+  }
+  const io = terminalIO();
+  try {
+    return await guided({
+      yes: r.b.has("--yes"),
+      ...(r.v["--input"] ? { input: r.v["--input"] } : {}),
+      ...(only ? { only: only as "dashboards" | "monitors" } : {}),
+      ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
+      dryRun: r.b.has("--dry-run"),
+      version: VERSION,
+      mappingsDir: join(import.meta.dirname, "..", "mappings"),
+      io,
+    });
+  } catch (e) {
+    console.error(`dd2dash0: ${(e as Error).message}`);
+    return EXIT.failed;
+  } finally {
+    io.close();
+  }
 }
 
 interface Flags {
@@ -106,7 +164,7 @@ export function parseFlags(args: string[]): Flags | string {
 async function runMigrate(args: string[]): Promise<number> {
   const f = parseFlags(args);
   if (typeof f === "string") {
-    console.error(`${f}\n\n${USAGE}`);
+    console.error(`${f}\n\n${USAGE_ADVANCED}`);
     return 2;
   }
   const mode = f.noImport ? "none" : f.dryRun ? "dry-run" : "live";
@@ -122,6 +180,7 @@ async function runMigrate(args: string[]): Promise<number> {
   try {
     const r = await migrate({
       ingest: { ...(f.input ? { input: resolve(f.input) } : { api: true }), ...(f.only ? { only: f.only } : {}) },
+      source: f.input ? { kind: "folder", site: null, path: f.input } : { kind: "api", site: process.env.DD_SITE || "datadoghq.eu", path: null },
       mappingsDir: resolve(f.mappings),
       ...(f.channels ? { channelsFile: resolve(f.channels) } : {}),
       outDir: resolve(f.out),
@@ -143,29 +202,158 @@ async function runMigrate(args: string[]): Promise<number> {
   }
 }
 
-async function runServe(args: string[]): Promise<number> {
-  let out = "out", port = 4317, pace = 700;
+const EXIT = { ok: 0, failed: 1, refused: 2, usage: 3 } as const;
+
+/** Reads `--name value` / `--flag` pairs; positional arguments are returned in `_`. */
+function readArgs(args: string[], valued: string[], bools: string[]): { _: string[]; v: Record<string, string>; b: Set<string> } | string {
+  const out = { _: [] as string[], v: {} as Record<string, string>, b: new Set<string>() };
   for (let i = 0; i < args.length; i++) {
-    const a = args[i], v = args[i + 1];
-    if (a === "--out" && v) (out = v), i++;
-    else if (a === "--port" && v && Number.isInteger(Number(v))) (port = Number(v)), i++;
-    else if (a === "--pace" && v && Number.isFinite(Number(v))) (pace = Number(v)), i++;
-    else {
-      console.error(`unknown or incomplete option ${a}\n\n${USAGE}`);
-      return 2;
+    const a = args[i]!;
+    if (valued.includes(a)) {
+      const v = args[++i];
+      if (v === undefined || v.startsWith("--")) return `${a} needs a value`;
+      out.v[a] = v;
+    } else if (bools.includes(a)) out.b.add(a);
+    else if (a.startsWith("--")) return `unknown option ${a}`;
+    else out._.push(a);
+  }
+  return out;
+}
+
+async function runPlanCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--input", "--out", "--config", "--mappings", "--channels", "--only", "--from"], ["--api", "--enable-rules"]);
+  if (typeof r === "string" || r._.length) {
+    console.error(`${typeof r === "string" ? r : `unexpected argument ${r._[0]}`}\n\n${USAGE_ADVANCED}`);
+    return EXIT.usage;
+  }
+  if (r.v["--from"] && r.v["--from"] !== "datadog") {
+    console.error("--from datadog is the only source so far");
+    return EXIT.usage;
+  }
+  const only = r.v["--only"];
+  if (only && only !== "dashboards" && only !== "monitors") {
+    console.error("--only must be dashboards or monitors");
+    return EXIT.usage;
+  }
+  if (r.v["--input"] && r.b.has("--api")) {
+    console.error("pass at most one of --input <dir> or --api");
+    return EXIT.usage;
+  }
+  const flags: Dd2dash0Config = {
+    ...(r.v["--input"] ? { source: { kind: "folder" as const, path: r.v["--input"] } } : r.b.has("--api") ? { source: { kind: "api" as const } } : {}),
+    ...(r.v["--mappings"] ? { mappings: resolve(r.v["--mappings"]) } : {}),
+    ...(r.v["--channels"] ? { channels: resolve(r.v["--channels"]) } : {}),
+    ...(r.b.has("--enable-rules") ? { enableRules: true } : {}),
+  };
+  let config;
+  try {
+    const file = loadConfig(r.v["--config"]);
+    config = resolveConfig(file.config, flags);
+    if (!file.file && !flags.source) {
+      console.error(`pass --input <dir> or --api (or a source in dd2dash0.yaml)\n\n${USAGE_ADVANCED}`);
+      return EXIT.usage;
+    }
+  } catch (e) {
+    if (e instanceof ConfigError) {
+      console.error(e.message);
+      return EXIT.usage;
+    }
+    throw e;
+  }
+  const out = resolve(r.v["--out"] ?? "plan");
+  try {
+    const p = await runPlan({
+      config,
+      outDir: out,
+      defaultMappingsDir: join(import.meta.dirname, "..", "mappings"),
+      ...(config.source.kind === "folder" ? { resolvedInput: resolve(config.source.path) } : {}),
+      ...(only ? { only: only as "dashboards" | "monitors" } : {}),
+      version: VERSION,
+    });
+    for (const l of summaryLines(p.result.report, p.files)) console.log(l);
+    console.log(`  plan ${p.planHash.slice(0, 16)}  ->  next: review it (dd2dash0 review ${r.v["--out"] ?? "plan"}), then dd2dash0 apply ${r.v["--out"] ?? "plan"} --approved <review.json>`);
+    return EXIT.ok;
+  } catch (e) {
+    console.error(`dd2dash0 plan: ${(e as Error).message}`);
+    return EXIT.failed;
+  }
+}
+
+async function runReviewCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--reviewer"], ["--terminal", "--all"]);
+  if (typeof r === "string" || r._.length !== 1) {
+    console.error(`${typeof r === "string" ? r : "usage: dd2dash0 review <plan dir> --terminal"}\n\n${USAGE_ADVANCED}`);
+    return EXIT.usage;
+  }
+  const planDir = resolve(r._[0]!);
+  const reviewer = r.v["--reviewer"] ?? process.env.USER ?? "";
+  // Read lines through the async iterator: it buffers input, so piped keystrokes aren't lost between prompts
+  // (readline's question() drops lines that arrive while no question is pending).
+  const rl = createInterface({ input: process.stdin, terminal: false });
+  const lines = rl[Symbol.asyncIterator]();
+  try {
+    await terminalReview(planDir, reviewer, {
+      ask: async (prompt) => {
+        process.stdout.write(prompt);
+        const n = await lines.next();
+        if (!process.stdin.isTTY && !n.done) process.stdout.write(`${n.value}\n`); // echo piped input
+        return n.done ? null : n.value;
+      },
+      print: (line) => console.log(line),
+    }, { all: r.b.has("--all") });
+    return EXIT.ok;
+  } catch (e) {
+    console.error(`dd2dash0 review: ${(e as Error).message}`);
+    return EXIT.refused;
+  } finally {
+    rl.close();
+  }
+}
+
+async function runApplyCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--approved"], ["--enable-rules", "--allow-pending", "--dry-run", "--skip-source-check"]);
+  if (typeof r === "string" || r._.length !== 1 || !r.v["--approved"]) {
+    console.error(`${typeof r === "string" ? r : "usage: dd2dash0 apply <plan dir> --approved <review.json>"}\n\n${USAGE_ADVANCED}`);
+    return EXIT.usage;
+  }
+  const dryRun = r.b.has("--dry-run");
+  let dash0;
+  if (!dryRun) {
+    try {
+      dash0 = configFromEnv();
+    } catch (e) {
+      console.error(`${(e as Error).message}\nUse --dry-run to write the approved payloads without importing.`);
+      return EXIT.usage;
     }
   }
   try {
-    loadReport(resolve(out));
+    const o = await runApply({
+      planDir: resolve(r._[0]!),
+      reviewFile: resolve(r.v["--approved"]),
+      enableRules: r.b.has("--enable-rules"),
+      allowPending: r.b.has("--allow-pending"),
+      dryRun,
+      skipSourceCheck: r.b.has("--skip-source-check"),
+      ...(dash0 ? { dash0 } : {}),
+    });
+    for (const w of o.warnings) console.error(`  warning: ${w}`);
+    if (o.kind === "refused") {
+      console.error("dd2dash0 apply: refused");
+      for (const x of o.reasons) console.error(`  ${x}`);
+      return EXIT.refused;
+    }
+    const m = o.manifest.summary;
+    console.log(`dd2dash0 apply: ${dryRun ? "dry run, nothing imported" : "imported"}: ${o.imported.dashboards} dashboard(s), ${o.imported.rules} check rule(s)`);
+    console.log(`  ${dryRun ? `written ${m["dry-run"]}` : `imported ${m.imported}, read back identical ${m.readBackMatch}`}, failed ${m.failed}, rejected by preflight ${m["rejected-preflight"]}`);
+    if (o.placeholders.length) console.log(`  flagged in review -> placeholder: ${o.placeholders.length} panel(s)`);
+    if (o.skippedAlerts.length) console.log(`  check rules not imported (flagged or not approved): ${o.skippedAlerts.join(", ")}`);
+    for (const x of o.manifest.results.filter((x) => x.errors.length)) console.error(`  ! ${x.kind} ${x.id}: ${x.errors.join("; ")}${x.traceId ? ` (traceId ${x.traceId})` : ""}`);
+    console.log(`  report: ${o.reportFile}${o.ok ? "" : "  (re-run apply to retry what failed; imports are idempotent)"}`);
+    return o.ok ? EXIT.ok : EXIT.failed;
   } catch (e) {
-    console.error((e as Error).message);
-    return 2;
+    console.error(`dd2dash0 apply: ${(e as Error).message}`);
+    return EXIT.failed;
   }
-  const agentId = process.env.ELEVENLABS_AGENT_ID?.trim();
-  const elevenLabsKey = process.env.ELEVENLABS_API_KEY?.trim();
-  const { url } = await startServer({ outDir: resolve(out), port, pace, ...(agentId ? { agentId } : {}), ...(elevenLabsKey ? { elevenLabsKey } : {}) });
-  console.log(`dd2dash0 live viewer: ${url}  (replaying ${join(out, "report.json")}; voice ${agentId && elevenLabsKey ? "on" : "off"}; Ctrl+C to stop)`);
-  return new Promise<number>(() => {}); // keep serving
 }
 
 const entry = process.argv[1] ?? "";
