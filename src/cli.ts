@@ -7,6 +7,7 @@ import { migrate, overallOk } from "./pipeline/migrate.js";
 import { summaryLines, writeReport } from "./report/index.js";
 import { reportToEvents } from "./report/events.js";
 import { loadReport, startServer } from "./serve/server.js";
+import { runVoice } from "./voice/cli.js";
 
 export const VERSION = "0.2.0";
 
@@ -15,6 +16,7 @@ const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards + monitors to Das
 Usage:
   dd2dash0 migrate --from datadog (--input <dir> | --api) [options]
   dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
+  dd2dash0 voice setup [--dry-run]                           create/update the ElevenLabs narrator agent
 
 Options:
   --input <dir>        folder of exported Datadog JSON or YAML (dashboards and monitors, any depth)
@@ -28,8 +30,8 @@ Options:
   --channels <file>    Datadog @handle -> existing Dash0 notification channel id (default: <mappings>/notification-channels.yaml)
 
 migrate writes <out>/report.json, report.md, events.jsonl and (unless --no-import) <out>/dash0/.
-serve replays <out>'s run in the browser; with ELEVENLABS_AGENT_ID + ELEVENLABS_API_KEY set, an ElevenLabs
-voice agent narrates it and answers questions (setup: src/serve/VOICE_AGENT.md).
+serve replays <out>'s run in the browser; with ELEVENLABS_API_KEY set (after 'voice setup'), an ElevenLabs
+voice agent narrates it and answers questions (setup and UI contract: src/serve/VOICE_AGENT.md).
 
 Live import needs DASH0_API_URL and DASH0_AUTH_TOKEN (and optionally DASH0_DATASET), e.g.
   npx tsx --env-file=.env src/cli.ts migrate --from datadog --input fixtures/datadog
@@ -48,6 +50,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
   }
   if (cmd === "migrate") return runMigrate(rest);
   if (cmd === "serve") return runServe(rest);
+  if (cmd === "voice") return runVoice(rest);
   console.error(`unknown command: ${cmd} (try --help)`);
   return 2;
 }
@@ -164,7 +167,7 @@ async function runServe(args: string[]): Promise<number> {
   const agentId = process.env.ELEVENLABS_AGENT_ID?.trim();
   const elevenLabsKey = process.env.ELEVENLABS_API_KEY?.trim();
   const { url } = await startServer({ outDir: resolve(out), port, pace, ...(agentId ? { agentId } : {}), ...(elevenLabsKey ? { elevenLabsKey } : {}) });
-  console.log(`dd2dash0 live viewer: ${url}  (replaying ${join(out, "report.json")}; voice ${agentId && elevenLabsKey ? "on" : "off"}; Ctrl+C to stop)`);
+  console.log(`dd2dash0 live viewer: ${url}  (replaying ${join(out, "report.json")}; voice ${elevenLabsKey ? "on" : "off"}; Ctrl+C to stop)`);
   return new Promise<number>(() => {}); // keep serving
 }
 
