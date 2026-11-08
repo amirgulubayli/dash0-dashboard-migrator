@@ -242,7 +242,8 @@ export async function resolveKeys(o: ResolveKeysOptions): Promise<Keys> {
       if (/404/.test(c.message)) {
         delete keys.DASH0_API_URL;
         delete keys.DASH0_DATASET;
-      } else delete keys.DASH0_AUTH_TOKEN;
+      } else if (/could not reach/.test(c.message)) delete keys.DASH0_API_URL;
+      else delete keys.DASH0_AUTH_TOKEN;
     }
   }
 

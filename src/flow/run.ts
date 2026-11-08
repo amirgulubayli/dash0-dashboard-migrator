@@ -191,6 +191,8 @@ export function terminalIO(input: NodeJS.ReadStream = process.stdin, output: Nod
       muted = secret && input.isTTY === true;
       const done = (l: string | null) => {
         muted = false;
+        // Piped input isn't echoed by a terminal: echo answers (never secrets) so the transcript reads right.
+        if (input.isTTY !== true) output.write(l === null ? "\n" : secret ? "\n" : `${l}\n`);
         res(l);
       };
       if (lines.length) done(lines.shift()!);
