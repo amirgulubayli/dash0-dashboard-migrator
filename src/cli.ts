@@ -14,10 +14,12 @@ import { runApply } from "./pipeline/apply.js";
 import { terminalReview } from "./pipeline/review-terminal.js";
 import { explain } from "./flow/explain.js";
 import { guided, terminalIO } from "./flow/run.js";
-import { outOf, Ui } from "./ui/style.js";
+import { outOf, tildify, Ui } from "./ui/style.js";
+import { openBrowser } from "./flow/keys-web.js";
+import { webBanner, webTerminal } from "./flow/web-term.js";
 import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.5.0";
+export const VERSION = "0.5.2";
 
 /**
  * The mapping tables, first found wins:
@@ -51,6 +53,10 @@ Migrate:
                                         prints a result card and writes report.html / report.md
   --yes                                 no prompts: keys from the environment or .env; imports
                                         bounded panels and translatable monitors
+  --web                                 run the whole migration in the browser, on a one-time page
+                                        on this computer (same flow, same output)
+  --env <file>                          read the keys from this file (any name; DATADOG_API_KEY,
+                                        DASH0_TOKEN, … understood)
   --browser                             enter missing keys on a one-time local web page
   --only dashboards|monitors            migrate one kind only
   --out <dir>                           run folder (default ./dd2dash0-run/<timestamp>)
@@ -59,15 +65,16 @@ Migrate:
 Claims: every panel and monitor gets exactly one
   ✓ exact          same result as Datadog, always
   ✓ exact-under    same result whenever the listed conditions hold
-  ± bounded        within a stated error bound; you approve these in review
+  ± bounded        within a proven error bound; you approve these in review
   ! manual         needs a person; a panel lands as a placeholder with the original query
   ∅ unsupported    no Dash0 equivalent; also a placeholder panel (nothing is dropped)
 
 What a run does:
   1. keys       DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET from
                 the environment, ./.env or your user key file (~/.config/dd2dash0/.env,
-                %APPDATA%\\dd2dash0\\.env on Windows); asks for missing ones (drag in a .env, paste,
-                type, or --browser), checks each, offers to save them there (0600)
+                %APPDATA%\\dd2dash0\\.env on Windows) or --env <file>; offers env files it finds
+                nearby; asks for missing ones (drag in a .env, paste, type, or
+                --browser), checks each, offers to save them there (0600)
   2. translate  dashboards -> Perses, queries -> PromQL, monitors -> Dash0 check rules
   3. review     one question for all bounded panels, one per monitor
   4. import     into Dash0; new check rules start off, existing ones keep their on/off state
@@ -98,7 +105,7 @@ Guided flow, extra options:
   --input <dir>   exported Datadog JSON/YAML instead of the API
   --dry-run       write the Dash0 payloads, import nothing, skip the live checks`;
 
-const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser"]);
+const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser", "--web", "--env"]);
 
 export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   const [cmd, ...rest] = argv;
@@ -132,7 +139,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
 }
 
 async function runGuided(args: string[]): Promise<number> {
-  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input"], ["--yes", "--dry-run", "--browser"]);
+  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input", "--env"], ["--yes", "--dry-run", "--browser", "--web"]);
   if (typeof r === "string" || r._.length) {
     console.error(`${typeof r === "string" ? r : `unexpected argument ${r._[0]}`}\n\n${USAGE}`);
     return EXIT.usage;
@@ -143,19 +150,45 @@ async function runGuided(args: string[]): Promise<number> {
     return EXIT.usage;
   }
   const io = terminalIO();
+  const ui = new Ui(outOf(process.stdout));
+  const common = {
+    yes: r.b.has("--yes"),
+    ...(r.v["--input"] ? { input: r.v["--input"] } : {}),
+    ...(only ? { only: only as "dashboards" | "monitors" } : {}),
+    ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
+    ...(r.v["--env"] ? { envFile: r.v["--env"] } : {}),
+    dryRun: r.b.has("--dry-run"),
+    version: VERSION,
+    mappingsDir: defaultMappingsDir(),
+  };
   try {
-    return await guided({
-      yes: r.b.has("--yes"),
-      ...(r.v["--input"] ? { input: r.v["--input"] } : {}),
-      ...(only ? { only: only as "dashboards" | "monitors" } : {}),
-      ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
-      dryRun: r.b.has("--dry-run"),
-      browser: r.b.has("--browser"),
-      ui: new Ui(outOf(process.stdout)),
-      version: VERSION,
-      mappingsDir: defaultMappingsDir(),
-      io,
-    });
+    // First screen: where to work. Only when someone is at a real terminal and didn't already say (--yes, --web, --browser).
+    const atTerminal = process.stdin.isTTY === true && process.stdout.isTTY === true;
+    let web = r.b.has("--web");
+    let header = true;
+    if (!web && atTerminal && !common.yes && !r.b.has("--browser")) {
+      ui.header(VERSION, process.cwd());
+      header = false;
+      const where = await io.choose("Where do you want to work?", ["Here, in this terminal", "In the browser (the same tool, on a one-time page on this computer)"], 0);
+      if (where === null) return EXIT.refused;
+      web = where === 1;
+      if (web) ui.line();
+    }
+    if (web) {
+      io.close();
+      const open = process.env.DD2DASH0_NO_OPEN ? () => {} : openBrowser;
+      return await webTerminal({
+        version: VERSION,
+        cwd: tildify(process.cwd()),
+        onReady: (url) => {
+          for (const l of webBanner(url)) ui.line(l);
+          open(url);
+        },
+        run: (s) => guided({ ...common, io: s.io, ui: new Ui(s.out, s.env), open: s.open, inBrowser: true }),
+        onFinished: (code) => ui.line(`  ${ui.p.dim("⎿")} ${ui.p.dim(`finished (exit ${code}) · the page stays up until you close its tab`)}`),
+      });
+    }
+    return await guided({ ...common, header, browser: r.b.has("--browser"), ui, io });
   } catch (e) {
     console.error(`dd2dash0: ${(e as Error).message}`);
     return EXIT.failed;

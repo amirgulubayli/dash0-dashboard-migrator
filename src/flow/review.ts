@@ -56,7 +56,7 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
     let approve = true;
     if (!o.yes && io.choose) {
       for (;;) {
-        const c = await io.choose(`Import ${plural(bounded.length, "bounded panel")} (${CLAIM_GLYPH.bounded} within a stated error bound of Datadog's result)?`, ["Yes, import them", "No, use placeholders", "Show them first"], 0);
+        const c = await io.choose(`Import ${plural(bounded.length, "bounded panel")} (${CLAIM_GLYPH.bounded} within a proven error bound of Datadog's result)?`, ["Yes, import them", "No, use placeholders", "Show them first"], 0);
         if (c === 2) {
           listBounded(io, bounded);
           continue;
@@ -66,7 +66,7 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
       }
     } else if (!o.yes) {
       for (;;) {
-        const a = await io.ask(`  Import all ${plural(bounded.length, "bounded panel")} (${CLAIM_GLYPH.bounded} within a stated error bound of Datadog's result)? [Y/n/list] `);
+        const a = await io.ask(`  Import all ${plural(bounded.length, "bounded panel")} (${CLAIM_GLYPH.bounded} within a proven error bound of Datadog's result)? [Y/n/list] `);
         if ((a ?? "").trim().toLowerCase() === "list") {
           listBounded(io, bounded);
           continue;

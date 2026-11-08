@@ -99,7 +99,7 @@ export const CLAIM_ROLE: Record<Claim, "ok" | "accent" | "warn" | "bad"> = { exa
 export const CLAIM_MEANING: Record<Claim, string> = {
   exact: "same result as Datadog, always",
   "exact-under": "same result as Datadog whenever the listed conditions hold",
-  bounded: "within a stated error bound of Datadog's result",
+  bounded: "within a proven error bound of Datadog's result",
   manual: "needs a person; lands as a placeholder panel with the original query",
   unsupported: "no Dash0 equivalent; lands as a placeholder panel with the original query",
 };

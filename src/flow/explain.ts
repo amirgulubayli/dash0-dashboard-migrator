@@ -3,7 +3,7 @@
 // claims, the PromQL (validated with the official grammar), and the final claim with the conditions it rests on.
 // It calls exactly the code a migration calls; nothing here translates on its own.
 import { basename } from "node:path";
-import { metricAvailability, metricLookup, metricRatio, ddKindLookup, tagLookup } from "../ir/index.js";
+import { metricAvailability, metricLookup, ddKindLookup, tagLookup } from "../ir/index.js";
 import { loadDdKinds, loadMappings, type Mappings } from "../ir/mappings.js";
 import { parseMonitorQuery, parseQuery, type Arg, type Expr, type MonitorQuery, type ScopeExpr } from "../parse/index.js";
 import { ASSUMPTIONS, RULES, translateMonitor, translateQuery, type QueryTranslation, type TranslateContext } from "../translate/query/index.js";
@@ -128,7 +128,7 @@ const isKnown = (s: string): s is Claim => (CLAIMS as readonly string[]).include
 const MEANING: Record<string, string> = {
   ...CLAIM_MEANING,
   "exact-under": "same result as Datadog whenever these conditions hold",
-  bounded: "within a stated error bound of Datadog's result; the bound and its conditions are at the end",
+  bounded: "within a proven error bound of Datadog's result; the bound and its conditions are at the end",
   manual: "needs a person: no exact or bounded rule covers this query",
 };
 
@@ -175,7 +175,7 @@ export function explain(o: ExplainOptions): number {
 
   const mappings: Mappings = loadMappings(o.mappingsDir);
   const kinds = loadDdKinds(o.mappingsDir);
-  const ctx: TranslateContext = { metric: metricLookup(mappings), availability: (dd) => metricAvailability(mappings, dd), ratio: metricRatio(mappings), tag: tagLookup(mappings), ddKind: ddKindLookup(kinds, mappings) };
+  const ctx: TranslateContext = { metric: metricLookup(mappings), availability: (dd) => metricAvailability(mappings, dd), tag: tagLookup(mappings), ddKind: ddKindLookup(kinds, mappings) };
   const t1 = now();
   const r: QueryTranslation & { thresholds?: { failed: number; degraded?: number } | null } = monitor ? translateMonitor(parsed.value as MonitorQuery, { critical: (parsed.value as MonitorQuery).threshold }, ctx) : translateQuery(expr, ctx);
   const trMs = now() - t1;
@@ -226,15 +226,6 @@ export function explain(o: ExplainOptions): number {
       const extra = [hit.kind, st === "approximate" ? "approximate → bounded" : st, ...(hit.scale && hit.scale !== 1 ? [`× ${hit.scale}`] : []), ...(hit.sumBy?.length ? [`sum over ${hit.sumBy.join(", ")}`] : []), ...(hit.labels ? Object.entries(hit.labels).map(([k, val]) => `${k}="${val}"`) : [])];
       item(`${m} ${p.dim("→")} ${p.accent(hit.otel)}  `, `${extra.join(" · ")}${origin ? `  mappings/datadog/${basename(origin)}` : ""}`, p.dim, 24);
     } else {
-      const ratio = ctx.ratio!(m);
-      if (ratio) {
-        ui.detail(`${m} ${p.dim("→")} ${p.accent(`${ratio.num} / ${ratio.den}`)}  ${p.dim("ratio of two mapped metrics")}${origin ? p.dim(`  mappings/datadog/${basename(origin)}`) : ""}`);
-        for (const side of [ratio.num, ratio.den]) {
-          const h = ctx.metric!(side);
-          if (h) ui.detail(`  ${side} ${p.dim("→")} ${p.accent(h.otel)}  ${p.dim([h.kind, h.status ?? "exact"].join(" · "))}`);
-        }
-        continue;
-      }
       const kind = ctx.ddKind!(m);
       const what = avail === "unmapped" ? "no curated mapping" : avail === "derived" ? "derived (no single OTel metric)" : avail.replace(/_/g, " ");
       ui.detail(`${m} ${p.dim("→")} ${p.warn(what)}${kind ? p.dim(`  Datadog kind ${kind} (integrations-core metadata)`) : ""}`);
