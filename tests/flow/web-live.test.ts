@@ -60,7 +60,7 @@ describe("web live: timeline and counts from the real flow output", () => {
 });
 
 describe("web live: gaps -> levers", () => {
-  it("groups the items that are not exact by reason code, with lever and owner", () => {
+  it("groups the items below EXACT IF by reason code, with lever and owner", () => {
     const rep: RunReportJson = {
       items: [
         { id: "a", kind: "panel", title: "A", status: "exact" },
@@ -74,12 +74,12 @@ describe("web live: gaps -> levers", () => {
     };
     const g = gapsOf(rep);
     expect(g.total).toBe(6);
-    expect(g.notExact).toBe(5);
+    expect(g.notExact).toBe(4);
     expect(g.groups[0]).toMatchObject({ code: "tag.unmapped", count: 2, byLabel: { bounded: 2 }, lever: "mapping row", owner: "mappings" });
     expect(g.groups.find((x) => x.code === "fn.anomalies")).toMatchObject({ lever: "impossible" });
     expect(g.groups.find((x) => x.code === "widget.unsupported")).toMatchObject({ lever: "Dash0 panel type missing" });
     expect(g.groups.find((x) => x.code === "metric.approximate")).toMatchObject({ lever: "probe" });
-    expect(g.groups.find((x) => x.code === "scope.var.free-form")).toMatchObject({ lever: "new rule", byLabel: { "exact-under": 1 } });
+    expect(g.groups.find((x) => x.code === "scope.var.free-form")).toBeUndefined(); // exact-under is not a gap
     expect(g.levers.find((l) => l.lever === "mapping row")).toEqual({ lever: "mapping row", groups: 1, items: 2 });
   });
 

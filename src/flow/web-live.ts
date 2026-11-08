@@ -406,7 +406,7 @@ const LV = (() => {
   function gaps(g, from) {
     const key = JSON.stringify(g) + from; if (key === gapsKey) return; gapsKey = key;
     gapsEl.textContent = ""; if (!g) { gapsEl.classList.remove("on"); return; }
-    gapsEl.append(mk("h2", "", "Gaps → levers"), mk("div", "sub", g.notExact + " of " + g.total + " items are not exact · grouped by reason · from " + (from === "run" ? "the run's" : "the plan's") + " report.json"));
+    gapsEl.append(mk("h2", "", "Gaps → levers"), mk("div", "sub", g.notExact + " of " + g.total + " items are below EXACT IF (bounded, manual or unsupported) · grouped by reason · from " + (from === "run" ? "the run's" : "the plan's") + " report.json"));
     const lv = mk("div", "lvr"); for (const l of g.levers) { const s = mk("span"); s.append(mk("b", "", String(l.items)), " " + l.lever); lv.append(s); } gapsEl.append(lv);
     const tb = mk("table"); const LBL = { "exact-under": "EXACT IF", bounded: "bounded", manual: "manual", unsupported: "unsupported" };
     for (const r of g.groups.slice(0, 14)) {

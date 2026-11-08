@@ -59,7 +59,7 @@ export function leverOf(code: string): { lever: Lever; owner: string } {
 
 export interface Gap {
   code: string;
-  /** Items (not exact) that carry this reason code. One item with two codes counts in both groups. */
+  /** Items below EXACT IF that carry this reason code. One item with two codes counts in both groups. */
   count: number;
   byLabel: Record<string, number>;
   lever: Lever;
@@ -69,7 +69,7 @@ export interface Gap {
 }
 
 export interface Gaps {
-  /** Items that are not exact (the gap set). */
+  /** Items below EXACT IF: bounded, manual or unsupported (the gap set, plan 10). */
   notExact: number;
   total: number;
   groups: Gap[];
@@ -84,7 +84,8 @@ export function gapsOf(report: RunReportJson): Gaps {
   const leverItems = new Map<Lever, Set<string>>();
   let notExact = 0;
   for (const it of items) {
-    if (it.status === "exact") continue;
+    // Plan 10: the gap set is what sits below EXACT IF (exact and exact-under are not gaps).
+    if (it.status === "exact" || it.status === "exact-under") continue;
     notExact++;
     const codes = [...new Set(it.reasons ?? it.reason_codes ?? [])];
     if (!codes.length) codes.push("reason.not_recorded");
