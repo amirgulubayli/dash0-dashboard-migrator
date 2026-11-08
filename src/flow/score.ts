@@ -6,6 +6,7 @@
 //   live        returns data in Dash0, out of items with a query where at least one side has data (+ query errors)
 //   success     translated AND landed AND not a live-data failure (live, no data anywhere, or no query)
 import { writeFileSync } from "node:fs";
+import { coverageHeadline, pct1, type QueryCoverage, type QueryTypeRow } from "../report/query-coverage.js";
 import { join } from "node:path";
 import type { Report, ReportItem } from "../report/types.js";
 import { reportHtml } from "./report-html.js";
@@ -144,7 +145,24 @@ export interface RunFacts {
   startedAt: string;
 }
 
-export function reportMarkdown(score: Score, rows: Row[], facts: RunFacts): string {
+/** "fn.anomalies 46 · monitor.as_count 13": why the rest of a query type stays with a person. */
+export const reasonsText = (r: QueryTypeRow, n = 3) => r.reasons.slice(0, n).map(([c, k]) => `${c} ${k}`).join(" · ");
+
+/** The "coverage by query type" section, Markdown. */
+export function coverageMarkdown(c: QueryCoverage): string[] {
+  if (!c.total) return [];
+  const L = ["## Coverage by query type", "", coverageHeadline(c), "", "| Type | Distinct | Translated | Exact under a stated condition | Why the rest stays with a person |", "|---|---:|---:|---:|---|"];
+  for (const r of c.rows) L.push(`| ${r.label} | ${r.total} | ${pct1(r.translated, r.total)} | ${pct1(r.exact, r.total)} | ${cell(reasonsText(r)) || "–"} |`);
+  L.push("");
+  const notes = ["Distinct: the same query in two widgets counts once, at its worst result. Percentages round down."];
+  if (c.anomalyMonitors) notes.push(`Anomaly monitors (${c.anomalyMonitors}) count as metric monitors. They stay with a person, because dd2dash0 doesn't guess.`);
+  const sk = Object.entries(c.skipped).reduce((a, [, n]) => a + n, 0);
+  if (sk) notes.push(`Not counted: ${sk} request(s) on other data sources (${Object.entries(c.skipped).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} ${n}`).join(", ")}).`);
+  L.push(...notes.map((n) => `${n}  `), "");
+  return L;
+}
+
+export function reportMarkdown(score: Score, rows: Row[], facts: RunFacts, coverage?: QueryCoverage): string {
   const L: string[] = [];
   L.push(`# dd2dash0 migration report`, "");
   L.push(`${facts.source} → ${facts.target} · ${score.panels} panels, ${score.monitors} monitors · ${facts.mode === "live" ? "live import" : "dry run (nothing imported)"} · ${facts.startedAt}`, "");
@@ -171,6 +189,7 @@ export function reportMarkdown(score: Score, rows: Row[], facts: RunFacts): stri
   }
   if (score.topGaps.length) L.push("", `Top gaps: ${score.topGaps.map(([c, n]) => `\`${c}\` ×${n}`).join(" · ")}`);
   L.push("");
+  if (coverage) L.push(...coverageMarkdown(coverage));
 
   // Per dashboard
   const panels = rows.filter((r) => r.kind === "panel");
@@ -222,13 +241,13 @@ export function reportMarkdown(score: Score, rows: Row[], facts: RunFacts): stri
   return L.join("\n") + "\n";
 }
 
-export function writeRunReport(dir: string, score: Score, rows: Row[], facts: RunFacts): { md: string; json: string; html: string } {
+export function writeRunReport(dir: string, score: Score, rows: Row[], facts: RunFacts, coverage?: QueryCoverage): { md: string; json: string; html: string } {
   const md = join(dir, "report.md");
   const json = join(dir, "report.json");
   const html = join(dir, "report.html");
-  writeFileSync(md, reportMarkdown(score, rows, facts));
-  writeFileSync(json, JSON.stringify({ schema: "dd2dash0.run/v1", facts, score, items: rows }, null, 2) + "\n");
-  writeFileSync(html, reportHtml(score, rows, facts));
+  writeFileSync(md, reportMarkdown(score, rows, facts, coverage));
+  writeFileSync(json, JSON.stringify({ schema: "dd2dash0.run/v1", facts, score, ...(coverage ? { queryCoverage: coverage } : {}), items: rows }, null, 2) + "\n");
+  writeFileSync(html, reportHtml(score, rows, facts, coverage));
   return { md, json, html };
 }
 

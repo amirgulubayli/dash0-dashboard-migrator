@@ -11,6 +11,7 @@ import { resolveConfig } from "../pipeline/config.js";
 import { runPlan } from "../pipeline/plan.js";
 import { importAll, type PrometheusAlertRule } from "../targets/dash0/index.js";
 import { bar, box, link, tildify, Ui, type Out } from "../ui/style.js";
+import { coverageHeadline, pct1, type QueryCoverage } from "../report/query-coverage.js";
 import { configEnvPath, displayPath, findEnvFiles, KeyError, KEYS, keysFromText, knownKeys, LABELS, resolveKeys, saveDotEnv, type KeyIO, type KeyName, type Keys } from "./keys.js";
 import { openBrowser, webKeys } from "./keys-web.js";
 import { batchedReview } from "./review.js";
@@ -209,6 +210,8 @@ export async function guided(o: GuidedOptions): Promise<number> {
   const claims = [["exact", by("exact")], ["exact-under", by("exact-under")], ["bounded", by("bounded")], ["manual", by("manual")], ["unsupported", by("unsupported")]].filter(([, n]) => n).map(([w, n]) => `${n} ${w}`);
   tStep.done(`${plural(report.summary.dashboards, "dashboard")} · ${plural(report.summary.alerts, "monitor")} ${p.dim("→")} ${items.length} items${o.only ? p.dim(` (${o.only} only)`) : ""}`, [p.dim(claims.join(" · "))]);
   ui.line();
+  const coverage = plan.result.queryCoverage;
+  for (const l of coverageLines(ui, coverage)) ui.line(l);
   if (items.length === 0) {
     ui.line(p.dim("Nothing to migrate: no dashboards or monitors found."));
     return EXIT.ok;
@@ -274,7 +277,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
   const write = () => {
     const rows = rowsOf(appliedReport, decisions, liveResults, live, enabled);
     const score = scoreOf(rows);
-    return { rows, score, files: writeRunReport(runDir, score, rows, facts) };
+    return { rows, score, files: writeRunReport(runDir, score, rows, facts, coverage) };
   };
   let out = write();
   // Inside the current folder: a short relative path. Elsewhere: the full path with ~, never a chain of ../.
@@ -315,6 +318,24 @@ export async function guided(o: GuidedOptions): Promise<number> {
 }
 
 /** The closing card: one bar per number, top gaps, rules, and links to the report. */
+/** "● By query type": the report's coverage section in the terminal, one bar per kind, best first. */
+export function coverageLines(ui: Ui, c: QueryCoverage): string[] {
+  if (!c.total) return [];
+  const p = ui.p;
+  const w = Math.max(...c.rows.map((r) => r.label.length));
+  const L = [`${p.accent("●")} ${p.bold("By query type")}  ${p.dim(`${c.total.toLocaleString("en")} distinct queries and monitors`)}`];
+  for (const r of c.rows) {
+    const cells = 18;
+    const ex = Math.floor((r.exact / r.total) * cells);
+    const tr = Math.floor((r.translated / r.total) * cells);
+    const barStr = p.accent("█".repeat(ex)) + p.accent(p.dim("▓".repeat(tr - ex))) + p.dim("░".repeat(cells - tr));
+    const why = r.reasons.length ? p.dim(`  ${r.reasons.slice(0, 2).map(([k, n]) => `${k} ${n}`).join(" · ")}`) : "";
+    L.push(`  ${p.dim("⎿")} ${r.label.padEnd(w)}  ${barStr}  ${pct1(r.translated, r.total).padStart(6)}  ${p.dim(`${r.translated}/${r.total}`)}${why}`);
+  }
+  L.push(`  ${p.dim("⎿")} ${p.dim(coverageHeadline(c))}`, "");
+  return L;
+}
+
 export function resultCard(ui: Ui, s: Score, x: { live: boolean; rulesImported: number; rulesOn: number; manualMonitors: number; html: string; md: string; rel: (f: string) => string }): string[] {
   const p = ui.p;
   const meter = (name: string, n: Score["success"], bold = false) => {
