@@ -136,7 +136,7 @@ Saved once, they live in `~/.config/dd2dash0/.env` (only you can read it) and wo
 5. **Verify**: reads every item back from Dash0 and runs every migrated query against the last hour of data, next to the original Datadog query.
 6. **Report**: the result card, `report.html`, `report.md`, `report.json`. At the end it offers to turn the approved rules on (default no) and to open the report.
 
-Commands: `dd2dash0` (the guided migration), `dd2dash0 explain "<query>"`. Options: `--yes` (no questions: keys from env or `.env`, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--browser`, `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
+Commands: `dd2dash0` (the guided migration), `dd2dash0 explain "<query>"`. Options: `--yes` (no questions: keys from the environment, `.env` or the saved file, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--dry-run` (import nothing), `--input <dir>` (Datadog JSON exports instead of the API), `--browser`, `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
 
 ## How it works
 

@@ -53,7 +53,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
+      # A failed Bun download (GitHub 504s happen) is not fatal: build.sh then runs Bun from the npm registry.
       - uses: oven-sh/setup-bun@v2
+        continue-on-error: true
         with: { bun-version: "${{ env.BUN_VERSION }}" }
       - run: npm ci --omit=optional
       - name: "compile (one file, the mapping tables are embedded)"
