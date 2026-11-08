@@ -24,6 +24,16 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - name: tag matches the version in the code
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          cli="$(grep -oE 'export const VERSION = "[^"]+"' src/cli.ts | cut -d'"' -f2)"
+          if [ "$tag" != "$pkg" ] || [ "$tag" != "$cli" ]; then
+            echo "::error::tag v$tag, but package.json says $pkg and src/cli.ts says $cli. Raise the version in both before tagging."
+            exit 1
+          fi
       - run: npx tsc -p . --noEmit
       - run: npx vitest run
 

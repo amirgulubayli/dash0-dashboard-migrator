@@ -16,7 +16,7 @@ import { guided, terminalIO } from "./flow/run.js";
 import { outOf, Ui } from "./ui/style.js";
 import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.1";
 
 /**
  * The mapping tables: $DD2DASH0_MAPPINGS, else a mappings/ folder next to the executable (the release download),
