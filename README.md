@@ -199,7 +199,7 @@ Solid is exact under a stated condition, shaded is within a proven bound, and wh
 
 Every dashboard and every translatable monitor passes the pre-import checks (exit 0). What doesn't translate is listed per item in `.corpus/run/report.html`, never dropped: mostly widget types with no Dash0 panel (`widget.unsupported`), queries on non-metric data sources, and the 140 monitors that can't become a check rule, each with its reason (most use a metric that isn't in our mapping tables; 46 use `anomalies()`).
 
-"Translate" means the query became valid PromQL with a stated claim; it does not mean the query returns data in Dash0. We curate metric mappings for four integrations (Redis, PostgreSQL, NGINX, host metrics), so most integrations-core queries keep their Datadog metric name, flagged `metric.unmapped` (8,624 of the 13,047 translated distinct queries, from `npx tsx scripts/corpus-coverage.ts .corpus/integrations-core`). They return data only if Dash0 has a metric of that name. Whether queries return data is what the Verify step measures on a live run.
+"Translate" means the query became valid PromQL with a stated claim; it does not mean the query returns data in Dash0. We curate metric mappings for four integrations (Redis, PostgreSQL, NGINX, host metrics), so most integrations-core queries keep their Datadog metric name, flagged `metric.unmapped` (6,624 of the 13,047 translated distinct queries, from `npx tsx scripts/corpus-coverage.ts .corpus/integrations-core`). They return data only if Dash0 has a metric of that name. Whether queries return data is what the Verify step measures on a live run.
 
 ## Run from source
 
