@@ -41,50 +41,69 @@ export function defaultMappingsDir(): string {
 
 const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards and monitors to Dash0
 
-Usage:
-  dd2dash0              asks for your Datadog and Dash0 keys, migrates everything, prints a report
+Try it first (no keys, nothing imported):
+  dd2dash0 --input <dir> --dry-run      translate a folder of Datadog JSON exports (the repo ships
+                                        examples in fixtures/datadog) and write the report
+  dd2dash0 explain "<query>"            one Datadog query through the engine: parse tree, mapping
+                                        tables, rules, PromQL and its claim, for example
+                                        dd2dash0 explain "avg:redis.mem.used{env:prod} by {host}"
 
-Options:
-  --yes                 no prompts: keys from env, .env or the saved file; approve bounded panels and
-                        translatable monitors
-  --env <file>          read the keys from this file (any name; DATADOG_API_KEY, DASH0_TOKEN, … understood)
-  --web                 run the whole migration in the browser, on a one-time page on this computer
-  --browser             enter missing keys on a one-time local web page instead of the terminal
-  --only <what>         dashboards | monitors
-  --out <dir>           run directory (default ./dd2dash0-run/<timestamp>)
-  --dry-run             translate and write the payloads and report, import nothing
-  --input <dir>         read Datadog JSON exports from a folder instead of the API
-  --version, --help
+Migrate:
+  dd2dash0                              asks for your Datadog and Dash0 keys, migrates everything,
+                                        prints a result card and writes report.html / report.md
+  --yes                                 no prompts: keys from the environment or .env; imports
+                                        bounded panels and translatable monitors
+  --web                                 run the whole migration in the browser, on a one-time page
+                                        on this computer (same flow, same output)
+  --env <file>                          read the keys from this file (any name; DATADOG_API_KEY,
+                                        DASH0_TOKEN, … understood)
+  --browser                             enter missing keys on a one-time local web page
+  --only dashboards|monitors            migrate one kind only
+  --out <dir>                           run folder (default ./dd2dash0-run/<timestamp>)
+  --version, --help, --help-advanced
 
-  dd2dash0 explain "<query>"   show one Datadog query going through the engine: the parse tree, the mapping
-                               tables, the rules that fire, the PromQL and the exact claim
+Claims: every panel and monitor gets exactly one
+  ✓ exact          same result as Datadog, always
+  ✓ exact-under    same result whenever the listed conditions hold
+  ± bounded        within a proven error bound; you approve these in review
+  ! manual         needs a person; a panel lands as a placeholder with the original query
+  ∅ unsupported    no Dash0 equivalent; also a placeholder panel (nothing is dropped)
 
-What it does:
-  1. keys       finds DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET in the
-                environment, ./.env or ~/.config/dd2dash0/.env (or --env <file>); offers env files it finds
-                nearby; asks for missing ones (drag in a .env, paste, type, or --browser), checks them, offers to save them to ~/.config/dd2dash0/.env (0600)
-  2. translate  every dashboard -> Perses, every query -> PromQL, every monitor -> a Dash0 check rule
-  3. review     one question for all approximate panels, one per monitor; what can't be translated
-                becomes a placeholder panel with the original query (nothing is dropped)
+What a run does:
+  1. keys       DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET from
+                the environment, ./.env or your user key file (~/.config/dd2dash0/.env,
+                %APPDATA%\\dd2dash0\\.env on Windows) or --env <file>; offers env files it finds
+                nearby; asks for missing ones (drag in a .env, paste, type, or
+                --browser), checks each, offers to save them there (0600)
+  2. translate  dashboards -> Perses, queries -> PromQL, monitors -> Dash0 check rules
+  3. review     one question for all bounded panels, one per monitor
   4. import     into Dash0; new check rules start off, existing ones keep their on/off state
-  5. verify     reads every item back from Dash0, checks the last hour of data against Datadog
-  6. report     translated · landed · live · success %, plus <run>/report.html and report.md
+  5. verify     reads every item back from Dash0 and checks the last hour of data against Datadog
+  6. report     success · translated · landed · live, plus <run>/report.html and report.md
 
-Exit codes: 0 all good, 1 something failed (see report.md), 2 refused, 3 usage or key error.
+Exit codes: 0 all good · 1 something failed (see report.md) · 2 refused · 3 usage or key error
 Translation is deterministic: parsers, rules and mapping tables. No LLM is involved.
 
-Advanced: dd2dash0 plan | review <plan> --terminal | apply <plan> --approved <review.json> | migrate  (see --help-advanced)`;
+Scripting (plan -> review -> apply, or one-shot migrate): dd2dash0 --help-advanced`;
 
-const USAGE_ADVANCED = `dd2dash0 ${VERSION} advanced commands
+const USAGE_ADVANCED = `dd2dash0 ${VERSION}: advanced commands, for scripts and CI
 
-  dd2dash0 plan  (--input <dir> | --api) [--config dd2dash0.yaml] [--out plan] [--only ...]   translate, import nothing
-  dd2dash0 review <plan dir> --terminal [--reviewer <name>] [--all]                         decide item by item
-  dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run] [--skip-source-check]
-  dd2dash0 migrate --from datadog (--input <dir> | --api) [--dry-run | --no-import] [--out <dir>] [--only ...]
-                   [--enable-rules] [--mappings <dir>] [--channels <file>]                   one shot, no review
+Gated flow (translate, decide, then import exactly what was approved):
+  dd2dash0 plan (--input <dir> | --api) [--config dd2dash0.yaml] [--out plan] [--only dashboards|monitors]
+      translate and write the plan; imports nothing
+  dd2dash0 review <plan dir> --terminal [--reviewer <name>] [--all]
+      decide item by item; writes <plan dir>/review.json
+  dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run]
+                 [--skip-source-check]
+      import what the review approved
 
-Guided flow, hidden options: --input <dir> (exported Datadog JSON/YAML instead of the API), --dry-run (write
-payloads, import nothing, skip the live checks).`;
+One shot, no review:
+  dd2dash0 migrate --from datadog (--input <dir> | --api) [--dry-run | --no-import] [--out <dir>]
+                   [--only dashboards|monitors] [--enable-rules] [--mappings <dir>] [--channels <file>]
+
+Guided flow, extra options:
+  --input <dir>   exported Datadog JSON/YAML instead of the API
+  --dry-run       write the Dash0 payloads, import nothing, skip the live checks`;
 
 const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser", "--web", "--env"]);
 

@@ -10,7 +10,7 @@ import { runApply } from "../pipeline/apply.js";
 import { resolveConfig } from "../pipeline/config.js";
 import { runPlan } from "../pipeline/plan.js";
 import { importAll, type PrometheusAlertRule } from "../targets/dash0/index.js";
-import { bar, box, link, tildify, Ui, type Out } from "../ui/style.js";
+import { bar, box, claimCounts, hang, link, tildify, truncateStart, Ui, width, wrap, type Out } from "../ui/style.js";
 import { configEnvPath, displayPath, findEnvFiles, KeyError, KEYS, keysFromText, knownKeys, LABELS, resolveKeys, saveDotEnv, type KeyIO, type KeyName, type Keys } from "./keys.js";
 import { openBrowser, webKeys } from "./keys-web.js";
 import { batchedReview } from "./review.js";
@@ -177,7 +177,12 @@ export async function guided(o: GuidedOptions): Promise<number> {
     keys = await resolveKeys({ need, env, cwd, io, yes: o.yes, pasted, ...(o.home ? { home: o.home } : {}), ...(o.fetch ? { fetch: o.fetch } : {}) });
   } catch (e) {
     if (e instanceof KeyError) {
-      ui.line(`${p.bad("✗")} dd2dash0: ${e.message}`);
+      for (const l of hang(`${p.bad("✗")} `, e.message, ui.out.columns)) ui.line(l);
+      // Always end an error with what to do next.
+      const next = o.yes
+        ? ["run dd2dash0 without --yes to be asked for them, or dd2dash0 --browser to enter them on a local page", "or try it without any keys: dd2dash0 --input <folder of Datadog JSON exports> --dry-run"]
+        : ["check the key where it was created (Datadog: Organization Settings → API / Application Keys; Dash0: Settings → Auth Tokens), then run dd2dash0 again"];
+      for (const [i, n] of next.entries()) for (const l of hang(`  ${p.dim("⎿")} ${i === 0 ? "next: " : ""}`, n, ui.out.columns)) ui.line(l);
       return EXIT.usage;
     }
     throw e;
@@ -199,18 +204,21 @@ export async function guided(o: GuidedOptions): Promise<number> {
   try {
     plan = await runPlan({ config, outDir: planDir, defaultMappingsDir: o.mappingsDir, ...(o.input ? { resolvedInput: resolve(cwd, o.input) } : {}), ...(o.only ? { only: o.only } : {}), version: o.version });
   } catch (e) {
-    tStep.fail(p.bad("could not read or translate the source"), [(e as Error).message]);
+    tStep.fail(p.bad("could not read or translate the source"), [
+      (e as Error).message,
+      `next: ${useApi ? `check DD_SITE (${keys.DD_SITE}) and that the application key can read dashboards and monitors` : `check that ${o.input} holds Datadog dashboard / monitor JSON exports`}`,
+    ]);
     return EXIT.usage;
   }
   const report: Report = plan.result.report;
   const items = report.items.filter((i) => i.kind === "panel" || i.kind === "alert");
   const by = (s: string) => items.filter((i) => i.status === s).length;
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const claims = [["exact", by("exact")], ["exact-under", by("exact-under")], ["bounded", by("bounded")], ["manual", by("manual")], ["unsupported", by("unsupported")]].filter(([, n]) => n).map(([w, n]) => `${n} ${w}`);
-  tStep.done(`${plural(report.summary.dashboards, "dashboard")} · ${plural(report.summary.alerts, "monitor")} ${p.dim("→")} ${items.length} items${o.only ? p.dim(` (${o.only} only)`) : ""}`, [p.dim(claims.join(" · "))]);
+  const claims = Object.fromEntries(["exact", "exact-under", "bounded", "manual", "unsupported"].map((c) => [c, by(c)]));
+  tStep.done(`${plural(report.summary.dashboards, "dashboard")} · ${plural(report.summary.alerts, "monitor")} ${p.dim("→")} ${plural(items.length, "item")}${o.only ? p.dim(` (${o.only} only)`) : ""}`, [claimCounts(p, claims)]);
   ui.line();
   if (items.length === 0) {
-    ui.line(p.dim("Nothing to migrate: no dashboards or monitors found."));
+    ui.line(p.dim(`Nothing to migrate: no dashboards or monitors found${o.input ? ` in ${o.input}` : ""}.`));
     return EXIT.ok;
   }
 
@@ -282,7 +290,7 @@ export async function guided(o: GuidedOptions): Promise<number> {
     const r = relative(cwd, f);
     return r && !r.startsWith("..") && !isAbsolute(r) ? r : tildify(f);
   };
-  for (const l of resultCard(ui, out.score, { live, rulesImported: applied.imported.rules, rulesOn: enabled.size, manualMonitors: review.manualMonitors.length, html: out.files.html, md: out.files.md, rel })) ui.line(l);
+  for (const l of resultCard(ui, out.score, { live, rulesImported: applied.imported.rules, rulesOn: enabled.size, manualMonitors: review.manualMonitors.length, html: out.files.html, md: out.files.md, rel, claims })) ui.line(l);
 
   // Offer to switch on only the imported rules that are off (default: leave them off).
   const offRules = applied.manifest.results.filter((r) => r.kind === "check-rule" && r.action === "imported" && !r.enabled).map((r) => r.id);
@@ -314,21 +322,82 @@ export async function guided(o: GuidedOptions): Promise<number> {
   return applied.ok && !liveFail ? EXIT.ok : EXIT.failed;
 }
 
-/** The closing card: one bar per number, top gaps, rules, and links to the report. */
-export function resultCard(ui: Ui, s: Score, x: { live: boolean; rulesImported: number; rulesOn: number; manualMonitors: number; html: string; md: string; rel: (f: string) => string }): string[] {
+/** Join `parts` with `sep`, wrapping between parts (never inside one) at `n` visible columns. */
+function joinWrap(parts: string[], sep: string, n: number): string[] {
+  const lines: string[] = [];
+  let cur = "";
+  for (const [i, part] of parts.entries()) {
+    const tail = i < parts.length - 1 ? width(sep.trimEnd()) : 0; // room for the separator that ends a wrapped line
+    if (cur && width(cur + sep + part) + tail > n) {
+      lines.push(cur + sep.trimEnd());
+      cur = part;
+    } else cur = cur ? cur + sep + part : part;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+/**
+ * The closing card, big picture first: one headline sentence, the meters, then the claim counts, the top gaps, the
+ * check rules and where the report is. A dry run shows only what it measured (translated); landed, live and success
+ * need a live import and say so in one line instead of three empty bars.
+ */
+export function resultCard(
+  ui: Ui,
+  s: Score,
+  x: { live: boolean; rulesImported: number; rulesOn: number; manualMonitors: number; html: string; md: string; rel: (f: string) => string; claims?: Partial<Record<string, number>> },
+): string[] {
   const p = ui.p;
+  const max = Math.min(ui.out.columns, 96);
+  const inner = max - 4;
+  const LABEL = 12;
+  const label = (name: string, bold = false) => (bold ? p.bold : (t: string) => t)(name.padEnd(LABEL - 1));
   const meter = (name: string, n: Score["success"], bold = false) => {
-    const label = (bold ? p.bold : (t: string) => t)(name.padEnd(11));
-    if (!n) return `${label} ${p.dim("░".repeat(18))}  ${p.dim("not measured")}`;
+    if (!n) return `${label(name, bold)} ${p.dim("░".repeat(18))}  ${p.dim("not measured")}`;
     const frac = n.total ? n.count / n.total : 0;
-    return `${label} ${bar(p, frac)}  ${`${n.count}/${n.total}`.padStart(7)}  ${(bold ? p.bold : (t: string) => t)(`${n.pct}%`.padStart(4))}`;
+    const pct = `${n.pct}%`.padStart(4);
+    return `${label(name, bold)} ${bar(p, frac)}  ${`${n.count}/${n.total}`.padStart(7)}  ${bold ? p.bold(pct) : pct}`;
   };
-  const lines = [meter("success", s.success, true), meter("translated", s.translated), meter("landed", s.landed), meter("live", s.live), ""];
-  if (s.topGaps.length) lines.push(`${p.dim("gaps  ")} ${s.topGaps.slice(0, 3).map(([c, n]) => `${c} ${p.dim(`×${n}`)}`).join(p.dim(" · "))}`);
-  lines.push(`${p.dim("rules ")} ${x.rulesImported} ${x.live ? `imported (${x.rulesOn} on, ${x.rulesImported - x.rulesOn} off)` : "written (dry run)"}${x.manualMonitors ? p.dim(` · ${x.manualMonitors} monitor(s) not translatable`) : ""}`);
-  const dir = x.rel(dirname(x.html));
-  lines.push(p.on ? `${p.dim("report")} ${link(p, "report.html", pathToFileURL(x.html).href)}${p.dim(" · ")}${link(p, "report.md", pathToFileURL(x.md).href)}${p.dim(`  in ${dir}`)}` : `report ${x.rel(x.html)} · ${x.rel(x.md)}`);
-  return box(p, lines, { title: "Result", max: Math.min(ui.out.columns, 96) });
+  /** "label       text", wrapped between parts with the continuation lines under the text. */
+  const row = (name: string, parts: string[], sep = p.dim(" · ")) => joinWrap(parts, sep, inner - LABEL).map((l, i) => (i === 0 ? `${p.dim(name.padEnd(LABEL - 1))} ` : " ".repeat(LABEL)) + l);
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+  const lines: string[] = [];
+  const t = s.translated;
+  lines.push(
+    x.live && s.success
+      ? `${p.bold(`${s.success.count} of ${plural(s.success.total, "item")} migrated successfully`)}  ${p.dim(`${s.success.pct}%`)}`
+      : `${p.bold(`${t.count} of ${plural(t.total, "item")} translated`)}  ${p.dim(`${t.pct}%`)}`,
+  );
+  lines.push("");
+  if (x.live) lines.push(meter("success", s.success, true), meter("translated", s.translated), meter("landed", s.landed), meter("live", s.live));
+  else lines.push(meter("translated", s.translated, true), ...wrap("dry run: landed, live and success need a live import", inner - LABEL).map((l) => " ".repeat(LABEL) + p.dim(l)));
+  lines.push("");
+  if (x.claims && Object.values(x.claims).some(Boolean)) lines.push(...row("claims", claimCounts(p, x.claims).split(p.dim(" · "))));
+  if (s.topGaps.length) lines.push(...row("top gaps", s.topGaps.slice(0, 3).map(([c, n]) => `${c} ${p.dim(`×${n}`)}`)));
+  lines.push(
+    ...row("check rules", [
+      `${x.rulesImported} ${x.live ? `imported (${x.rulesOn} on, ${x.rulesImported - x.rulesOn} off)` : "written (dry run)"}`,
+      ...(x.manualMonitors ? [p.dim(`${plural(x.manualMonitors, "monitor")} not a rule (manual)`)] : []),
+    ]),
+  );
+  // Report: a path that climbs out of the working folder (../../..) reads worse than the absolute one.
+  const show = (f: string) => {
+    const r = x.rel(f);
+    return r.startsWith("..") ? tildify(f) : r;
+  };
+  const dir = show(dirname(x.html));
+  const reportLines = p.on
+    ? [
+        `${p.dim("report".padEnd(LABEL - 1))} ${link(p, "report.html", pathToFileURL(x.html).href)}${p.dim(" · ")}${link(p, "report.md", pathToFileURL(x.md).href)}`,
+        `${" ".repeat(LABEL)}${p.dim(`in ${truncateStart(dir, inner - LABEL - 3)}`)}`,
+      ]
+    : [`${"report".padEnd(LABEL - 1)} ${show(x.html)} · ${show(x.md)}`];
+  // Plain text (logs, CI): never cut a path; if it does not fit the frame it goes under it, whole.
+  const outside = !p.on && reportLines.some((l) => width(l) > inner);
+  if (!outside) lines.push(...reportLines);
+  const card = box(p, lines, { title: "Result", max });
+  return outside ? [...card, `report  ${show(x.html)}`, `        ${show(x.md)}`] : card;
 }
 
 export { terminalIO } from "./tty.js";
