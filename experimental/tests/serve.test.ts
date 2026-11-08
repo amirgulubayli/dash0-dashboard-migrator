@@ -7,7 +7,7 @@ import { migrate } from "../../src/pipeline/migrate.js";
 import { writeReport } from "../../src/report/index.js";
 import { reportToEvents } from "../../src/report/events.js";
 import { narrate } from "../../src/report/narrate.js";
-import { startServer } from "../../src/serve/server.js";
+import { startServer } from "../serve/server.js";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const out = mkdtempSync(join(tmpdir(), "t8s-"));

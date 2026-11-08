@@ -8,8 +8,8 @@
 import { createServer, type Server } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve, sep } from "node:path";
-import { checkReview, parseReview, ReviewError } from "../pipeline/review.js";
-import { itemsOf, openReview, saveReview, type ReviewSession } from "../pipeline/review-session.js";
+import { checkReview, parseReview, ReviewError } from "../../src/pipeline/review.js";
+import { itemsOf, openReview, saveReview, type ReviewSession } from "../../src/pipeline/review-session.js";
 
 export interface ReviewServerOptions {
   planDir: string;
