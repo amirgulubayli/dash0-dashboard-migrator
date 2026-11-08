@@ -10,23 +10,23 @@ It runs in your terminal, because the people who migrate monitoring are engineer
 
 ## Quick start
 
-Download one file and run it. No Node, no clone, no install:
+Download one file and run it. No Node, no clone, no install, no folder of extras:
 
 ```bash
 # macOS, Apple silicon (M1-M4)
-curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-macos-arm64.tar.gz | tar xz && cd dd2dash0-macos-arm64 && ./dd2dash0
+curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-macos-arm64.tar.gz | tar xz && ./dd2dash0
 ```
 ```bash
 # macOS, Intel
-curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-macos-x64.tar.gz | tar xz && cd dd2dash0-macos-x64 && ./dd2dash0
+curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-macos-x64.tar.gz | tar xz && ./dd2dash0
 ```
 ```bash
 # Linux x64 (use dd2dash0-linux-arm64 on ARM)
-curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-linux-x64.tar.gz | tar xz && cd dd2dash0-linux-x64 && ./dd2dash0
+curl -fsSL https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest/download/dd2dash0-linux-x64.tar.gz | tar xz && ./dd2dash0
 ```
 Windows: download `dd2dash0-windows-x64.zip` from [Releases](https://github.com/amirgulubayli/dash0-dashboard-migrator/releases/latest), unzip it, and run `.\dd2dash0.exe` in PowerShell.
 
-Each archive holds the `dd2dash0` executable, its `mappings/` folder (keep them together) and a short README. `SHA256SUMS.txt` on the release lists the checksums. If macOS refuses a browser download ("cannot be opened"), run `xattr -d com.apple.quarantine dd2dash0` once; downloading with `curl` as above avoids this.
+The archive holds one file, `dd2dash0`, with everything inside it (the mapping tables included). `SHA256SUMS.txt` on the release lists the checksums. If macOS refuses a browser download ("cannot be opened"), run `xattr -d com.apple.quarantine dd2dash0` once; downloading with `curl` as above avoids this.
 
 ## What a run looks like
 
@@ -34,7 +34,7 @@ A real run against our Datadog trial and Dash0 org (1 dashboard, 1 monitor):
 
 ```
 ╭──────────────────────────────────────────╮
-│ ◆ dd2dash0 0.4.1                         │
+│ ◆ dd2dash0 0.5.0                         │
 │   Datadog → Dash0 · deterministic, no AI │
 ╰──────────────────────────────────────────╯
 
@@ -76,6 +76,42 @@ What the numbers mean (each counts every panel, including notes, and every monit
 
 Every run writes `dd2dash0-run/<time>/report.html` (open it in a browser), `report.md` and `report.json`, with every panel and monitor, its claim, the original Datadog query, the PromQL, and what to do by hand where needed.
 
+## See the engine: `dd2dash0 explain`
+
+No wrapper, no model: a parser, mapping tables and a rule table with a claim for every rule. `explain` shows one query going through exactly the code a migration runs:
+
+```
+$ dd2dash0 explain "avg:redis.mem.used{env:prod} by {host}.rollup(avg, 60)"
+
+● Parse  recursive-descent parser, Datadog query grammar → AST  0.62 ms
+  └─ .rollup(avg, 60)
+     └─ metric redis.mem.used
+        ├─ space agg: avg
+        ├─ scope: env:prod
+        └─ group by: host
+
+● Map  332 curated metric mappings · 36,828 Datadog metric kinds
+  ⎿ redis.mem.used → redis.memory.used  gauge · exact  mappings/datadog/redisdb.yaml
+  ⎿ tag host → host_name
+  ⎿ tag env → deployment_environment_name
+
+● Rules  4 applied from the rule table  3.12 ms
+  ⎿ select.metric.mapped  exact        Datadog metric -> {otel_metric_name=...} through the mapping table
+  ⎿ scope.tag.eq          exact        key:value -> key="value"
+  ⎿ time.rollup.explicit  exact-under  .rollup(fn, s) -> fn_over_time(x[s])
+  ⎿ space.agg             exact        avg|sum|min|max|count by {tags} -> PromQL aggregation by (labels)
+
+● PromQL  parsed by the official PromQL grammar (lezer-promql) ✓
+  avg by (host_name) (avg_over_time({otel_metric_name="redis.memory.used", deployment_environment_name="prod"}[1m]))
+
+● Claim  exact-under
+  ⎿ equal to Datadog's result whenever these conditions hold:
+  ⎿ A.align     PromQL evaluation step equals the Datadog rollup width and timestamps are Unix-aligned
+  ⎿ A.boundary  no sample lies exactly on a bucket boundary
+```
+
+It explains monitors too (`avg(last_5m):… > 90` → a Dash0 check rule with `failed`/`degraded` thresholds), and points at the exact character where a query doesn't parse.
+
 ## What you need
 
 | Key | Where to find it |
@@ -87,7 +123,9 @@ Every run writes `dd2dash0-run/<time>/report.html` (open it in a browser), `repo
 | Dash0 auth token | Dash0 → Settings → Auth Tokens |
 | Dash0 dataset | usually `default` |
 
-`dd2dash0` looks for them in the environment and in `./.env`. It asks for anything missing, in the terminal (keys hidden as you type) or, if you choose, on a one-time page on your own computer (`--browser`: 127.0.0.1 only, secret link, closes after use). It checks every key with a read-only call before doing anything, and offers to save them to `./.env` (readable only by you).
+Have a `.env` already? **Drag it into the terminal window** (or paste its contents) when dd2dash0 asks: it reads the keys, shows only their last four characters, and checks each one with a read-only call. Other common names work too (`DATADOG_API_KEY`, `DD_APPLICATION_KEY`, `DASH0_TOKEN`, …). You can also type them one by one (a dot per character, never the key), or enter them on a one-time page on your own computer (`--browser`: 127.0.0.1 only, secret link, closes after use).
+
+Saved once, they live in `~/.config/dd2dash0/.env` (only you can read it) and work from any folder. dd2dash0 looks in the environment, then `./.env`, then that file.
 
 ## What it does, step by step
 
@@ -98,7 +136,7 @@ Every run writes `dd2dash0-run/<time>/report.html` (open it in a browser), `repo
 5. **Verify**: reads every item back from Dash0 and runs every migrated query against the last hour of data, next to the original Datadog query.
 6. **Report**: the result card, `report.html`, `report.md`, `report.json`. At the end it offers to turn the approved rules on (default no) and to open the report.
 
-Options: `--yes` (no questions: keys from env or `.env`, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--browser`, `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
+Commands: `dd2dash0` (the guided migration), `dd2dash0 explain "<query>"`. Options: `--yes` (no questions: keys from env or `.env`, approve approximate panels and translatable monitors), `--only dashboards|monitors`, `--browser`, `--out <dir>`, `--help`. Exit codes: 0 all good, 1 something failed (see the report), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
 
 ## How it works
 

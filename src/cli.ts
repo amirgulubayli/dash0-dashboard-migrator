@@ -12,11 +12,12 @@ import { ConfigError, loadConfig, resolveConfig, type Dd2dash0Config } from "./p
 import { runPlan } from "./pipeline/plan.js";
 import { runApply } from "./pipeline/apply.js";
 import { terminalReview } from "./pipeline/review-terminal.js";
+import { explain } from "./flow/explain.js";
 import { guided, terminalIO } from "./flow/run.js";
 import { outOf, Ui } from "./ui/style.js";
 import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.4.1";
+export const VERSION = "0.5.0";
 
 /**
  * The mapping tables, first found wins:
@@ -47,6 +48,9 @@ Options:
   --only <what>         dashboards | monitors
   --out <dir>           run directory (default ./dd2dash0-run/<timestamp>)
   --version, --help
+
+  dd2dash0 explain "<query>"   show one Datadog query going through the engine: the parse tree, the mapping
+                               tables, the rules that fire, the PromQL and the exact claim
 
 What it does:
   1. keys       finds DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET in the
@@ -91,6 +95,14 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
     return 0;
   }
   if (cmd === undefined || GUIDED_FLAGS.has(cmd)) return runGuided(argv);
+  if (cmd === "explain") {
+    const q = rest.join(" ").trim();
+    if (!q) {
+      console.error('usage: dd2dash0 explain "<Datadog query>"   e.g. dd2dash0 explain "avg:redis.mem.used{env:prod} by {host}"');
+      return EXIT.usage;
+    }
+    return explain({ query: q, mappingsDir: defaultMappingsDir(), ui: new Ui(outOf(process.stdout)), version: VERSION });
+  }
   if (cmd === "plan") return runPlanCmd(rest);
   if (cmd === "review") return runReviewCmd(rest);
   if (cmd === "apply") return runApplyCmd(rest);
