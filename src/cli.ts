@@ -7,13 +7,22 @@ import { migrate, overallOk } from "./pipeline/migrate.js";
 import { summaryLines, writeReport } from "./report/index.js";
 import { reportToEvents } from "./report/events.js";
 import { loadReport, startServer } from "./serve/server.js";
+import { ConfigError, loadConfig, resolveConfig, type Dd2dash0Config } from "./pipeline/config.js";
+import { runPlan } from "./pipeline/plan.js";
+import { runApply } from "./pipeline/apply.js";
+import { terminalReview } from "./pipeline/review-terminal.js";
+import { findConsoleDir, startReviewServer } from "./serve/review.js";
+import { createInterface } from "node:readline/promises";
 
 export const VERSION = "0.2.0";
 
 const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards + monitors to Dash0 (Perses, PromQL, check rules)
 
 Usage:
-  dd2dash0 migrate --from datadog (--input <dir> | --api) [options]
+  dd2dash0 plan  (--input <dir> | --api) [--config dd2dash0.yaml] [--out plan] [options]   translate, import nothing
+  dd2dash0 review <plan dir> [--terminal] [--port 4318] [--reviewer <name>]                 decide what gets imported
+  dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run]
+  dd2dash0 migrate --from datadog (--input <dir> | --api) [options]                        one-shot: translate + import all
   dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
 
 Options:
@@ -26,6 +35,11 @@ Options:
   --enable-rules       import check rules enabled (default: disabled, D-30)
   --mappings <dir>     mapping tables (default: the package's mappings/)
   --channels <file>    Datadog @handle -> existing Dash0 notification channel id (default: <mappings>/notification-channels.yaml)
+
+plan writes a plan directory (report.json, report.md, events.jsonl, dash0/ payloads, plan.lock). A review
+(review.json from the console) binds to the plan's hash; apply imports only what was approved and refuses on a
+changed plan, a review of another plan, a changed Datadog source, or approximate panels with no decision.
+Exit codes (plan, apply): 0 ok, 1 some imports failed, 2 refused, 3 usage or config error.
 
 migrate writes <out>/report.json, report.md, events.jsonl and (unless --no-import) <out>/dash0/.
 serve replays <out>'s run in the browser; with ELEVENLABS_AGENT_ID + ELEVENLABS_API_KEY set, an ElevenLabs
@@ -46,6 +60,9 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
     console.log(VERSION);
     return 0;
   }
+  if (cmd === "plan") return runPlanCmd(rest);
+  if (cmd === "review") return runReviewCmd(rest);
+  if (cmd === "apply") return runApplyCmd(rest);
   if (cmd === "migrate") return runMigrate(rest);
   if (cmd === "serve") return runServe(rest);
   console.error(`unknown command: ${cmd} (try --help)`);
@@ -122,6 +139,7 @@ async function runMigrate(args: string[]): Promise<number> {
   try {
     const r = await migrate({
       ingest: { ...(f.input ? { input: resolve(f.input) } : { api: true }), ...(f.only ? { only: f.only } : {}) },
+      source: f.input ? { kind: "folder", site: null, path: f.input } : { kind: "api", site: process.env.DD_SITE || "datadoghq.eu", path: null },
       mappingsDir: resolve(f.mappings),
       ...(f.channels ? { channelsFile: resolve(f.channels) } : {}),
       outDir: resolve(f.out),
@@ -140,6 +158,177 @@ async function runMigrate(args: string[]): Promise<number> {
   } catch (e) {
     console.error(`dd2dash0: ${(e as Error).message}`);
     return 1;
+  }
+}
+
+const EXIT = { ok: 0, failed: 1, refused: 2, usage: 3 } as const;
+
+/** Reads `--name value` / `--flag` pairs; positional arguments are returned in `_`. */
+function readArgs(args: string[], valued: string[], bools: string[]): { _: string[]; v: Record<string, string>; b: Set<string> } | string {
+  const out = { _: [] as string[], v: {} as Record<string, string>, b: new Set<string>() };
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (valued.includes(a)) {
+      const v = args[++i];
+      if (v === undefined || v.startsWith("--")) return `${a} needs a value`;
+      out.v[a] = v;
+    } else if (bools.includes(a)) out.b.add(a);
+    else if (a.startsWith("--")) return `unknown option ${a}`;
+    else out._.push(a);
+  }
+  return out;
+}
+
+async function runPlanCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--input", "--out", "--config", "--mappings", "--channels", "--only", "--from"], ["--api", "--enable-rules"]);
+  if (typeof r === "string" || r._.length) {
+    console.error(`${typeof r === "string" ? r : `unexpected argument ${r._[0]}`}\n\n${USAGE}`);
+    return EXIT.usage;
+  }
+  if (r.v["--from"] && r.v["--from"] !== "datadog") {
+    console.error("--from datadog is the only source so far");
+    return EXIT.usage;
+  }
+  const only = r.v["--only"];
+  if (only && only !== "dashboards" && only !== "monitors") {
+    console.error("--only must be dashboards or monitors");
+    return EXIT.usage;
+  }
+  if (r.v["--input"] && r.b.has("--api")) {
+    console.error("pass at most one of --input <dir> or --api");
+    return EXIT.usage;
+  }
+  const flags: Dd2dash0Config = {
+    ...(r.v["--input"] ? { source: { kind: "folder" as const, path: r.v["--input"] } } : r.b.has("--api") ? { source: { kind: "api" as const } } : {}),
+    ...(r.v["--mappings"] ? { mappings: resolve(r.v["--mappings"]) } : {}),
+    ...(r.v["--channels"] ? { channels: resolve(r.v["--channels"]) } : {}),
+    ...(r.b.has("--enable-rules") ? { enableRules: true } : {}),
+  };
+  let config;
+  try {
+    const file = loadConfig(r.v["--config"]);
+    config = resolveConfig(file.config, flags);
+    if (!file.file && !flags.source) {
+      console.error(`pass --input <dir> or --api (or a source in dd2dash0.yaml)\n\n${USAGE}`);
+      return EXIT.usage;
+    }
+  } catch (e) {
+    if (e instanceof ConfigError) {
+      console.error(e.message);
+      return EXIT.usage;
+    }
+    throw e;
+  }
+  const out = resolve(r.v["--out"] ?? "plan");
+  try {
+    const p = await runPlan({
+      config,
+      outDir: out,
+      defaultMappingsDir: join(import.meta.dirname, "..", "mappings"),
+      ...(config.source.kind === "folder" ? { resolvedInput: resolve(config.source.path) } : {}),
+      ...(only ? { only: only as "dashboards" | "monitors" } : {}),
+      version: VERSION,
+    });
+    for (const l of summaryLines(p.result.report, p.files)) console.log(l);
+    console.log(`  plan ${p.planHash.slice(0, 16)}  ->  next: review it (dd2dash0 review ${r.v["--out"] ?? "plan"}), then dd2dash0 apply ${r.v["--out"] ?? "plan"} --approved <review.json>`);
+    return EXIT.ok;
+  } catch (e) {
+    console.error(`dd2dash0 plan: ${(e as Error).message}`);
+    return EXIT.failed;
+  }
+}
+
+async function runReviewCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--port", "--reviewer", "--console"], ["--terminal", "--all"]);
+  if (typeof r === "string" || r._.length !== 1) {
+    console.error(`${typeof r === "string" ? r : "usage: dd2dash0 review <plan dir> [--terminal]"}\n\n${USAGE}`);
+    return EXIT.usage;
+  }
+  const planDir = resolve(r._[0]!);
+  const reviewer = r.v["--reviewer"] ?? process.env.USER ?? "";
+  if (r.b.has("--terminal")) {
+    // Read lines through the async iterator: it buffers input, so piped keystrokes aren't lost between prompts
+    // (readline's question() drops lines that arrive while no question is pending).
+    const rl = createInterface({ input: process.stdin, terminal: false });
+    const lines = rl[Symbol.asyncIterator]();
+    try {
+      const out = await terminalReview(planDir, reviewer, {
+        ask: async (prompt) => {
+          process.stdout.write(prompt);
+          const n = await lines.next();
+          if (!process.stdin.isTTY && !n.done) process.stdout.write(`${n.value}\n`); // echo piped input
+          return n.done ? null : n.value;
+        },
+        print: (line) => console.log(line),
+      }, { all: r.b.has("--all") });
+      return EXIT.ok;
+    } catch (e) {
+      console.error(`dd2dash0 review: ${(e as Error).message}`);
+      return EXIT.refused;
+    } finally {
+      rl.close();
+    }
+  }
+  const port = Number(r.v["--port"] ?? 4318);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    console.error("--port must be a port number");
+    return EXIT.usage;
+  }
+  const consoleDir = r.v["--console"] ? resolve(r.v["--console"]) : findConsoleDir(import.meta.dirname);
+  try {
+    const { url } = await startReviewServer({ planDir, port, ...(consoleDir ? { consoleDir } : {}), reviewer });
+    console.log(`dd2dash0 review: ${url}  (plan ${planDir}; ${consoleDir ? "console" : "console not built: notice page, or use --terminal"}; Ctrl+C to stop)`);
+    console.log(`  decisions are saved to ${join(planDir, "review.json")}; then: dd2dash0 apply ${r._[0]} --approved ${join(r._[0]!, "review.json")}`);
+    return new Promise<number>(() => {}); // keep serving
+  } catch (e) {
+    console.error(`dd2dash0 review: ${(e as Error).message}`);
+    return EXIT.refused;
+  }
+}
+
+async function runApplyCmd(args: string[]): Promise<number> {
+  const r = readArgs(args, ["--approved"], ["--enable-rules", "--allow-pending", "--dry-run", "--skip-source-check"]);
+  if (typeof r === "string" || r._.length !== 1 || !r.v["--approved"]) {
+    console.error(`${typeof r === "string" ? r : "usage: dd2dash0 apply <plan dir> --approved <review.json>"}\n\n${USAGE}`);
+    return EXIT.usage;
+  }
+  const dryRun = r.b.has("--dry-run");
+  let dash0;
+  if (!dryRun) {
+    try {
+      dash0 = configFromEnv();
+    } catch (e) {
+      console.error(`${(e as Error).message}\nUse --dry-run to write the approved payloads without importing.`);
+      return EXIT.usage;
+    }
+  }
+  try {
+    const o = await runApply({
+      planDir: resolve(r._[0]!),
+      reviewFile: resolve(r.v["--approved"]),
+      enableRules: r.b.has("--enable-rules"),
+      allowPending: r.b.has("--allow-pending"),
+      dryRun,
+      skipSourceCheck: r.b.has("--skip-source-check"),
+      ...(dash0 ? { dash0 } : {}),
+    });
+    for (const w of o.warnings) console.error(`  warning: ${w}`);
+    if (o.kind === "refused") {
+      console.error("dd2dash0 apply: refused");
+      for (const x of o.reasons) console.error(`  ${x}`);
+      return EXIT.refused;
+    }
+    const m = o.manifest.summary;
+    console.log(`dd2dash0 apply: ${dryRun ? "dry run, nothing imported" : "imported"}: ${o.imported.dashboards} dashboard(s), ${o.imported.rules} check rule(s)`);
+    console.log(`  ${dryRun ? `written ${m["dry-run"]}` : `imported ${m.imported}, read back identical ${m.readBackMatch}`}, failed ${m.failed}, rejected by preflight ${m["rejected-preflight"]}`);
+    if (o.placeholders.length) console.log(`  flagged in review -> placeholder: ${o.placeholders.length} panel(s)`);
+    if (o.skippedAlerts.length) console.log(`  check rules not imported (flagged or not approved): ${o.skippedAlerts.join(", ")}`);
+    for (const x of o.manifest.results.filter((x) => x.errors.length)) console.error(`  ! ${x.kind} ${x.id}: ${x.errors.join("; ")}${x.traceId ? ` (traceId ${x.traceId})` : ""}`);
+    console.log(`  report: ${o.reportFile}${o.ok ? "" : "  (re-run apply to retry what failed; imports are idempotent)"}`);
+    return o.ok ? EXIT.ok : EXIT.failed;
+  } catch (e) {
+    console.error(`dd2dash0 apply: ${(e as Error).message}`);
+    return EXIT.failed;
   }
 }
 
