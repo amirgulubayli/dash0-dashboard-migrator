@@ -74,7 +74,7 @@ describe("report.html", () => {
     const row: Row = { id: "x", kind: "panel", title: "<script>alert(1)</script>", dashboard: "Redis", widget: "timeseries", status: "bounded", decision: "approved", translated: true, landed: true, landedDetail: "", live: "live", success: true, reasons: [], manualActions: [], sourceQueries: [], promql: [] };
     const facts: RunFacts = { version: "0.3.0", source: "Datadog datadoghq.eu", target: "Dash0 x / default", mode: "live", inputHash: "a".repeat(64), outputHash: "b".repeat(64), planHash: "c".repeat(64), windowSeconds: 3600, startedAt: "2026-11-08T10:00:00.000Z" };
     const html = reportHtml(score, [row], facts);
-    expect(html).toContain("31/37 <b>83%</b>");
+    expect(html).toContain("<b>31</b> of 37");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toMatch(/<script|src=|href="http/);
   });
