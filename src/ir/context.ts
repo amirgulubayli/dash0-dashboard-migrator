@@ -19,12 +19,17 @@ export interface MetricLookup {
   transform: "none" | "rate" | "increase";
   status: "exact" | "approximate";
   note?: string;
+  /** Datadog value = scale × OTel value. T4 applies it (select.metric.transform) or fails closed. */
+  scale?: number;
+  /** OTel labels Datadog doesn't have: T4 sums them away first (select.metric.transform) or fails closed. */
+  sumBy?: string[];
 }
 
 /**
  * Why a metric has no lookup, so the caller can emit the right finding code.
- * needs_transform: the entry sets `scale` or `sumBy`, which no translator applies yet. It fails closed (manual)
- * instead of silently emitting the wrong unit or un-summed series (Ali's review of PR #4).
+ * needs_transform: kept in the union for contexts that can't pass scale/sumBy to T4 (which then fails closed). T1 no
+ * longer returns it: entries with `scale` or `sumBy` are "mapped", and metricLookup carries both fields so T4 applies
+ * them (rule select.metric.transform) or fails closed with metric.needs_transform (Ali's review of PR #4).
  */
 export type MetricAvailability = "mapped" | "unmapped" | "no_equivalent" | "derived" | "needs_transform";
 
@@ -32,7 +37,6 @@ export function metricAvailability(m: Mappings, dd: string): MetricAvailability 
   const e = m.metrics.get(dd);
   if (!e) return "unmapped";
   if (e.otel === null) return e.derived ? "derived" : "no_equivalent";
-  if (e.scale !== undefined || e.sumBy.length > 0) return "needs_transform";
   return "mapped";
 }
 
@@ -51,6 +55,8 @@ export function metricLookup(m: Mappings): (dd: string) => MetricLookup | undefi
       transform: kindTransform(e).transform,
       status: e.status,
       ...(e.note !== undefined && { note: e.note }),
+      ...(e.scale !== undefined && { scale: e.scale }),
+      ...(e.sumBy.length > 0 && { sumBy: [...e.sumBy] }),
     };
   };
 }
