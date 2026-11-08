@@ -7,6 +7,7 @@
 import type { ReportItem } from "../report/types.js";
 import { decide, openReview, saveReview } from "../pipeline/review-session.js";
 import type { KeyIO } from "./keys.js";
+import type { Choose } from "./tty.js";
 
 export interface BatchResult {
   file: string;
@@ -25,14 +26,18 @@ const yesNo = (a: string | null, def: boolean) => {
 
 function showRule(io: Pick<KeyIO, "print">, i: ReportItem, n: number, total: number) {
   io.print("");
-  io.print(`  [${n}/${total}] ${i.title || "(untitled monitor)"}  (${i.status})`);
-  for (const q of i.source_queries) io.print(`    Datadog  ${q}`);
-  for (const q of i.promql) io.print(`    PromQL   ${q}`);
-  if (i.thresholds) io.print(`    failed > ${i.thresholds.failed}${i.thresholds.degraded !== undefined ? `   degraded > ${i.thresholds.degraded}` : ""}`);
-  if (i.certificate.epsilon) io.print(`    bound    ${i.certificate.epsilon}`);
+  io.print(`  ⎿ monitor ${n}/${total}  ${i.title || "(untitled monitor)"}  (${i.status})`);
+  for (const q of i.source_queries) io.print(`      Datadog  ${q}`);
+  for (const q of i.promql) io.print(`      PromQL   ${q}`);
+  if (i.thresholds) io.print(`      failed > ${i.thresholds.failed}${i.thresholds.degraded !== undefined ? `   degraded > ${i.thresholds.degraded}` : ""}`);
+  if (i.certificate.epsilon) io.print(`      bound    ${i.certificate.epsilon}`);
 }
 
-export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "print">, o: { yes: boolean; reviewer?: string }): Promise<BatchResult> {
+const listBounded = (io: Pick<KeyIO, "print">, bounded: ReportItem[]) => {
+  for (const i of bounded) io.print(`      · ${i.dashboard ?? ""} / ${i.title || "(untitled)"}: ${i.promql[0] ?? ""}${i.certificate.epsilon ? `   (bound: ${i.certificate.epsilon})` : ""}`);
+};
+
+export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "print"> & { choose?: Choose }, o: { yes: boolean; reviewer?: string }): Promise<BatchResult> {
   const s = openReview(planDir, o.reviewer ?? "dd2dash0");
   s.decisions.clear(); // a fresh run always reviews fresh
   const bounded = s.queue.filter((i) => i.kind === "panel" && i.status === "bounded");
@@ -44,11 +49,21 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
   // Bounded panels: one batch decision.
   if (bounded.length) {
     let approve = true;
-    if (!o.yes) {
+    if (!o.yes && io.choose) {
+      for (;;) {
+        const c = await io.choose(`Import ${bounded.length} approximate panels? They are translated within a proven error bound.`, ["Yes, import them", "No, use placeholders", "Show them first"], 0);
+        if (c === 2) {
+          listBounded(io, bounded);
+          continue;
+        }
+        approve = c !== 1;
+        break;
+      }
+    } else if (!o.yes) {
       for (;;) {
         const a = await io.ask(`  Approve all ${bounded.length} approximate (bounded) panels? They are translated within a proven error bound. [Y/n/list] `);
         if ((a ?? "").trim().toLowerCase() === "list") {
-          for (const i of bounded) io.print(`    · ${i.dashboard ?? ""} / ${i.title || "(untitled)"}: ${i.promql[0] ?? ""}${i.certificate.epsilon ? `   (bound: ${i.certificate.epsilon})` : ""}`);
+          listBounded(io, bounded);
           continue;
         }
         approve = yesNo(a, true);
@@ -63,13 +78,13 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
   // Manual / unsupported panels: acknowledged automatically; they land as placeholders holding the original query.
   for (const i of manualPanels) decide(s, i.id, "acknowledged");
   r.acknowledged = manualPanels.length;
-  if (manualPanels.length) io.print(`  ${manualPanels.length} panel(s) can't be translated exactly; they become placeholder panels with the original Datadog query.`);
+  if (manualPanels.length) io.print(`  ⎿ ${manualPanels.length} panel(s) can't be translated exactly; they become placeholder panels with the original Datadog query.`);
 
   // Monitors that can't become a rule: acknowledged, listed, never imported as rules (still counted in the report).
   for (const i of manualMonitors) decide(s, i.id, "acknowledged");
   if (manualMonitors.length) {
-    io.print(`  ${manualMonitors.length} monitor(s) can't be translated into a check rule (listed in the report):`);
-    for (const i of manualMonitors) io.print(`    · ${i.title || i.id}: ${i.reason_codes.slice(0, 3).join(", ") || "manual"}`);
+    io.print(`  ⎿ ${manualMonitors.length} monitor(s) can't be translated into a check rule (listed in the report):`);
+    for (const i of manualMonitors) io.print(`      · ${i.title || i.id}: ${i.reason_codes.slice(0, 3).join(", ") || "manual"}`);
   }
 
   // Translatable monitors: one prompt each.
@@ -78,11 +93,17 @@ export async function batchedReview(planDir: string, io: Pick<KeyIO, "ask" | "pr
     let approve = true;
     if (!o.yes && !skipAll) {
       showRule(io, i, n + 1, rules.length);
-      const a = ((await io.ask("    Approve this check rule? [Y/n/skip-all] ")) ?? "").trim().toLowerCase();
-      if (a === "skip-all" || a === "s") {
-        skipAll = true;
-        approve = false;
-      } else approve = yesNo(a, true);
+      if (io.choose) {
+        const c = await io.choose("Import this check rule?", ["Yes, import it (it starts off)", "No, skip it", "Skip all remaining monitors"], 0);
+        approve = c === 0 || c === null;
+        if (c === 2) skipAll = true;
+      } else {
+        const a = ((await io.ask("    Approve this check rule? [Y/n/skip-all] ")) ?? "").trim().toLowerCase();
+        if (a === "skip-all" || a === "s") {
+          skipAll = true;
+          approve = false;
+        } else approve = yesNo(a, true);
+      }
     } else if (skipAll) approve = false;
     decide(s, i.id, approve ? "approved" : "flagged", approve ? "" : "not approved in review");
     (approve ? r.rulesApproved : r.rulesRejected).push(i.id);

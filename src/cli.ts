@@ -13,9 +13,10 @@ import { runPlan } from "./pipeline/plan.js";
 import { runApply } from "./pipeline/apply.js";
 import { terminalReview } from "./pipeline/review-terminal.js";
 import { guided, terminalIO } from "./flow/run.js";
+import { outOf, Ui } from "./ui/style.js";
 import { createInterface } from "node:readline/promises";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.1";
 
 /**
  * The mapping tables: $DD2DASH0_MAPPINGS, else a mappings/ folder next to the executable (the release download),
@@ -35,6 +36,7 @@ Usage:
 
 Options:
   --yes                 no prompts: keys from env/.env, approve bounded panels and translatable monitors
+  --browser             enter missing keys on a one-time local web page instead of the terminal
   --only <what>         dashboards | monitors
   --out <dir>           run directory (default ./dd2dash0-run/<timestamp>)
   --version, --help
@@ -47,7 +49,7 @@ What it does:
                 becomes a placeholder panel with the original query (nothing is dropped)
   4. import     into Dash0; check rules go in disabled
   5. verify     reads every item back from Dash0, checks the last hour of data against Datadog
-  6. report     translated · landed · live · success %, plus <run>/report.md
+  6. report     translated · landed · live · success %, plus <run>/report.html and report.md
 
 Exit codes: 0 all good, 1 something failed (see report.md), 2 refused, 3 usage or key error.
 Translation is deterministic: parsers, rules and mapping tables. No LLM is involved.
@@ -65,7 +67,7 @@ const USAGE_ADVANCED = `dd2dash0 ${VERSION} advanced commands
 Guided flow, hidden options: --input <dir> (exported Datadog JSON/YAML instead of the API), --dry-run (write
 payloads, import nothing, skip the live checks).`;
 
-const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run"]);
+const GUIDED_FLAGS = new Set(["--yes", "-y", "--only", "--out", "--input", "--dry-run", "--browser"]);
 
 export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   const [cmd, ...rest] = argv;
@@ -91,7 +93,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
 }
 
 async function runGuided(args: string[]): Promise<number> {
-  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input"], ["--yes", "--dry-run"]);
+  const r = readArgs(args.map((a) => (a === "-y" ? "--yes" : a)), ["--only", "--out", "--input"], ["--yes", "--dry-run", "--browser"]);
   if (typeof r === "string" || r._.length) {
     console.error(`${typeof r === "string" ? r : `unexpected argument ${r._[0]}`}\n\n${USAGE}`);
     return EXIT.usage;
@@ -109,6 +111,8 @@ async function runGuided(args: string[]): Promise<number> {
       ...(only ? { only: only as "dashboards" | "monitors" } : {}),
       ...(r.v["--out"] ? { out: r.v["--out"] } : {}),
       dryRun: r.b.has("--dry-run"),
+      browser: r.b.has("--browser"),
+      ui: new Ui(outOf(process.stdout)),
       version: VERSION,
       mappingsDir: defaultMappingsDir(),
       io,

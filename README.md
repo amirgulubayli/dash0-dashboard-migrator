@@ -43,6 +43,6 @@ That's the whole flow. It:
 5. reads every item back from Dash0 and checks the last hour of data against Datadog;
 6. prints **translated · landed · live · success %** and writes `dd2dash0-run/<time>/report.md`, then asks whether to enable the approved rules.
 
-`--yes` runs it without prompts (keys from env/.env), `--only dashboards|monitors` narrows it. Exit codes: 0 all good, 1 something failed (see report.md), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
+Choices are arrow-key lists; the run ends with a result card and writes `report.html` (same report as a page, offline) next to `report.md`. `--browser` enters missing keys on a one-time page on this computer (127.0.0.1, secret link, closes after use; `DD2DASH0_NO_OPEN=1` prints the link without opening a browser). `--yes` runs it without prompts (keys from env/.env), `--only dashboards|monitors` narrows it. Exit codes: 0 all good, 1 something failed (see report.md), 2 refused, 3 usage or key error. Scripting commands (`plan`, `review --terminal`, `apply`, `migrate`) are listed by `--help-advanced`.
 
 **No AI in the translation path.** Translation is rules and mapping tables only. The only network calls are the Datadog API reads, the Dash0 import and read-back, and the read-only data checks. Parked extras (the web console, live viewer and voice narrator) are in `experimental/` and are not part of the CLI.

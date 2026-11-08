@@ -3,9 +3,44 @@
 //   (like readline's default "> " prompt redraw) can paint over the question. Secrets echo nothing at all.
 // - Piped stdin: plain line reading; answers are echoed (never secrets) so a transcript reads right.
 import { createInterface } from "node:readline";
+import { colorEnabled, paint } from "../ui/style.js";
 import type { KeyIO } from "./keys.js";
 
-export type TerminalIO = KeyIO & { close: () => void };
+/**
+ * choose(): pick one option. TTY: an arrow-key list (↑/↓ or j/k, a number key, Enter); piped: a numbered prompt.
+ * Resolves the chosen index, or null at end of input.
+ */
+export type Choose = (question: string, options: string[], defaultIndex?: number) => Promise<number | null>;
+export type TerminalIO = KeyIO & { close: () => void; choose: Choose };
+
+/** Apply one chunk of raw keystrokes to a list selection. Exported for tests. */
+export function chooseKeys(state: { i: number }, chunk: string, n: number): "enter" | "interrupt" | "eof" | null {
+  for (let k = 0; k < chunk.length; k++) {
+    const rest = chunk.slice(k);
+    if (rest.startsWith("\u001b[A") || rest.startsWith("\u001bOA")) {
+      state.i = (state.i - 1 + n) % n;
+      k += 2;
+    } else if (rest.startsWith("\u001b[B") || rest.startsWith("\u001bOB")) {
+      state.i = (state.i + 1) % n;
+      k += 2;
+    } else {
+      const ch = chunk[k]!;
+      if (ch === "\r" || ch === "\n") return "enter";
+      if (ch === "\u0003") return "interrupt";
+      if (ch === "\u0004") return "eof";
+      if (ch === "k") state.i = (state.i - 1 + n) % n;
+      else if (ch === "j") state.i = (state.i + 1) % n;
+      else if (/[1-9]/.test(ch) && Number(ch) <= n) {
+        state.i = Number(ch) - 1;
+        return "enter";
+      } else if (ch === "\u001b") {
+        const m = /^\u001b(?:\[[0-9;?]*[ -/]*[@-~]|O.|.)?/.exec(rest);
+        k += (m?.[0].length ?? 1) - 1;
+      }
+    }
+  }
+  return null;
+}
 
 export function terminalIO(input: NodeJS.ReadStream = process.stdin, output: NodeJS.WriteStream = process.stdout): TerminalIO {
   return input.isTTY === true && typeof input.setRawMode === "function" ? ttyIO(input, output) : pipedIO(input, output);
@@ -91,10 +126,44 @@ function ttyIO(input: NodeJS.ReadStream, output: NodeJS.WriteStream): TerminalIO
         onData(p);
       }
     });
+  const p = paint(colorEnabled({ isTTY: true }));
+  const choose: Choose = (question, options, defaultIndex = 0) =>
+    new Promise((resolve) => {
+      const state = { i: Math.min(Math.max(0, defaultIndex), options.length - 1) };
+      const render = (first: boolean) => {
+        if (!first) output.write(`\x1b[${options.length}A`);
+        options.forEach((o, n) => output.write(`\r\x1b[2K${n === state.i ? `  ${p.accent("❯")} ${o}` : `    ${p.dim(o)}`}\n`));
+      };
+      output.write(`  ${question}\n\x1b[?25l`);
+      render(true);
+      const finish = (v: number | null) => {
+        input.off("data", onData);
+        input.setRawMode(false);
+        input.pause();
+        // Collapse the list to one line: "  question  › choice".
+        output.write(`\x1b[${options.length + 1}A\r\x1b[0J`);
+        output.write(`  ${question}  ${p.dim("›")} ${v === null ? p.dim("(no answer)") : options[v]}\n\x1b[?25h`);
+        resolve(v);
+      };
+      const onData = (data: Buffer | string) => {
+        const r = chooseKeys(state, typeof data === "string" ? data : data.toString("utf8"), options.length);
+        if (r === "enter") finish(state.i);
+        else if (r === "eof") finish(null);
+        else if (r === "interrupt") {
+          input.setRawMode(false);
+          output.write("\x1b[?25h\n");
+          process.exit(130);
+        } else render(false);
+      };
+      input.setRawMode(true);
+      input.resume();
+      input.on("data", onData);
+    });
   return {
     ask: (p) => ask(p, false),
     askSecret: (p) => ask(p.replace(/:\s*$/, " (hidden as you type): "), true),
     print: (l) => output.write(l + "\n"),
+    choose,
     close: () => {
       if (input.isRaw) input.setRawMode(false);
       input.pause();
@@ -123,5 +192,22 @@ function pipedIO(input: NodeJS.ReadStream, output: NodeJS.WriteStream): Terminal
       else if (closed) done(null);
       else waiting = done;
     });
-  return { ask: (p) => ask(p, false), askSecret: (p) => ask(p, true), print: (l) => output.write(l + "\n"), close: () => rl.close() };
+  const choose: Choose = async (question, options, defaultIndex = 0) => {
+    output.write(`  ${question}\n`);
+    options.forEach((o, n) => output.write(`    ${n + 1}. ${o}\n`));
+    for (;;) {
+      const a = await ask(`  choose 1-${options.length} [${defaultIndex + 1}]: `, false);
+      if (a === null) return null;
+      const t = a.trim().toLowerCase();
+      if (t === "") return defaultIndex;
+      const n = Number(t);
+      if (Number.isInteger(n) && n >= 1 && n <= options.length) return n - 1;
+      // y / n shortcuts for yes/no style lists (first option = yes).
+      if (t === "y" || t === "yes") return 0;
+      if ((t === "n" || t === "no") && options.length >= 2) return 1;
+      const byWord = options.findIndex((o) => o.toLowerCase().startsWith(t));
+      if (byWord >= 0) return byWord;
+    }
+  };
+  return { ask: (p) => ask(p, false), askSecret: (p) => ask(p, true), print: (l) => output.write(l + "\n"), choose, close: () => rl.close() };
 }
