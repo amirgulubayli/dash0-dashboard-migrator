@@ -16,6 +16,7 @@ import { explain } from "./flow/explain.js";
 import { guided, terminalIO } from "./flow/run.js";
 import { outOf, Ui } from "./ui/style.js";
 import { createInterface } from "node:readline/promises";
+import { startUi } from "./web/server.js";
 
 export const VERSION = "0.5.0";
 
@@ -54,6 +55,8 @@ Options:
 
   dd2dash0 explain "<query>"   show one Datadog query going through the engine: the parse tree, the mapping
                                tables, the rules that fire, the PromQL and the exact claim
+  dd2dash0 ui [--input <dir>]  a local web page that runs plan, review, apply and watch with this CLI and shows
+                               its output live (http://127.0.0.1:7319; demo data when there is no input or key)
 
 What it does:
   1. keys       finds DD_API_KEY, DD_APP_KEY, DD_SITE, DASH0_API_URL, DASH0_AUTH_TOKEN, DASH0_DATASET in the
@@ -111,6 +114,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
   if (cmd === "review") return runReviewCmd(rest);
   if (cmd === "apply") return runApplyCmd(rest);
   if (cmd === "migrate") return runMigrate(rest);
+  if (cmd === "ui") return startUi(rest, VERSION);
   console.error(`unknown command: ${cmd} (try --help)`);
   return 3;
 }
