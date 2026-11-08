@@ -16,52 +16,58 @@ import { createInterface } from "node:readline/promises";
 import { datadogEnv, durationMs, findDatadogMonitor, plannedAlerts, runWatch, type WatchedAlert } from "./pipeline/watch.js";
 import { defaultMappingsDir, homeDir } from "./home.js";
 import { writeProof } from "./pipeline/proof.js";
+import { styler } from "./term.js";
 
 export const VERSION = "0.2.0";
+/** Defaults kept off 4317/4318, the OTLP ports a local OpenTelemetry Collector listens on. */
+export const REVIEW_PORT = 7318;
+export const SERVE_PORT = 7317;
+const ui = styler();
+const print = (lines: string[]) => lines.forEach((l, i) => console.log(i === 0 ? ui.bold(ui.claims(l)) : ui.claims(l)));
 
-const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards + monitors to Dash0 (Perses, PromQL, check rules)
+const USAGE = `dd2dash0 ${VERSION}: migrate Datadog dashboards and monitors to Dash0 (Perses dashboards, PromQL, check rules)
 
-Usage:
-  dd2dash0 plan  (--input <dir> | --api) [--config dd2dash0.yaml] [--out plan] [options]   translate, import nothing
-  dd2dash0 review <plan dir> [--terminal] [--port 4318] [--reviewer <name>]                 decide what gets imported
-  dd2dash0 apply <plan dir> --approved <review.json> [--enable-rules] [--allow-pending] [--dry-run]
-  dd2dash0 watch <plan dir> [--alert <name>] [--dd-monitor <name>=<id>,...] [--every 5s] [--max 30m] [--until-recovered]
-  dd2dash0 proof <plan dir> [--corpus corpus.json] [--out proof.html]                      one-page evidence (offline HTML)
-  dd2dash0 migrate --from datadog (--input <dir> | --api) [options]                        one-shot: translate + import all
-  dd2dash0 serve [--out <dir>] [--port 4317] [--pace <ms>]    live viewer (+ voice narrator) for a run
+The reviewed flow, three steps:
+  1. dd2dash0 plan --input <dir> | --api [--out plan]      translate everything, import nothing
+  2. dd2dash0 review plan                                  decide in the browser (or add --terminal)
+  3. dd2dash0 apply plan --approved plan/review.json       import only what you approved
 
-Options:
+Then show it works:
+  dd2dash0 watch plan [--alert <name>]     Datadog monitor and migrated Dash0 rule side by side, parity verdict
+  dd2dash0 proof plan                      one offline page: coverage, alert timeline, every item that needs a person
+
+Other:
+  dd2dash0 migrate --from datadog --input <dir> | --api [--dry-run | --no-import]   one shot, no review step
+  dd2dash0 serve [--out <dir>]             replay a migrate run in the browser (optional voice narrator)
+  dd2dash0                                 with no arguments in a terminal: the interactive app
+
+Every claim in the output is one of five words:
+  exact         same numbers as Datadog
+  exact-under   exact if its stated conditions hold (shown per item)
+  bounded       approximate, within a proven error bound (shown per item)
+  manual        needs a person; the panel keeps the original query as a placeholder
+  unsupported   no Dash0 equivalent; placeholder with the original
+
+Options for plan and migrate:
   --input <dir>        folder of exported Datadog JSON or YAML (dashboards and monitors, any depth)
   --api                read from the Datadog API (DD_SITE, default datadoghq.eu; DD_API_KEY, DD_APP_KEY)
-  --dry-run            translate and write the Dash0 payloads to <out>/dash0, import nothing
-  --no-import          translate and report only
-  --out <dir>          output directory (default ./out): report.json, report.md, dash0/
+  --out <dir>          output directory (plan: ./plan, migrate: ./out)
   --only <what>        dashboards | monitors
   --enable-rules       import check rules enabled (default: disabled, D-30)
   --mappings <dir>     mapping tables (default: the package's mappings/)
-  --channels <file>    Datadog @handle -> existing Dash0 notification channel id (default: <mappings>/notification-channels.yaml)
+  --channels <file>    Datadog @handle -> existing Dash0 notification channel id
+Options for review:  --terminal  --port ${REVIEW_PORT}  --reviewer <name>
+Options for apply:   --dry-run (write payloads, import nothing)  --allow-pending  --enable-rules  --skip-source-check
+Options for watch:   --dd-monitor <name>=<id>,...  --every 5s  --max 30m  --until-recovered
 
-plan writes a plan directory (report.json, report.md, events.jsonl, dash0/ payloads, plan.lock). A review
-(review.json from the console) binds to the plan's hash; apply imports only what was approved and refuses on a
-changed plan, a review of another plan, a changed Datadog source, or approximate panels with no decision.
-Exit codes (plan, apply): 0 ok, 1 some imports failed, 2 refused, 3 usage or config error.
+apply refuses if the plan changed, the review belongs to another plan, the Datadog source changed, or an
+approximate panel has no decision. Live import needs DASH0_API_URL and DASH0_AUTH_TOKEN (optional DASH0_DATASET);
+watch also needs DD_API_KEY and DD_APP_KEY.
 
-watch polls each Datadog monitor and the Dash0 check rule migrated from it, writes <plan>/watch/timeline.json
-and parity.json, and passes when both fire at the same severity within 2 x the rule interval + the poll interval.
-The Dash0 state is computed from the rule's own query and thresholds (labelled "computed").
-Exit codes (watch): 0 parity passed, 1 failed or no incident seen, 3 usage, config or API error.
-
-proof writes <plan>/proof/proof.html from the plan, apply/ and watch/ (and a corpus-coverage --json file): coverage,
-the alert timeline and verdict, and every item that needs a person. Self-contained, no network; same inputs, same bytes.
-
-migrate writes <out>/report.json, report.md, events.jsonl and (unless --no-import) <out>/dash0/.
-serve replays <out>'s run in the browser; with ELEVENLABS_AGENT_ID + ELEVENLABS_API_KEY set, an ElevenLabs
-voice agent narrates it and answers questions (setup: src/serve/VOICE_AGENT.md).
-
-Live import needs DASH0_API_URL and DASH0_AUTH_TOKEN (and optionally DASH0_DATASET), e.g.
-  npx tsx --env-file=.env src/cli.ts migrate --from datadog --input fixtures/datadog
-
+Exit codes: 0 ok, 1 some imports failed (watch: no parity), 2 refused, 3 usage, config or API error.
 Translation is deterministic: rules, parsers and mapping tables. No LLM is involved.`;
+
+const EXIT = { ok: 0, failed: 1, refused: 2, usage: 3 } as const;
 
 export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   const [cmd, ...rest] = argv;
@@ -81,7 +87,7 @@ export function main(argv: string[] = process.argv.slice(2)): number | Promise<n
   if (cmd === "migrate") return runMigrate(rest);
   if (cmd === "serve") return runServe(rest);
   console.error(`unknown command: ${cmd} (try --help)`);
-  return 2;
+  return EXIT.usage;
 }
 
 interface Flags {
@@ -139,7 +145,7 @@ async function runMigrate(args: string[]): Promise<number> {
   const f = parseFlags(args);
   if (typeof f === "string") {
     console.error(`${f}\n\n${USAGE}`);
-    return 2;
+    return EXIT.usage;
   }
   const mode = f.noImport ? "none" : f.dryRun ? "dry-run" : "live";
   let dash0;
@@ -148,7 +154,7 @@ async function runMigrate(args: string[]): Promise<number> {
       dash0 = configFromEnv();
     } catch (e) {
       console.error(`${(e as Error).message}\nUse --dry-run to translate without importing.`);
-      return 2;
+      return EXIT.usage;
     }
   }
   try {
@@ -165,7 +171,7 @@ async function runMigrate(args: string[]): Promise<number> {
     });
     const files = writeReport(r.report, resolve(f.out));
     writeFileSync(join(resolve(f.out), "events.jsonl"), reportToEvents(r.report).map((e) => JSON.stringify(e)).join("\n") + "\n");
-    for (const l of summaryLines(r.report, files)) console.log(l);
+    print(summaryLines(r.report, files, { command: "migrate" }));
     if (r.manifest) {
       for (const x of r.manifest.results.filter((x) => x.errors.length)) console.error(`  ! ${x.kind} ${x.id}: ${x.errors.join("; ")}${x.traceId ? ` (traceId ${x.traceId})` : ""}`);
     }
@@ -175,8 +181,6 @@ async function runMigrate(args: string[]): Promise<number> {
     return 1;
   }
 }
-
-const EXIT = { ok: 0, failed: 1, refused: 2, usage: 3 } as const;
 
 /** Reads `--name value` / `--flag` pairs; positional arguments are returned in `_`. */
 function readArgs(args: string[], valued: string[], bools: string[]): { _: string[]; v: Record<string, string>; b: Set<string> } | string {
@@ -244,12 +248,13 @@ async function runPlanCmd(args: string[]): Promise<number> {
       ...(only ? { only: only as "dashboards" | "monitors" } : {}),
       version: VERSION,
     });
-    for (const l of summaryLines(p.result.report, p.files)) console.log(l);
-    console.log(`  plan ${p.planHash.slice(0, 16)}  ->  next: review it (dd2dash0 review ${r.v["--out"] ?? "plan"}), then dd2dash0 apply ${r.v["--out"] ?? "plan"} --approved <review.json>`);
+    print(summaryLines(p.result.report, p.files, { command: "plan", planHash: p.planHash }));
+    const dir = r.v["--out"] ?? "plan";
+    console.log(`\n  next  ${ui.bold(`dd2dash0 review ${dir}`)}   then   ${ui.bold(`dd2dash0 apply ${dir} --approved ${join(dir, "review.json")}`)}`);
     return EXIT.ok;
   } catch (e) {
-    console.error(`dd2dash0 plan: ${(e as Error).message}`);
-    return EXIT.failed;
+    console.error(ui.bad(`dd2dash0 plan: ${(e as Error).message}`));
+    return EXIT.usage; // nothing was imported, so 1 ("some imports failed") would mislead
   }
 }
 
@@ -260,7 +265,7 @@ async function runReviewCmd(args: string[]): Promise<number> {
     return EXIT.usage;
   }
   const planDir = resolve(r._[0]!);
-  const reviewer = r.v["--reviewer"] ?? process.env.USER ?? "";
+  const reviewer = r.v["--reviewer"] ?? process.env.USER ?? process.env.USERNAME ?? "";
   if (r.b.has("--terminal")) {
     // Read lines through the async iterator: it buffers input, so piped keystrokes aren't lost between prompts
     // (readline's question() drops lines that arrive while no question is pending).
@@ -284,7 +289,7 @@ async function runReviewCmd(args: string[]): Promise<number> {
       rl.close();
     }
   }
-  const port = Number(r.v["--port"] ?? 4318);
+  const port = Number(r.v["--port"] ?? REVIEW_PORT);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     console.error("--port must be a port number");
     return EXIT.usage;
@@ -390,26 +395,32 @@ async function runApplyCmd(args: string[]): Promise<number> {
     });
     for (const w of o.warnings) console.error(`  warning: ${w}`);
     if (o.kind === "refused") {
-      console.error("dd2dash0 apply: refused");
+      console.error(ui.bad("dd2dash0 apply: refused, nothing imported"));
       for (const x of o.reasons) console.error(`  ${x}`);
       return EXIT.refused;
     }
     const m = o.manifest.summary;
-    console.log(`dd2dash0 apply: ${dryRun ? "dry run, nothing imported" : "imported"}: ${o.imported.dashboards} dashboard(s), ${o.imported.rules} check rule(s)`);
-    console.log(`  ${dryRun ? `written ${m["dry-run"]}` : `imported ${m.imported}, read back identical ${m.readBackMatch}`}, failed ${m.failed}, rejected by preflight ${m["rejected-preflight"]}`);
-    if (o.placeholders.length) console.log(`  flagged in review -> placeholder: ${o.placeholders.length} panel(s)`);
-    if (o.skippedAlerts.length) console.log(`  check rules not imported (flagged or not approved): ${o.skippedAlerts.join(", ")}`);
+    console.log(ui.bold(`dd2dash0 apply  ${dryRun ? "dry run: nothing imported" : "imported into Dash0"}`));
+    const n = (k: number, one: string) => `${k} ${one}${k === 1 ? "" : "s"}`;
+    console.log(`  ${"scope".padEnd(9)}${n(o.imported.dashboards, "dashboard")} (exact items need no review) · ${n(o.imported.rules, "check rule")} you approved`);
+    console.log(`  ${(dryRun ? "written" : "imported").padEnd(9)}${dryRun ? `${m["dry-run"]} payloads` : `${m.imported} · ${m.readBackMatch} read back identical`} · ${m.failed} failed · ${m["rejected-preflight"]} rejected by preflight`);
+    if (o.placeholders.length) console.log(`  ${"flagged".padEnd(9)}${o.placeholders.length} panel(s) imported as placeholders with the reviewer's note`);
+    if (o.skippedAlerts.length) console.log(`  ${"skipped".padEnd(9)}check rules not approved: ${o.skippedAlerts.join(", ")}`);
     for (const x of o.manifest.results.filter((x) => x.errors.length)) console.error(`  ! ${x.kind} ${x.id}: ${x.errors.join("; ")}${x.traceId ? ` (traceId ${x.traceId})` : ""}`);
-    console.log(`  report: ${o.reportFile}${o.ok ? "" : "  (re-run apply to retry what failed; imports are idempotent)"}`);
+    console.log(`  ${"report".padEnd(9)}${o.reportFile}${o.ok ? "" : ui.warn("  (re-run apply to retry what failed; imports are idempotent)")}`);
+    if (o.ok && !dryRun) console.log(`\n  next  ${ui.bold(`dd2dash0 watch ${r._[0]}`)}   then   ${ui.bold(`dd2dash0 proof ${r._[0]}`)}`);
     return o.ok ? EXIT.ok : EXIT.failed;
   } catch (e) {
-    console.error(`dd2dash0 apply: ${(e as Error).message}`);
-    return EXIT.failed;
+    // runApply only throws before importing (imports report failures per item), so this is a usage/config/API error.
+    const msg = (e as Error).message;
+    console.error(ui.bad(`dd2dash0 apply: ${msg}`));
+    if (!/plan directory|plan schema/.test(msg)) console.error("  (apply re-reads the Datadog source to check it didn't change; pass --skip-source-check if it isn't reachable)");
+    return EXIT.usage;
   }
 }
 
 async function runServe(args: string[]): Promise<number> {
-  let out = "out", port = 4317, pace = 700;
+  let out = "out", port = SERVE_PORT, pace = 700;
   for (let i = 0; i < args.length; i++) {
     const a = args[i], v = args[i + 1];
     if (a === "--out" && v) (out = v), i++;
@@ -417,14 +428,14 @@ async function runServe(args: string[]): Promise<number> {
     else if (a === "--pace" && v && Number.isFinite(Number(v))) (pace = Number(v)), i++;
     else {
       console.error(`unknown or incomplete option ${a}\n\n${USAGE}`);
-      return 2;
+      return EXIT.usage;
     }
   }
   try {
     loadReport(resolve(out));
   } catch (e) {
     console.error((e as Error).message);
-    return 2;
+    return EXIT.usage;
   }
   const agentId = process.env.ELEVENLABS_AGENT_ID?.trim();
   const elevenLabsKey = process.env.ELEVENLABS_API_KEY?.trim();

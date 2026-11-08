@@ -92,7 +92,11 @@ describe("review server", () => {
       i.status === "bounded" ? { id: i.id, decision: "approved", note: "" } : i.kind === "alert" && i.status !== "manual" ? { id: i.id, decision: "approved", note: "" } : { id: i.id, decision: "acknowledged", note: "" },
     );
     const reportSha = createHash("sha256").update(readFileSync(join(planDir, "report.json"))).digest("hex");
-    const post = (body: unknown) => fetch(url + "api/review", { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body) });
+    const post = (body: unknown, headers: Record<string, string> = { "content-type": "application/json" }) =>
+      fetch(url + "api/review", { method: "POST", headers, body: typeof body === "string" ? body : JSON.stringify(body) });
+    // Only the console on this machine may save: JSON content type, local Host, same-origin Origin.
+    expect((await post({}, {})).status).toBe(415);
+    expect((await post({}, { "content-type": "application/json", origin: "https://evil.example" })).status).toBe(403);
     expect((await post("{not json")).status).toBe(400);
     const bad = await post({ schema_version: "1", report_sha256: reportSha, decisions: [{ id: decisions[0]!.id, decision: "approved" }] });
     expect(bad.status).toBe(409); // approving a manual item isn't allowed

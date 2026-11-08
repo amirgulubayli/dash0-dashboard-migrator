@@ -33,7 +33,7 @@ Keep answers under 4 sentences unless asked for detail.
 npx tsx src/cli.ts migrate --from datadog --input fixtures/datadog --dry-run --out out
 ELEVENLABS_AGENT_ID=<agent id> ELEVENLABS_API_KEY=<key> npx tsx src/cli.ts serve --out out
 ```
-Open http://127.0.0.1:4317 and click **Start voice**. Use `localhost` or `127.0.0.1`: browsers allow the microphone only there or over HTTPS. **Replay** restarts the run. `--pace <ms>` sets the speed.
+Open http://127.0.0.1:7317 and click **Start voice**. Use `localhost` or `127.0.0.1`: browsers allow the microphone only there or over HTTPS. **Replay** restarts the run. `--pace <ms>` sets the speed.
 
 How it behaves:
 - Every event goes to the agent as silent context (`sendContextualUpdate`).

@@ -21,7 +21,7 @@ Changes from rev 1 are listed in §10.
 ## 3. Commands (`src/cli.ts`, HOT)
 ```
 dd2dash0 plan   [--config dd2dash0.yaml] (--input <dir> | --api) [--select <glob>…] [--out plan/]
-dd2dash0 review plan/ [--terminal] [--port 4317]
+dd2dash0 review plan/ [--terminal] [--port 7318]
 dd2dash0 apply  plan/ --approved plan/review.json [--enable-rules] [--allow-pending] [--force] [--verify-data] [--ui]
 dd2dash0 migrate …        # one-shot: plan + apply of everything, as today (kept for scripts and the live dry runs)
 dd2dash0 diff planA/ planB/

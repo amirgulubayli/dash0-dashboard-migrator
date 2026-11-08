@@ -25,7 +25,7 @@ export function renderMarkdown(r: Report): string {
   L.push("| | " + ORDER.join(" | ") + " |", "|---|" + ORDER.map(() => "---:").join("|") + "|");
   for (const [k, v] of Object.entries(s.byKind)) L.push(`| ${k} | ${ORDER.map((o) => v[o] ?? 0).join(" | ")} |`);
   L.push("");
-  if (s.import) L.push(importLine(s.import) + ".", "");
+  if (s.import) L.push(`${s.import.mode === "dry-run" ? "Dry run" : "Import"}: ${importLine(s.import)}.`, "");
   L.push("Status meanings: **exact**, same numbers for any data. **exact-under**, exact while the listed assumptions hold. **bounded**, within a stated error. **manual**, not translated (the original is kept). **unsupported**, no Dash0 equivalent (placeholder panel).", "");
 
   const dashboards = [...new Set(r.items.filter((i) => i.kind === "panel").map((i) => i.dashboard!))];
@@ -48,25 +48,47 @@ export function renderMarkdown(r: Report): string {
   return L.join("\n");
 }
 
-export function summaryLines(r: Report, files: { json: string; md: string }): string[] {
+export interface SummaryContext {
+  /** plan writes payloads for review instead of a dry run; it also has a plan hash that review.json binds to. */
+  command?: "migrate" | "plan";
+  planHash?: string;
+}
+
+/**
+ * The terminal summary of a run, in the report's own claim words (exact, exact-under, bounded, manual, unsupported),
+ * so the CLI, report.md and the console use one vocabulary. Plain text: the CLI adds colour on a TTY (src/term.ts).
+ */
+export function summaryLines(r: Report, files: { json: string; md: string }, ctx: SummaryContext = {}): string[] {
   const s = r.summary;
-  const line = (label: string, v: Partial<Record<ReportStatus, number>> | undefined) =>
-    `  ${label.padEnd(8)} ${ORDER.map((o) => `${o} ${v?.[o] ?? 0}`).join("  ")}`;
+  const label = (l: string) => `  ${l.padEnd(9)}`;
+  const counts = (v: Partial<Record<ReportStatus, number>> | undefined) => {
+    const parts = ORDER.filter((o) => (v?.[o] ?? 0) > 0).map((o) => `${v![o]} ${o}`);
+    const total = ORDER.reduce((n, o) => n + (v?.[o] ?? 0), 0);
+    return parts.length ? `${parts.join(" · ")}   (${total})` : "none";
+  };
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
   const out = [
-    `dd2dash0 ${r.run.version}: ${s.dashboards} dashboards, ${s.alerts} monitors`,
-    line("panels", s.byKind.panel),
-    line("alerts", s.byKind.alert),
-    `  coverage (query panels): exact/exact-under ${pct(s.coverageExact)}, translated ${pct(s.coverageTranslated)}`,
+    `dd2dash0 ${r.run.version}  ${plural(s.dashboards, "dashboard")}, ${plural(s.alerts, "monitor")}`,
+    label("panels") + counts(s.byKind.panel),
+    label("monitors") + counts(s.byKind.alert),
+    label("coverage") + `${pct(s.coverageExact)} of query panels exact or exact-under · ${pct(s.coverageTranslated)} translated (adds bounded)`,
+    label("claims") + "exact-under = exact if its stated conditions hold · bounded = within a proven error bound · manual = needs a person",
   ];
-  if (s.import) out.push(`  ${importLine(s.import)}`);
-  out.push(`  output hash ${r.run.outputHash.slice(0, 16)} (same input -> same hash)`, `  report: ${files.json}`, `          ${files.md}`);
+  if (s.import) out.push(label(importLabel(s.import, ctx)) + importLine(s.import, ctx));
+  if (ctx.planHash) out.push(label("plan") + `${ctx.planHash.slice(0, 16)}  (review.json binds to this)`);
+  out.push(label("output") + `${r.run.outputHash.slice(0, 16)}  (same input -> same hash)`, label("report") + files.json, label("") + files.md);
   return out;
 }
 
-function importLine(i: NonNullable<Report["summary"]["import"]>): string {
+function importLabel(i: NonNullable<Report["summary"]["import"]>, ctx: SummaryContext): string {
+  return ctx.command === "plan" ? "payloads" : i.mode === "dry-run" ? "dry run" : "imported";
+}
+
+function importLine(i: NonNullable<Report["summary"]["import"]>, ctx: SummaryContext = {}): string {
+  if (ctx.command === "plan") return `${i.written} Dash0 payloads ready for review · ${i.rejected} rejected by preflight · nothing imported yet`;
   return i.mode === "dry-run"
-    ? `dry run: ${i.written} Dash0 payloads written, ${i.rejected} rejected by preflight (nothing imported)`
-    : `import: ${i.imported} imported, ${i.readBackMatch} read back identical, ${i.failed} failed, ${i.rejected} rejected by preflight`;
+    ? `${i.written} Dash0 payloads written · ${i.rejected} rejected by preflight · nothing imported`
+    : `${i.imported} imported · ${i.readBackMatch} read back identical · ${i.failed} failed · ${i.rejected} rejected by preflight`;
 }
 
 const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");

@@ -52,10 +52,21 @@ export function dashboardFromDatadog(json: unknown, ref: SourceRef): { dashboard
   }
 
   const items: (Panel | Group)[] = [];
+  // One id per widget in the whole dashboard (groups included), built exactly like T5's payload panel keys:
+  // characters outside [A-Za-z0-9_-] become _, and a repeated id gets _2, _3 ... So report item ids, findings and
+  // the Dash0 panel keys agree even when an export repeats a widget id (review decisions are keyed by item id).
+  const used = new Set<string>();
+  const uniq = (raw: string) => {
+    const base = raw.replace(/[^A-Za-z0-9_-]/g, "_");
+    let k = base;
+    for (let n = 2; used.has(k); n++) k = `${base}_${n}`;
+    used.add(k);
+    return k;
+  };
   for (const [i, w] of (d.widgets as unknown[]).entries()) {
-    const path = `${dashId}/w-${widgetId(w, String(i))}`;
+    const path = `${dashId}/${uniq(`w-${widgetId(w, String(i))}`)}`;
     if (isObj(w) && isObj(w.definition) && w.definition.type === "group") {
-      items.push(group(w, path, find));
+      items.push(group(w, path, find, uniq));
     } else {
       items.push(panel(w, path, find));
     }
@@ -103,15 +114,15 @@ function layoutOf(w: Json): Layout | null {
   return [x, y, wd, h].every(Number.isFinite) ? { x, y, w: wd, h } : null;
 }
 
-function group(w: Json, path: string, find: (f: Omit<Finding, "itemId" | "itemKind"> & { itemId?: string; itemKind?: Finding["itemKind"] }) => void): Group {
+function group(w: Json, path: string, find: (f: Omit<Finding, "itemId" | "itemKind"> & { itemId?: string; itemKind?: Finding["itemKind"] }) => void, uniq: (raw: string) => string): Group {
   const def = w.definition as Json;
   const panels: Panel[] = [];
   for (const [i, c] of (Array.isArray(def.widgets) ? def.widgets : []).entries()) {
-    const cpath = `${path}/w-${widgetId(c, String(i))}`;
+    const cpath = `${path}/${uniq(`w-${widgetId(c, String(i))}`)}`;
     if (isObj(c) && isObj(c.definition) && c.definition.type === "group") {
       // Datadog doesn't nest groups; if an export does, keep the children and say so.
       find({ status: "bounded", code: "widget.nested_group", itemKind: "group", itemId: cpath, message: "nested group flattened into its parent group", original: "group" });
-      panels.push(...group(c, cpath, find).panels);
+      panels.push(...group(c, cpath, find, uniq).panels);
     } else panels.push(panel(c, cpath, find));
   }
   return {

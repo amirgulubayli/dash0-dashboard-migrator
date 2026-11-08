@@ -90,6 +90,19 @@ export function startReviewServer(o: ReviewServerOptions): Promise<{ server: Ser
       }
       if (url.pathname === "/api/review") {
         if (req.method !== "POST") return json({ error: "POST a review.json" }, 405);
+        // Only the console on this machine may save a review: a page elsewhere (or one using DNS rebinding) could
+        // otherwise POST an approve-everything review.json that apply would honour.
+        const port = (server.address() as { port?: number } | null)?.port;
+        const local = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
+        const origin = req.headers.origin;
+        const refuse = (error: string, code: number) => {
+          req.resume(); // drain the unread body so the keep-alive connection stays usable
+          res.setHeader("Connection", "close");
+          return json({ error }, code);
+        };
+        if (!local.has(req.headers.host ?? "")) return refuse("reviews are accepted only from this machine (Host)", 403);
+        if (origin !== undefined && !local.has(origin.replace(/^https?:\/\//, ""))) return refuse("reviews are accepted only from the console served here (Origin)", 403);
+        if (!/^application\/json\b/i.test(req.headers["content-type"] ?? "")) return refuse("send review.json as Content-Type: application/json", 415);
         const body = await readBody(req, 5_000_000);
         let review;
         try {

@@ -41,7 +41,7 @@ describe("CLI flags", () => {
     delete process.env.DASH0_API_URL;
     delete process.env.DASH0_AUTH_TOKEN;
     try {
-      expect(await main(["migrate", "--from", "datadog", "--input", join(ROOT, "fixtures", "datadog")])).toBe(2);
+      expect(await main(["migrate", "--from", "datadog", "--input", join(ROOT, "fixtures", "datadog")])).toBe(3); // config error, not "refused"
     } finally {
       if (saved.u !== undefined) process.env.DASH0_API_URL = saved.u;
       if (saved.t !== undefined) process.env.DASH0_AUTH_TOKEN = saved.t;
