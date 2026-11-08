@@ -12,15 +12,9 @@
 // (T5) or layout.
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { ddKindLookup, loadDdKinds, loadMappings, metricAvailability, metricLookup, tagLookup, worst } from "../src/ir/index.js";
+import { loadMappings, worst } from "../src/ir/index.js";
 import type { Status } from "../src/ir/index.js";
-import { parseFormula, parseMonitorQuery, parseQuery, parseQueryList } from "../src/parse/index.js";
-import type { Expr } from "../src/parse/index.js";
-import { translateMonitor, translateQuery } from "../src/translate/query/index.js";
-import type { FormulaEnv, TranslateContext } from "../src/translate/query/index.js";
-import { loadLogAttributes, logRef, translateLogMonitor, translateLogQuery } from "../src/translate/logs/index.js";
-import type { DatadogLogQuery, LogTranslateContext } from "../src/translate/logs/index.js";
-import { validatePromQL } from "../src/validate/promql.js";
+import { coverageCollector, type CoverageItem, type QueryKind } from "../src/report/query-coverage.js";
 
 const args = process.argv.slice(2);
 const flag = (n: string) => {
@@ -36,156 +30,16 @@ if (!root || !existsSync(root)) {
 // Resolved from this file, so the script works from any working directory.
 const mappingsDir = join(import.meta.dirname, "..", "mappings");
 const maps = loadMappings(mappingsDir);
-const ddKind = ddKindLookup(loadDdKinds(mappingsDir), maps);
-const attributes = loadLogAttributes(join(mappingsDir, "log-attributes.yaml"));
 
-type Kind =
-  | "metric formula / query"
-  | "legacy q"
-  | "log query"
-  | "log formula"
-  | "metric monitor"
-  | "log monitor";
-
-interface Item {
-  kind: Kind;
-  status: Status;
-  /** The distinct-ness key (so each distinct query counts once in the "distinct" columns). */
-  key: string;
-  /** First manual finding code, when status is manual. */
-  reason?: string;
-  /** The translation kept a Datadog metric name because the mapping table has no entry (metric.unmapped). */
-  unmapped: boolean;
-  /** Datadog metric names kept as-is because the mapping table has no entry. */
-  unmappedNames: string[];
-  /** The emitted PromQL failed lezer validation (must stay 0). */
-  invalid: boolean;
-  integration: string;
-}
-const items: Item[] = [];
-/** Things we did not attempt, by reason, so denominators stay honest. */
-const skipped = new Map<string, number>();
+// The classification lives in src/report/query-coverage.ts, shared with every run's report.
+type Kind = QueryKind;
+type Item = CoverageItem & { integration: string };
+const collector = coverageCollector(mappingsDir, maps);
+const items = collector.items as Item[];
+const skipped = collector.skipped;
 const skip = (why: string) => skipped.set(why, (skipped.get(why) ?? 0) + 1);
-
-function record(kind: Kind, key: string, integration: string, t: { status: Status; promql: string | null; findings: { code: string; status: string; message?: string }[] }): void {
-  const reason = t.status === "manual" ? t.findings.find((f) => f.status === "manual")?.code ?? t.findings[0]?.code ?? "unknown" : undefined;
-  const invalid = t.promql !== null && !validatePromQL(t.promql.replace(/\$__threshold/g, "1")).ok;
-  items.push({
-    kind,
-    status: invalid ? "manual" : t.status,
-    key: `${kind}|${key}`,
-    reason: invalid ? "promql.invalid" : reason,
-    unmapped: t.findings.some((f) => f.code === "metric.unmapped"),
-    unmappedNames: t.findings.flatMap((f) => (f.code === "metric.unmapped" ? [/no mapping for ([^;\s]+)/.exec(f.message ?? "")?.[1] ?? "?"] : [])),
-    invalid,
-    integration,
-  });
-}
-
-const num = (v: unknown): number | undefined => (v === undefined || v === null || v === "" || Number.isNaN(Number(v)) ? undefined : Number(v));
-
-function dashboardCtx(dash: any): { m: TranslateContext; l: LogTranslateContext } {
-  const variables: NonNullable<TranslateContext["variables"]> = {};
-  for (const v of dash.template_variables ?? []) variables[v.name] = { tag: v.prefix ?? null };
-  return {
-    m: { metric: metricLookup(maps), availability: (dd) => metricAvailability(maps, dd), ddKind, tag: tagLookup(maps), variables },
-    l: { attributes, variables },
-  };
-}
-
-function walkWidgets(ws: any[], fn: (d: any) => void): void {
-  for (const w of ws ?? []) {
-    const d = w?.definition;
-    if (!d) continue;
-    if (Array.isArray(d.widgets)) walkWidgets(d.widgets, fn); // group
-    else fn(d);
-  }
-}
-
-function doDashboard(file: string, integration: string): void {
-  const dash = JSON.parse(readFileSync(file, "utf8"));
-  const { m: mctx, l: lctx } = dashboardCtx(dash);
-  walkWidgets(dash.widgets, (d) => {
-    const reqs: any[] = Array.isArray(d.requests) ? d.requests : d.requests && typeof d.requests === "object" ? Object.values(d.requests).flat() : [];
-    for (const req of reqs as any[]) {
-      if (!req || typeof req !== "object") continue;
-      if (Array.isArray(req.queries)) {
-        const env: FormulaEnv = new Map();
-        let sawLog = false;
-        let broken = false;
-        for (const q of req.queries) {
-          const ds = q.data_source ?? "metrics";
-          if (ds === "metrics") {
-            const p = parseQuery(q.query ?? "");
-            if (!p.ok) {
-              record("metric formula / query", q.query ?? "", integration, { status: "manual", promql: null, findings: [{ code: "query.parse_error", status: "manual" }] });
-              broken = true;
-              continue;
-            }
-            env.set(q.name, p.value as Expr);
-          } else if (ds === "logs") {
-            sawLog = true;
-            const t = translateLogQuery(q as DatadogLogQuery, lctx);
-            record("log query", JSON.stringify([q.search, q.compute, q.group_by, q.indexes]), integration, t);
-            env.set(q.name, logRef(t));
-          } else skip(`data_source:${ds}`);
-        }
-        if (broken) continue;
-        const names = [...env.keys()];
-        if (names.length === 0) continue;
-        if (Array.isArray(req.formulas) && req.formulas.length) {
-          for (const f of req.formulas) {
-            const p = parseFormula(f.formula);
-            const kind: Kind = sawLog ? "log formula" : "metric formula / query";
-            const key = JSON.stringify([f.formula, req.queries.map((q: any) => q.query ?? q.search)]);
-            if (!p.ok) record(kind, key, integration, { status: "manual", promql: null, findings: [{ code: "query.parse_error", status: "manual" }] });
-            else {
-              // A formula that touches a data source we did not translate (events, apm, ...) cannot be translated.
-              const used = req.queries.filter((q: any) => !env.has(q.name)).length;
-              if (used) record(kind, key, integration, { status: "manual", promql: null, findings: [{ code: "query.datasource", status: "manual" }] });
-              else record(kind, key, integration, translateQuery(p.value, mctx, env));
-            }
-          }
-        } else {
-          for (const q of req.queries) {
-            if ((q.data_source ?? "metrics") !== "metrics") continue; // logs already recorded above
-            const e = env.get(q.name);
-            if (e && "type" in (e as object) === false) continue;
-            const p = parseQuery(q.query);
-            if (p.ok) record("metric formula / query", JSON.stringify([q.query]), integration, translateQuery(p.value, mctx));
-          }
-        }
-      } else if (typeof req.q === "string") {
-        const p = parseQueryList(req.q);
-        if (!p.ok) {
-          record("legacy q", req.q, integration, { status: "manual", promql: null, findings: [{ code: "query.parse_error", status: "manual" }] });
-          continue;
-        }
-        const list = Array.isArray(p.value) ? p.value : [p.value];
-        for (const e of list) record("legacy q", `${req.q}`, integration, translateQuery(e as Expr, mctx));
-      } else {
-        for (const k of ["log_query", "apm_query", "rum_query", "process_query", "event_query", "network_query", "security_query", "profile_metrics_query", "apm_stats_query"])
-          if (req[k]) skip(`request.${k}`);
-      }
-    }
-  });
-}
-
-function doMonitor(file: string, integration: string): void {
-  const doc = JSON.parse(readFileSync(file, "utf8"));
-  const def = doc.definition ?? doc;
-  const type: string = def.type ?? "";
-  const th = def.options?.thresholds ?? {};
-  const opts = { critical: num(th.critical), warning: num(th.warning) };
-  if (type === "query alert" || type === "metric alert") {
-    const p = parseMonitorQuery(def.query ?? "");
-    if (!p.ok) return record("metric monitor", def.query ?? "", integration, { status: "manual", promql: null, findings: [{ code: "query.parse_error", status: "manual" }] });
-    const ctx: TranslateContext = { metric: metricLookup(maps), availability: (dd) => metricAvailability(maps, dd), ddKind, tag: tagLookup(maps) };
-    record("metric monitor", def.query, integration, translateMonitor(p.value, opts, ctx));
-  } else if (type === "log alert") {
-    record("log monitor", def.query ?? "", integration, translateLogMonitor(def.query ?? "", { ...opts, variables: def.options?.variables }, { attributes }));
-  } else skip(`monitor type: ${type || "(none)"}`);
-}
+const doDashboard = (file: string, integration: string) => collector.dashboard(JSON.parse(readFileSync(file, "utf8")), integration);
+const doMonitor = (file: string, integration: string) => collector.monitor(JSON.parse(readFileSync(file, "utf8")), integration);
 
 const dirs = readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
 let nDash = 0;
@@ -207,6 +61,7 @@ for (const integ of dirs) {
 }
 
 // ---------------- report ----------------
+for (const i of items) i.integration = i.group;
 const KINDS: Kind[] = ["metric formula / query", "legacy q", "log query", "log formula", "metric monitor", "log monitor"];
 const STATUSES: Status[] = ["exact", "exact-under", "bounded", "manual"];
 const pct = (a: number, b: number) => (b === 0 ? "-" : `${((100 * a) / b).toFixed(1)}%`);

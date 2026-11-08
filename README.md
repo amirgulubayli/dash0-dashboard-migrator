@@ -178,6 +178,21 @@ npm run integrations-core
   translated  12574/14614   86%
 ```
 
+Every run also reports **coverage by query type**: every distinct query and monitor in the source, run through the same translators, split the way a Datadog user thinks of them. Over integrations-core:
+
+```
+● By query type  14,172 distinct queries and monitors
+  ⎿ Legacy queries   ████████████████▓░   96.7%  1555/1607  time.kind 26 · metric.derived 9
+  ⎿ Metric queries   ████████████████▓░   94.4%  5215/5520  time.kind-unknown 91 · time.kind 33
+  ⎿ Log monitors     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░   93.7%  30/32  log.monitor.shape 2
+  ⎿ Log queries      ████████████████░░   93.4%  4177/4472  log.measure 292 · log.or.cross-key 2
+  ⎿ Log formulas     ████████████████░░   92.8%  2100/2261  log.measure 152 · fn.throughput 5
+  ⎿ Metric monitors  ████████████▓░░░░░   74.6%  209/280  fn.anomalies 46 · monitor.as_count 13
+  ⎿ 93.7% of 14,172 distinct queries and monitors translate, and 92.2% are exact under a stated condition.
+```
+
+Solid is exact under a stated condition, shaded is within a proven bound, and what stays with a person is named with its reason (46 metric monitors use `anomalies()`: we don't guess). The same section is in `report.html`, `report.md` and `report.json` (`queryCoverage`), for whatever you migrate.
+
 Every dashboard and every translatable monitor passes the pre-import checks (exit 0). What doesn't translate is listed per item in `.corpus/run/report.html`, never dropped: mostly widget types with no Dash0 panel (`widget.unsupported`), queries on non-metric data sources, and the 140 monitors built on Datadog-only functions such as `anomalies()`.
 
 ## Run from source

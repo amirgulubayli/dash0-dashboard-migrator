@@ -25,6 +25,7 @@ function defaultAlertConverter(attributes: LogAttributes | null): AlertConverter
 }
 import { buildReport } from "../report/build.js";
 import type { Report } from "../report/types.js";
+import { coverageCollector, summarizeCoverage, type QueryCoverage } from "../report/query-coverage.js";
 
 export interface MigrateOptions {
   ingest: IngestOptions;
@@ -66,6 +67,8 @@ export interface MigrateResult {
   manifest: Manifest | null;
   dashboards: DashboardTranslation[];
   alerts: { alert: import("../ir/index.js").Alert; conversion: AlertConversion }[];
+  /** Coverage by query type over the source's distinct queries and monitors (the report's "by query type" section). */
+  queryCoverage: QueryCoverage;
 }
 
 export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
@@ -123,7 +126,11 @@ export async function migrate(o: MigrateOptions): Promise<MigrateResult> {
     ...(o.config ? { config: o.config } : {}),
     metrics: summarizeMetrics(metricNames(ingested.dashboards, ingested.alerts), mappings),
   });
-  return { report, manifest, dashboards: dashboards.map((d) => d.out), alerts };
+  // Coverage by query type: the same translators, over every distinct query and monitor in the raw source.
+  const cov = coverageCollector(o.mappingsDir, mappings);
+  for (const d of ingested.dashboards) cov.dashboard(d.original, d.title);
+  for (const a of ingested.alerts) cov.monitor(a.original, a.name);
+  return { report, manifest, dashboards: dashboards.map((d) => d.out), alerts, queryCoverage: summarizeCoverage(cov.items, cov.skipped) };
 }
 
 /** Hash of the Datadog sources as ingested: the plan records it, and `apply` re-ingests and compares (source drift). */

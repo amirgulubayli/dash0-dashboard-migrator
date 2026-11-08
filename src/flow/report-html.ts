@@ -1,6 +1,28 @@
 // <run>/report.html: the run report in the same terminal look as the CLI and the key page. One offline file, no
 // external assets, no script. Light and dark follow the system.
 import type { Num, Row, RunFacts, Score } from "./score.js";
+import { reasonsText } from "./score.js";
+import { coverageHeadline, pct1, type QueryCoverage } from "../report/query-coverage.js";
+
+/**
+ * Coverage by query type: one row per kind, best first. The bar has two shades: exact under a stated condition
+ * (solid) and within a proven bound (lighter); the gap is what stays with a person, named underneath.
+ */
+function coverageSection(c: QueryCoverage | undefined): string {
+  if (!c?.total) return "";
+  const w = (a: number, b: number) => (b ? Math.floor((a * 1000) / b) / 10 : 0);
+  const rows = c.rows
+    .map((r) => {
+      const why = reasonsText(r);
+      return `<div class="qt"><span class="ql">${esc(r.label)}</span><span class="qb" role="img" aria-label="${pct1(r.translated, r.total)} translated, ${pct1(r.exact, r.total)} exact"><i style="width:${w(r.exact, r.total)}%"></i><i class="b" style="width:${w(r.translated - r.exact, r.total)}%"></i></span><span class="qv">${pct1(r.translated, r.total)}</span><span class="qn dim">${r.translated.toLocaleString("en")} of ${r.total.toLocaleString("en")}</span>${why ? `<span class="qw dim">⎿ ${esc(why)}</span>` : ""}</div>`;
+    })
+    .join("\n");
+  return `<section class="cov"><h2><span class="dot">●</span> Coverage by query type</h2>
+<p class="head">${esc(coverageHeadline(c))}</p>
+<div class="legend dim"><span><i></i> exact under a stated condition</span><span><i class="b"></i> within a proven bound</span><span><i class="g"></i> stays with a person</span></div>
+${rows}
+<p class="dim note">⎿ distinct queries: the same query in two widgets counts once, at its worst result; percentages round down${c.anomalyMonitors ? `<br>⎿ anomaly monitors (${c.anomalyMonitors}) count as metric monitors. They stay with a person, because dd2dash0 doesn't guess.` : ""}</p></section>`;
+}
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
@@ -12,7 +34,7 @@ function meter(name: string, n: Num | null, what: string): string {
 const mark = (b: boolean | null) => (b === null ? `<span class="dim">–</span>` : b ? `<span class="ok">✓</span>` : `<span class="bad">✗</span>`);
 const liveCell = (l: Row["live"]) => (l === null ? `<span class="dim">–</span>` : l === "live" ? `<span class="ok">live</span>` : l === "missing" || l === "error" ? `<span class="bad">${l}</span>` : `<span class="dim">${l}</span>`);
 
-export function reportHtml(score: Score, rows: Row[], facts: RunFacts): string {
+export function reportHtml(score: Score, rows: Row[], facts: RunFacts, coverage?: QueryCoverage): string {
   const panels = rows.filter((r) => r.kind === "panel");
   const dashboards = [...new Set(panels.map((r) => r.dashboard ?? "(no dashboard)"))];
   const monitors = rows.filter((r) => r.kind === "alert");
@@ -62,7 +84,7 @@ body{font:13.5px/1.6 ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monosp
 main{max-width:1040px;margin:0 auto}.dim{color:var(--dim)}.ok{color:var(--ok)}.bad{color:var(--bad)}.dot{color:var(--accent)}b{font-weight:600}
 .frame{border:1px solid var(--line);border-radius:10px;padding:10px 16px;margin-bottom:26px;display:inline-block}
 .mark{color:var(--accent)}
-.meters{margin:0 0 30px}.m{display:grid;grid-template-columns:11ch minmax(120px,260px) 13ch 1fr;gap:14px;align-items:center;padding:3px 0}
+.meters{margin:0 0 30px}.m{display:grid;grid-template-columns:11ch minmax(120px,260px) minmax(13ch,max-content) 1fr;gap:14px;align-items:center;padding:3px 0}.m .v{white-space:nowrap;font-variant-numeric:tabular-nums}
 .k{color:var(--dim)}.m:first-child .k,.m:first-child .v{color:var(--fg);font-weight:600}
 .bar{height:8px;border-radius:2px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent)}
 .facts{margin:-14px 0 30px}.facts div{padding:1px 0}
@@ -72,7 +94,14 @@ td{border-bottom:1px solid var(--line);padding:5px 10px 5px 0;vertical-align:top
 .claim{font-size:12px}.c-exact,.c-exact-under{color:var(--ok)}.c-bounded{color:var(--accent)}.c-manual{color:var(--warn)}.c-unsupported{color:var(--bad)}
 .mon{padding:6px 0 10px}.q{padding-left:2ch}code{font:inherit;white-space:pre-wrap;word-break:break-word}
 .att{list-style:none;margin:0;padding:0}.att li{padding:5px 0}
-@media (max-width:760px){.m{grid-template-columns:11ch 1fr 12ch}.m .w{display:none}table{display:block;overflow-x:auto}}
+.cov .head{margin:0 0 12px;max-width:72ch}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin:0 0 10px}.legend i{display:inline-block;width:10px;height:8px;border-radius:2px;background:var(--accent);vertical-align:0}.legend i.b{opacity:.45}.legend i.g{background:var(--line)}
+.qt{display:grid;grid-template-columns:16ch minmax(140px,1fr) 7ch 15ch;gap:4px 14px;align-items:center;padding:4px 0}
+.ql{font-weight:600}.qv{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}.qn{font-variant-numeric:tabular-nums}
+.qb{display:flex;height:8px;border-radius:2px;background:var(--line);overflow:hidden}.qb i{display:block;height:100%;background:var(--accent)}.qb i.b{opacity:.45}
+.qw{grid-column:2/-1;font-size:12px;margin-top:-2px}
+.cov .note{margin-top:10px}
+@media (max-width:760px){.qt{grid-template-columns:1fr 7ch}.qb{grid-column:1/-1;grid-row:2}.qn{display:none}.qw{grid-column:1/-1}.m{grid-template-columns:11ch 1fr 12ch}.m .w{display:none}table{display:block;overflow-x:auto}}
 </style></head><body><main>
 <div class="frame"><div><span class="mark">◆</span> <b>dd2dash0</b> <span class="dim">${esc(facts.version)} · migration report</span></div>
 <div class="dim">${esc(facts.source)} → ${esc(facts.target)}</div>
@@ -88,6 +117,7 @@ ${lc ? `<div>⎿ live check: ${lc.live} live · ${lc.missing} missing in Dash0 �
 ${score.topGaps.length ? `<div>⎿ top gaps: ${score.topGaps.map(([c, n]) => `${esc(c)} ×${n}`).join(" · ")}</div>` : ""}
 <div>⎿ percentages round down; every panel (notes too) and every monitor counts</div>
 </div>
+${coverageSection(coverage)}
 ${attentionSection}
 ${dashboards.map(dashSection).join("\n")}
 ${monSection}
