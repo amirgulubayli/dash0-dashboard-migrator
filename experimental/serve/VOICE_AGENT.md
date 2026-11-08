@@ -1,5 +1,7 @@
 # Voice narrator (ElevenLabs) for `dd2dash0 serve`
 
+> **Parked.** `serve` is not a `dd2dash0` command today (`dd2dash0 serve` answers "unknown command"), and the release builds don't include `@elevenlabs/client`. The commands below only work after re-wiring this folder into `src/`; see [experimental/README.md](../README.md).
+
 The narrator **explains a finished, deterministic run**. It never translates anything: every number it says comes from `report.json` through its tools. That keeps the migrator inside the brief's "no LLM in translation" rule.
 
 ## 1. Create the agent (ElevenLabs dashboard → Agents → New agent)

@@ -8,7 +8,9 @@ Translation is **deterministic**: a Datadog query parser, rule tables and metric
 
 It runs in your terminal, because the people who migrate monitoring are engineers, and engineers live there. No web app to log in to, no account to create.
 
-**Tested on Datadog's own dashboards.** All 516 dashboards and 329 monitors in [DataDog/integrations-core](https://github.com/DataDog/integrations-core) run through end to end: **93.7% of 14,172 distinct queries and monitors translate, and 92.2% are exact under a stated condition** ([details](#tested-against-datadogintegrations-core)). One command repeats it: `npm run integrations-core`.
+**Tested on Datadog's own dashboards.** All 516 dashboards and 329 monitors in [DataDog/integrations-core](https://github.com/DataDog/integrations-core) run through end to end: **93.7% of 14,172 distinct queries and monitors translate, and 92.2% are exact under a stated condition** ([details](#tested-against-datadogintegrations-core)). One command repeats it: `npm run integrations-core` (figures from v0.5.5 on integrations-core `a9b9e42`).
+
+**Pitch deck:** [docs/pitch.pdf](docs/pitch.pdf) · **License:** [MIT](LICENSE), free and open source.
 
 ## Quick start
 
@@ -195,7 +197,9 @@ Every run also reports **coverage by query type**: every distinct query and moni
 
 Solid is exact under a stated condition, shaded is within a proven bound, and what stays with a person is named with its reason (46 metric monitors use `anomalies()`: we don't guess). The same section is in `report.html`, `report.md` and `report.json` (`queryCoverage`), for whatever you migrate.
 
-Every dashboard and every translatable monitor passes the pre-import checks (exit 0). What doesn't translate is listed per item in `.corpus/run/report.html`, never dropped: mostly widget types with no Dash0 panel (`widget.unsupported`), queries on non-metric data sources, and the 140 monitors built on Datadog-only functions such as `anomalies()`.
+Every dashboard and every translatable monitor passes the pre-import checks (exit 0). What doesn't translate is listed per item in `.corpus/run/report.html`, never dropped: mostly widget types with no Dash0 panel (`widget.unsupported`), queries on non-metric data sources, and the 140 monitors that can't become a check rule, each with its reason (most use a metric that isn't in our mapping tables; 46 use `anomalies()`).
+
+"Translate" means the query became valid PromQL with a stated claim; it does not mean the query returns data in Dash0. We curate metric mappings for four integrations (Redis, PostgreSQL, NGINX, host metrics), so most integrations-core queries keep their Datadog metric name, flagged `metric.unmapped` (8,624 of the 13,047 translated distinct queries, from `npx tsx scripts/corpus-coverage.ts .corpus/integrations-core`). They return data only if Dash0 has a metric of that name. Whether queries return data is what the Verify step measures on a live run.
 
 ## Run from source
 
