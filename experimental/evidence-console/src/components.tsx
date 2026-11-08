@@ -68,7 +68,7 @@ function Code({ lines, empty }: { lines: string[]; empty: string }) {
 }
 
 export function EvidencePanel({ item, expanded, onToggle }: { item: ItemView | null; expanded: boolean; onToggle: () => void }) {
-  if (!item) return <aside className="panel evidence"><p className="none">Select an item.</p></aside>;
+  if (!item) return <aside className="panel evidence"><p className="none panel-pad">Select an item that has appeared in the log.</p></aside>;
   const explainBlock =
     item.label === "exact-under" ? { head: "Exact if (full condition)", body: item.condition ?? item.plain ?? NOT_RECORDED }
     : item.label === "bounded" ? { head: "Bounded difference from Datadog", body: item.plain ?? NOT_RECORDED }

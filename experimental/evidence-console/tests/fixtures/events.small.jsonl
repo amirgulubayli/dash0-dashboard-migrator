@@ -1,0 +1,10 @@
+{"seq":0,"type":"run.start","mode":"dry-run","dashboards":1,"alerts":1}
+{"seq":1,"type":"dashboard.start","dashboard":"Small - Dash","panels":4}
+{"seq":2,"type":"item.done","kind":"panel","id":"p1","title":"Note","status":"exact-under"}
+{"seq":3,"type":"item.done","kind":"panel","id":"p2","title":"Hit rate","status":"bounded"}
+{"seq":4,"type":"item.done","kind":"panel","id":"p3","title":"Lost","status":"manual"}
+{"seq":5,"type":"item.done","kind":"panel","id":"p4","title":"Good","status":"exact-under"}
+{"seq":6,"type":"dashboard.done","dashboard":"Small - Dash"}
+{"seq":7,"type":"item.done","kind":"alert","id":"m1","title":"High mem","status":"exact-under"}
+{"seq":8,"type":"import.done","mode":"dry-run","written":2,"imported":0}
+{"seq":9,"type":"run.done"}

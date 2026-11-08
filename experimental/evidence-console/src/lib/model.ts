@@ -193,7 +193,7 @@ export function normalizeItem(raw: unknown, index: number, reasonCodes: Record<s
   };
 }
 
-function countLabels(items: ItemView[]): { label: string; count: number; textNotes: number }[] {
+export function countLabels(items: ItemView[]): { label: string; count: number; textNotes: number }[] {
   const m = new Map<string, { count: number; textNotes: number }>();
   for (const l of STANDARD_LABELS) m.set(l, { count: 0, textNotes: 0 });
   for (const it of items) {

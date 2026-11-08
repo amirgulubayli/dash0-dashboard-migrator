@@ -23,3 +23,8 @@ events.jsonl: `{seq, type, ...}`; types seen: `run.start, dashboard.start, item.
 ## Steps 3-6: UI
 Main screen (counts computed from the loaded report, tile grid with text labels, monitors in a separate pinned row, stage bar from events), evidence panel with Expand, live SSE + replay through one reducer, deterministic brief, optional AI (server side, off by default, no SDK: one fetch, key only from the shell env).
 Screenshots at 1920x1080 and 1280x720 looked at: first pass at 1280x720 had a two-line stage strip and the monitor row below the fold; fixed (single-line stage marks, monitors pinned under the grid). No sideways scroll at either size.
+
+## Step 7: tests and screenshots
+51 tests (counts, label mapping, malformed values, evidence kinds distinct, replay order/duplicates/no fabricated events, partial lines and truncation, AI off, invalid ids rejected, AI cannot change the report, server path safety, SSE). First test run had two failures from my own wrong fixture indices (items[3] vs items[4]); fixed in the tests, not in the code.
+Replay screenshot showed full-report counts while tiles were still waiting; fixed so counts cover only items already in the log ("widgets assessed so far (N in the report)").
+Playwright used the browser already installed. Screenshots in `screenshots/`: main, brief and expanded at 1920x1080 and 1280x720, plus a replay frame at 1280x720. No sideways scroll at either size.

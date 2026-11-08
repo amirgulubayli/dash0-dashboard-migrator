@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AiState, BriefDialog, EvidencePanel, StageBar, Tile } from "./components";
 import { buildBrief } from "./lib/brief";
-import { findItem, labelText, type ItemView, type ReportView } from "./lib/model";
+import { countLabels, findItem, labelText, type ItemView, type ReportView } from "./lib/model";
 import { stagesFrom } from "./lib/reducer";
 import { viewFromEvents } from "./lib/viewFromEvents";
 import { useConfig, useReport, useRun } from "./useData";
@@ -48,11 +48,15 @@ export function App() {
   const stages = stagesFrom(active);
   const gated = active.events.length > 0 && (mode === "replay" || active.runDone === null);
   const isWaiting = (i: ItemView) => gated && !active.itemsSeen.has(i.id);
+  // While a run is arriving (or replaying) the counts cover only items whose events are in the log.
+  const shownWidgets = view ? view.widgets.filter((w) => !isWaiting(w)) : [];
+  const shownCounts = view ? (gated ? countLabels(shownWidgets) : view.labelCounts) : [];
+  const shownMonitors = view ? view.monitors.filter((m) => !isWaiting(m)).length : 0;
 
   const badge =
     mode === "replay" ? { cls: "replay", text: "REPLAY", sub: run.replaying ? "playing" : "finished" }
     : { cls: "live", text: "LIVE", sub: run.conn === "connected" ? (run.live.runDone ? "connected, run complete" : run.live.events.length === 0 ? "connected, no events yet" : "connected, receiving") : run.conn === "connecting" ? "connecting" : "disconnected, retrying" };
-  const stageCaption = mode === "replay" ? (run.plan?.note ?? "") : run.live.events.length === 0 ? "No events in the log yet. Stages stay empty until they appear." : "Stages come from events.jsonl only.";
+  const stageCaption = mode === "replay" ? "" : run.live.events.length === 0 ? "No events in the log yet. Stages stay empty until they appear." : "Stages come from events.jsonl only.";
 
   const ask = async () => {
     setAi((a) => ({ ...a, status: "loading" }));
@@ -67,7 +71,8 @@ export function App() {
   };
 
   const dashboardName = view ? (view.dashboardNames.length > 0 ? view.dashboardNames.join(", ") : "Dashboard name not recorded") : "";
-  const selectedItem = view ? findItem(view, selected) : null;
+  const foundItem = view ? findItem(view, selected) : null;
+  const selectedItem = foundItem && !isWaiting(foundItem) ? foundItem : null;
 
   let lastGroup: string | null | undefined;
   return (
@@ -113,11 +118,11 @@ export function App() {
       ) : (
         <>
           <section className="counts">
-            <div className="total"><span className="total-n">{view.widgetCount}</span><span className="total-l">widgets assessed</span></div>
-            <CountChips counts={view.labelCounts} />
+            <div className="total"><span className="total-n">{gated ? shownWidgets.length : view.widgetCount}</span><span className="total-l">{gated ? `widgets assessed so far (${view.widgetCount} in the report)` : "widgets assessed"}</span></div>
+            <CountChips counts={shownCounts} />
             <div className="monitor-count">
-              <span className="total-n m">{view.monitors.length}</span>
-              <span className="total-l">monitor{view.monitors.length === 1 ? "" : "s"}, not in the widget totals</span>
+              <span className="total-n m">{gated ? shownMonitors : view.monitors.length}</span>
+              <span className="total-l">monitor{(gated ? shownMonitors : view.monitors.length) === 1 ? "" : "s"}, not in the widget totals</span>
             </div>
           </section>
           <main className={`main ${expanded ? "wide-evidence" : ""}`}>

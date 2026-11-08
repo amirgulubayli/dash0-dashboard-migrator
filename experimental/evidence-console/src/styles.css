@@ -85,3 +85,5 @@ details { margin-top: 12px; } summary { cursor: pointer; color: var(--dim); }
 .codes { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }
 .ai-note { margin: 2px 0 4px; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--bg3); border-radius: 4px; }
 @media (min-width: 1700px) { body { font-size: 17px; } .tile-title { font-size: 15px; } .tile { min-height: 64px; } .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .code { font-size: 14px; } }
+
+.panel-pad { padding: 14px; }
