@@ -64,6 +64,11 @@ describe("T11 histogram_quantile vs Datadog pXX (maths.md §12)", () => {
     fc.assert(
       fc.property(caseArb, fc.double({ min: 0.001, max: 1000, noNaN: true }), ({ uppers, samples, q }, c) => {
         const cum = histogram(samples, uppers);
+        // Exact ties (q·n equal to a bucket's cumulative count) are where floating point, not the maths, breaks
+        // invariance: q·(n·c) and cum·c can round apart by one step and pick the neighbouring bucket. Skip them
+        // (Ali's review of #46, seed 1767545266). A tie is also exactly where the two rank rules disagree (g in T11b).
+        const n = samples.length;
+        fc.pre(cum.every((x) => Math.abs(q * n - x) > 1e-9 * n));
         const a = promQuantile(q, uppers, cum);
         const b = promQuantile(q, uppers, cum.map((x) => x * c));
         expect(Math.abs(a - b)).toBeLessThanOrEqual(1e-9 * Math.max(1, Math.abs(a)));
